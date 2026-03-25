@@ -1,0 +1,4 @@
+{
+  "watch": ["server.js", "sheets.js", "public"],
+  "ext": "js,html"
+}

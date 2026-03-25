@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>空き時間案内</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      height: 100dvh;
+    }
+    body {
+      font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .chat-container {
+      width: 100%;
+      max-width: 600px;
+      height: 100%;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      overflow: hidden;
+    }
+    @media (min-width: 640px) {
+      body { background: #f0f2f5; }
+      .chat-container {
+        height: 90dvh;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+      }
+    }
+    .chat-header {
+      background: #ff6b9d;
+      color: white;
+      padding: 16px 20px;
+      padding-top: max(16px, env(safe-area-inset-top));
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .chat-header h1 { font-size: 18px; font-weight: bold; }
+    .reset-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .reset-btn:active { background: rgba(255,255,255,0.4); }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .message {
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .message.user {
+      background: #ff6b9d;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+    .message.assistant {
+      background: #f0f2f5;
+      color: #333;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+    .message.loading {
+      background: #f0f2f5;
+      color: #999;
+      align-self: flex-start;
+    }
+    .suggestions {
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      flex-shrink: 0;
+    }
+    .suggestions::-webkit-scrollbar { display: none; }
+    .suggestion-btn {
+      background: #fff0f6;
+      color: #ff6b9d;
+      border: 1px solid #ffb3d1;
+      padding: 8px 14px;
+      border-radius: 16px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .suggestion-btn:active { background: #ffe0ee; }
+    .input-area {
+      padding: 10px 12px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      border-top: 1px solid #eee;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-shrink: 0;
+      background: #fff;
+    }
+    .input-area input {
+      flex: 1;
+      padding: 11px 16px;
+      border: 1.5px solid #ddd;
+      border-radius: 24px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .input-area input:focus { border-color: #ff6b9d; }
+    .send-btn {
+      background: #ff6b9d;
+      color: white;
+      border: none;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .send-btn:active { background: #e05585; }
+    .send-btn:disabled { background: #ccc; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">
+      <h1>空き時間案内</h1>
+      <button class="reset-btn" onclick="resetChat()">新しいチャット</button>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="message assistant">こんにちは！空き時間についてお気軽にご質問ください。</div>
+    </div>
+
+    <div class="suggestions">
+      <button class="suggestion-btn" onclick="sendSuggestion('今空いている子は誰ですか？')">今空いてる子は？</button>
+      <button class="suggestion-btn" onclick="sendSuggestion('全員の状況を教えてください')">全員の状況</button>
+      <button class="suggestion-btn" onclick="sendSuggestion('次に空く子はいつですか？')">次に空くのは？</button>
+    </div>
+
+    <div class="input-area">
+      <input type="text" id="input" placeholder="質問を入力..." onkeydown="handleEnter(event)" />
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">&#9658;</button>
+    </div>
+  </div>
+
+  <script>
+    const sessionId = 'session_' + Date.now();
+    let lastEnterTime = 0;
+
+    // キーボードが開いたとき最新メッセージが見えるようスクロール
+    document.getElementById('input').addEventListener('focus', () => {
+      setTimeout(() => {
+        const messagesEl = document.getElementById('messages');
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }, 400);
+    });
+
+    function handleEnter(event) {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const now = Date.now();
+      if (now - lastEnterTime < 500) {
+        lastEnterTime = 0;
+        sendMessage();
+      } else {
+        lastEnterTime = now;
+      }
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('input');
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = '';
+      await chat(message);
+    }
+
+    async function sendSuggestion(text) {
+      await chat(text);
+    }
+
+    async function chat(message) {
+      const messagesEl = document.getElementById('messages');
+      const sendBtn = document.getElementById('sendBtn');
+
+      // ユーザーメッセージ表示
+      appendMessage(message, 'user');
+      sendBtn.disabled = true;
+
+      // ローディング
+      const loadingEl = appendMessage('考え中...', 'loading');
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, sessionId }),
+        });
+        const data = await res.json();
+        loadingEl.remove();
+        if (data.error) {
+          appendMessage('エラーが発生しました: ' + data.error, 'assistant');
+        } else {
+          appendMessage(data.reply, 'assistant');
+        }
+      } catch (e) {
+        loadingEl.remove();
+        appendMessage('通信エラーが発生しました。', 'assistant');
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    function appendMessage(text, type) {
+      const messagesEl = document.getElementById('messages');
+      const el = document.createElement('div');
+      el.className = `message ${type}`;
+      el.textContent = text;
+      messagesEl.appendChild(el);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return el;
+    }
+
+    async function resetChat() {
+      await fetch('/api/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+      const messagesEl = document.getElementById('messages');
+      messagesEl.innerHTML = '<div class="message assistant">こんにちは！空き時間についてお気軽にご質問ください。</div>';
+    }
+  </script>
+</body>
+</html>
