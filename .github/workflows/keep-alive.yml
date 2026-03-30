@@ -1,0 +1,21 @@
+name: Render Keep-Alive
+
+on:
+  schedule:
+    # 5分ごとにサーバーを起こす（UTC）
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render server
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+            https://chatbot-z9qe.onrender.com/api/availability)
+          echo "Status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Warning: server returned $STATUS"
+            exit 1
+          fi
