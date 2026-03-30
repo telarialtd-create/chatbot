@@ -476,59 +476,112 @@ app.get('/api/estama-sync', async (req, res) => {
   res.end();
 });
 
-// デバッグ: Renderでスクショ＆Push全体をテスト
-app.get('/api/test-line-screenshot', async (req, res) => {
+// デバッグ: sharp動作確認 + 手動でPush送信をトリガー
+app.get('/api/test-line', async (req, res) => {
   const steps = [];
   try {
-    const { findSpreadsheetId, screenshotCells, getSheetBusinessDate, dateToNippoName } = require('./line_handler').__test || {};
-
-    // line_handler内部を直接テスト
-    const { google } = require('googleapis');
-    const puppeteer = require('puppeteer');
+    steps.push('1. sharp テスト');
+    const sharp = require('sharp');
     const fs = require('fs'), path = require('path');
-
-    steps.push('start');
-
-    // 日付
-    const now = new Date();
-    const d = now.getHours() < 6 ? new Date(now.getTime() - 86400000) : now;
-    const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
-    steps.push(`date: ${dateStr}`);
-
-    // Drive
-    const oauthKeys = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '/root', '.config/gcp-oauth.keys.json')));
-    const credentials = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '/root', '.config/gdrive-server-credentials.json')));
-    const oauth2Client = new (require('googleapis').google.auth.OAuth2)(oauthKeys.installed.client_id, oauthKeys.installed.client_secret, 'http://localhost');
-    oauth2Client.setCredentials({ access_token: credentials.access_token, refresh_token: credentials.refresh_token });
-    const drive = google.drive({ version: 'v3', auth: oauth2Client });
-    const driveRes = await drive.files.list({
-      q: `'1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ' in parents and name contains '${dateStr}'`,
-      fields: 'files(id,name)', pageSize: 5,
-    });
-    steps.push(`drive: ${JSON.stringify(driveRes.data.files)}`);
-
-    // puppeteer
-    steps.push('launching puppeteer...');
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.setContent('<table><tr><td style="border:1px solid #ccc;padding:4px">テスト</td></tr></table>');
-    const el = await page.$('table');
     const tmpDir = path.join(__dirname, 'public', 'temp');
     fs.mkdirSync(tmpDir, { recursive: true });
-    const tmpFile = path.join(tmpDir, `debug_${Date.now()}.png`);
-    await el.screenshot({ path: tmpFile });
-    await browser.close();
+    const tmpFile = path.join(tmpDir, `test_${Date.now()}.png`);
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="30"><rect width="100" height="30" fill="#fff"/><text x="5" y="20" font-size="12">テスト</text></svg>';
+    await sharp(Buffer.from(svg)).png().toFile(tmpFile);
     const stat = fs.statSync(tmpFile);
-    steps.push(`screenshot OK: ${stat.size} bytes → ${path.basename(tmpFile)}`);
+    steps.push(`sharp OK: ${stat.size} bytes`);
 
+    steps.push('2. LINE Push テスト');
+    const { messagingApi } = require('@line/bot-sdk');
+    const client = new messagingApi.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
     const imageUrl = `${process.env.LINE_BOT_SERVER_URL}/temp/${path.basename(tmpFile)}`;
-    steps.push(`imageUrl: ${imageUrl}`);
+    await client.pushMessage({
+      to: process.env.LINE_USER_ID,
+      messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }],
+    });
+    steps.push(`Push OK: ${imageUrl}`);
 
     res.json({ ok: true, steps });
   } catch (e) {
     steps.push(`ERROR: ${e.message}`);
-    res.json({ ok: false, steps, error: e.message });
+    res.status(500).json({ ok: false, steps, error: e.message, stack: e.stack?.split('\n').slice(0,5) });
   }
+});
+
+// デバッグ: 手動で (教えて) フロー全体を実行
+app.get('/api/test-line-full', async (req, res) => {
+  res.json({ ok: true, message: 'バックグラウンドでスクショ処理開始' });
+  const { messagingApi } = require('@line/bot-sdk');
+  const client = new messagingApi.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
+  const target = process.env.LINE_USER_ID;
+  setImmediate(async () => {
+    try {
+      const { findSpreadsheetId, screenshotCells, getSheetBusinessDate } = require('./line_handler_test');
+    } catch(e) {}
+    // line_handler の processAndPush と同じ処理をここで直接実行
+    try {
+      const { google } = require('googleapis');
+      const sharp = require('sharp');
+      const fs = require('fs'), path = require('path');
+
+      const now = new Date();
+      const d = now.getHours() < 6 ? new Date(now.getTime() - 86400000) : now;
+      const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+      console.log('[TEST] 検索日:', dateStr);
+
+      const auth = (() => {
+        const client_id = process.env.GOOGLE_CLIENT_ID;
+        const client_secret = process.env.GOOGLE_CLIENT_SECRET;
+        const refresh_token = process.env.GOOGLE_REFRESH_TOKEN;
+        const c = new google.auth.OAuth2(client_id, client_secret, 'http://localhost');
+        c.setCredentials({ refresh_token });
+        return c;
+      })();
+
+      const drive = google.drive({ version: 'v3', auth });
+      const res2 = await drive.files.list({
+        q: `'1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ' in parents and name contains '${dateStr}'`,
+        fields: 'files(id,name)', pageSize: 5,
+      });
+      const file = res2.data.files?.[0];
+      if (!file) throw new Error(`ファイルなし: ${dateStr}`);
+      console.log('[TEST] ファイル:', file.name);
+
+      const sheets = google.sheets({ version: 'v4', auth });
+      const meta = await sheets.spreadsheets.get({ spreadsheetId: file.id });
+      const sheet = meta.data.sheets.find(s => s.properties.sheetId === 1873674341);
+      console.log('[TEST] シート:', sheet?.properties?.title);
+
+      const sheetData = await sheets.spreadsheets.get({
+        spreadsheetId: file.id,
+        ranges: [`'${sheet.properties.title}'!CA3:CR32`],
+        includeGridData: true,
+      });
+      const gridData = sheetData.data.sheets?.[0]?.data?.[0];
+      const rows = gridData?.rowData || [];
+      console.log('[TEST] 行数:', rows.length);
+
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="50"><rect width="200" height="50" fill="#fff" stroke="#ccc"/><text x="5" y="30" font-size="14">取得OK: ' + rows.length + '行</text></svg>';
+      const tmpDir = path.join(__dirname, 'public', 'temp');
+      fs.mkdirSync(tmpDir, { recursive: true });
+      const tmpFile = path.join(tmpDir, `full_${Date.now()}.png`);
+      await sharp(Buffer.from(svg)).png().toFile(tmpFile);
+      console.log('[TEST] sharp OK');
+
+      const { messagingApi: ma } = require('@line/bot-sdk');
+      const c2 = new ma.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
+      const imageUrl = `${process.env.LINE_BOT_SERVER_URL}/temp/${path.basename(tmpFile)}`;
+      await c2.pushMessage({ to: target, messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }] });
+      console.log('[TEST] Push OK:', imageUrl);
+    } catch(e) {
+      console.error('[TEST] エラー:', e.message);
+      try {
+        const { messagingApi: ma } = require('@line/bot-sdk');
+        const c2 = new ma.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
+        await c2.pushMessage({ to: target, messages: [{ type: 'text', text: `[デバッグ]エラー: ${e.message}` }] });
+      } catch(_) {}
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
