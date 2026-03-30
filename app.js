@@ -6,8 +6,34 @@ const { runEstamaSync } = require('./estama_worker');
 const { lineConfig, handleLineEvent, middleware: lineMiddleware } = require('./line_handler');
 
 const app = express();
-app.use(express.json());
 app.use(express.static('public'));
+
+// LINE webhook は署名検証のため raw body が必要 → express.json() より先に登録
+if (process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+  if (process.env.LINE_CHANNEL_SECRET) {
+    app.post(
+      '/webhook/line',
+      express.raw({ type: 'application/json' }),
+      lineMiddleware(lineConfig),
+      (req, res) => {
+        Promise.all(req.body.events.map(handleLineEvent))
+          .then(() => res.status(200).end())
+          .catch(err => { console.error('[LINE webhook]', err); res.status(500).end(); });
+      }
+    );
+    console.log('LINE webhook 有効（署名検証あり）: POST /webhook/line');
+  } else {
+    app.post('/webhook/line', express.json(), (req, res) => {
+      const events = req.body?.events || [];
+      Promise.all(events.map(handleLineEvent))
+        .then(() => res.status(200).end())
+        .catch(err => { console.error('[LINE webhook]', err); res.status(500).end(); });
+    });
+    console.warn('LINE webhook 有効（署名検証なし）: POST /webhook/line');
+  }
+}
+
+app.use(express.json());
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -449,35 +475,6 @@ app.get('/api/estama-sync', async (req, res) => {
   }
   res.end();
 });
-
-// ── LINE Webhook ────────────────────────────────────────────────────────────
-// LINEで「(教えて)」と送ると当日の日報CA3:CR32のスクショを返す
-if (process.env.LINE_CHANNEL_ACCESS_TOKEN) {
-  if (process.env.LINE_CHANNEL_SECRET) {
-    // Channel Secret あり → 署名検証あり（推奨）
-    app.post(
-      '/webhook/line',
-      lineMiddleware(lineConfig),
-      (req, res) => {
-        Promise.all(req.body.events.map(handleLineEvent))
-          .then(() => res.status(200).end())
-          .catch(err => { console.error('[LINE webhook]', err); res.status(500).end(); });
-      }
-    );
-    console.log('LINE webhook 有効（署名検証あり）: POST /webhook/line');
-  } else {
-    // Channel Secret なし → 署名検証なし
-    app.post('/webhook/line', express.json(), (req, res) => {
-      const events = req.body?.events || [];
-      Promise.all(events.map(handleLineEvent))
-        .then(() => res.status(200).end())
-        .catch(err => { console.error('[LINE webhook]', err); res.status(500).end(); });
-    });
-    console.warn('LINE webhook 有効（署名検証なし）: POST /webhook/line — LINE_CHANNEL_SECRET を設定すると署名検証が有効になります');
-  }
-} else {
-  console.warn('LINE_CHANNEL_ACCESS_TOKEN が未設定のため、LINE webhookは無効です');
-}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
