@@ -1,4 +1,4 @@
 {
-  "watch": ["server.js", "sheets.js", "public"],
+  "watch": ["app.js", "scheduleReader.js", "public"],
   "ext": "js,html"
 }

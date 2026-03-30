@@ -2,7 +2,6 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
 
-const SPREADSHEET_ID = '107xIhIEsTvTrvxTTFI0v1NjgAgw7W4r1KkFM2NQhac4';
 const TARGET_GID = 1873674341;
 const SCHEDULE_SPREADSHEET_ID = '10siqLe6B9A7uvNWgRUdHb462RqxCxkGEGMEKTPhY-S8';
 const SCHEDULE_GID = 1449788742;
@@ -29,7 +28,10 @@ const BOOKING = {
   BE: colLetterToIndex('BF'), // 接客終了はBF列
 };
 
+let _authClient = null;
 function createAuthClient() {
+  if (_authClient) return _authClient;
+
   let client_id, client_secret, refresh_token, access_token;
 
   if (process.env.GOOGLE_CLIENT_ID) {
@@ -50,13 +52,24 @@ function createAuthClient() {
 
   const oauth2Client = new google.auth.OAuth2(client_id, client_secret, 'http://localhost');
   oauth2Client.setCredentials({ access_token, refresh_token });
+  _authClient = oauth2Client;
   return oauth2Client;
 }
 
+// キャッシュ
+const cache = {
+  availability: { data: null, expiresAt: 0 },
+  upcomingSchedule: { data: null, expiresAt: 0 },
+  intervalMap: { data: null, expiresAt: 0 },
+  todayFileId: { id: null, date: null }, // 今日の日報ファイルID
+};
+
 // 数値の時間（小数含む、24超=翌日）から Date を生成
-// 例: 16 → 16:00, 21.5 → 21:30, 27 → 翌3:00, 1530 → 15:30
-function hoursToDate(rawVal) {
-  const d = new Date();
+// baseDate: 営業日の基準日（未指定時は現在日）
+function hoursToDate(rawVal, baseDate = null) {
+  // 基準日の深夜0時を起点にする
+  const d = baseDate ? new Date(baseDate) : new Date();
+  if (baseDate) d.setHours(0, 0, 0, 0);
 
   // 100以上は "HHMM" 形式（例: 1530 → 15:30）
   if (rawVal >= 100) {
@@ -70,7 +83,6 @@ function hoursToDate(rawVal) {
   const minutes = Math.round((rawVal - hours) * 60);
 
   if (hours >= 24) {
-    // 翌日扱い
     d.setDate(d.getDate() + 1);
     d.setHours(hours - 24, minutes, 0, 0);
   } else {
@@ -80,20 +92,21 @@ function hoursToDate(rawVal) {
 }
 
 // 汎用 parseTime: 文字列"HH:MM" / 数値 / 小数 に対応
-function parseTime(val) {
+function parseTime(val, baseDate = null) {
   if (val === null || val === undefined || val === '') return null;
 
   if (typeof val === 'string') {
     // "HH:MM" 形式
     const match = val.trim().match(/^(\d{1,2}):(\d{2})/);
     if (match) {
-      const d = new Date();
+      const d = baseDate ? new Date(baseDate) : new Date();
+      if (baseDate) d.setHours(0, 0, 0, 0);
       d.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
       return d;
     }
     // 数字のみ文字列（例: "19"）
     const numMatch = val.trim().match(/^(\d+(?:\.\d+)?)/);
-    if (numMatch) return hoursToDate(parseFloat(numMatch[1]));
+    if (numMatch) return hoursToDate(parseFloat(numMatch[1]), baseDate);
     return null;
   }
 
@@ -101,21 +114,19 @@ function parseTime(val) {
     // Google Sheets小数形式（0〜1）
     if (val > 0 && val < 1) {
       const totalMin = Math.round(val * 24 * 60);
-      const d = new Date();
+      const d = baseDate ? new Date(baseDate) : new Date();
+      if (baseDate) d.setHours(0, 0, 0, 0);
       d.setHours(Math.floor(totalMin / 60), totalMin % 60, 0, 0);
       return d;
     }
-    return hoursToDate(val);
+    return hoursToDate(val, baseDate);
   }
 
   return null;
 }
 
 // CB列をパース: 時刻と「上」フラグを返す
-// 例: "23上" → { time: 23:00, hasUpper: true }
-//     27     → { time: 翌3:00, hasUpper: false }
-//     "26上" → { time: 翌2:00, hasUpper: true }
-function parseCB(val) {
+function parseCB(val, baseDate = null) {
   if (val === null || val === undefined || val === '') return { time: null, hasUpper: false };
 
   const str = String(val).trim();
@@ -124,7 +135,7 @@ function parseCB(val) {
   const match = str.match(/^(\d+(?:\.\d+)?)/);
   if (!match) return { time: null, hasUpper };
 
-  return { time: hoursToDate(parseFloat(match[1])), hasUpper };
+  return { time: hoursToDate(parseFloat(match[1]), baseDate), hasUpper };
 }
 
 // インターバル（分）をパース
@@ -147,23 +158,52 @@ function formatTime(date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+// 今日の日報ファイルIDをDriveから検索（日付が変わったら再取得）
+async function getTodaySpreadsheetId() {
+  const biz = getBusinessDate();
+  const dateStr = dateToNippoName(biz);
+  if (cache.todayFileId.id && cache.todayFileId.date === dateStr) {
+    return cache.todayFileId.id;
+  }
+  const auth = createAuthClient();
+  const drive = google.drive({ version: 'v3', auth });
+  const res = await drive.files.list({
+    q: `'${NIPPO_FOLDER_ID}' in parents and name contains '${dateStr}'`,
+    fields: 'files(id, name)',
+    pageSize: 5,
+  });
+  const file = res.data.files && res.data.files[0];
+  if (!file) throw new Error(`今日の日報ファイルが見つかりません: ${dateStr}`);
+  cache.todayFileId = { id: file.id, date: dateStr };
+  return file.id;
+}
+
 async function getAvailability() {
+  if (cache.availability.data && Date.now() < cache.availability.expiresAt) {
+    return cache.availability.data;
+  }
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const spreadsheetId = await getTodaySpreadsheetId();
+
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const sheet = meta.data.sheets.find(s => s.properties.sheetId === TARGET_GID);
   if (!sheet) throw new Error(`シートが見つかりません (gid=${TARGET_GID})`);
   const sheetName = sheet.properties.title;
 
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId,
     range: `'${sheetName}'!AP:CF`,
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
 
   const rows = res.data.values || [];
   const now = new Date();
+  // 営業日の基準日（深夜0〜2時は前日扱い）の深夜0時を起点として時刻を解析する
+  const bizDay = getBusinessDate();
+  const bizMidnight = new Date(bizDay);
+  bizMidnight.setHours(0, 0, 0, 0);
   const baseAP = BOOKING.AP;
 
   // --- 1. スタッフ情報を収集 ---
@@ -175,9 +215,9 @@ async function getAvailability() {
     const name = nameVal.trim();
     if (name === '' || name === '名前' || name === '源氏名') continue;
 
-    const workStart = parseTime(row[STAFF.CA - baseAP]);
+    const workStart = parseTime(row[STAFF.CA - baseAP], bizMidnight);
     const cbRaw = row[STAFF.CB - baseAP];
-    const { time: workEnd, hasUpper } = parseCB(cbRaw);
+    const { time: workEnd, hasUpper } = parseCB(cbRaw, bizMidnight);
     const interval = parseInterval(row[STAFF.CF - baseAP]);
 
     if (workStart || workEnd) {
@@ -194,8 +234,8 @@ async function getAvailability() {
     const name = nameVal.trim();
     if (name === '' || name === '源氏名') continue;
 
-    const serviceStart = parseTime(row[BOOKING.BD - baseAP]);
-    const serviceEnd = parseTime(row[BOOKING.BE - baseAP]);
+    const serviceStart = parseTime(row[BOOKING.BD - baseAP], bizMidnight);
+    const serviceEnd = parseTime(row[BOOKING.BE - baseAP], bizMidnight);
     if (!serviceStart || !serviceEnd) continue;
 
     const interval = staffMap[name] ? staffMap[name].interval : 0;
@@ -219,7 +259,7 @@ async function getAvailability() {
       continue;
     }
     if (now < workStart) {
-      results.push({ name, status: '出勤前', nextAvailable: formatTime(workStart) });
+      results.push({ name, status: '出勤前', nextAvailable: formatTime(workStart), workEnd: formatTime(workEnd), hasUpper, start: formatTime(workStart), end: formatTime(workEnd) });
       continue;
     }
     if (now > workEnd) {
@@ -236,12 +276,14 @@ async function getAvailability() {
           status: '接客中',
           serviceEnd: formatTime(booking.serviceEnd),
           nextAvailable: formatTime(booking.intervalEnd),
+          start: formatTime(workStart), end: formatTime(workEnd), hasUpper,
         });
       } else {
         results.push({
           name,
           status: 'インターバル中',
           nextAvailable: formatTime(booking.intervalEnd),
+          start: formatTime(workStart), end: formatTime(workEnd), hasUpper,
         });
       }
       continue;
@@ -256,6 +298,7 @@ async function getAvailability() {
           name,
           status: '受付終了',
           note: `本日の受付は終了しました（${formatTime(workEnd)}終了）`,
+          start: formatTime(workStart), end: formatTime(workEnd), hasUpper,
         });
         continue;
       }
@@ -267,6 +310,7 @@ async function getAvailability() {
         workEnd: formatTime(workEnd),
         lastAccept: formatTime(lastAccept),
         hasUpper: true,
+        start: formatTime(workStart), end: formatTime(workEnd),
       });
     } else {
       // (上)なし: workEndまで来店可能
@@ -275,11 +319,15 @@ async function getAvailability() {
         status: '空き',
         workEnd: formatTime(workEnd),
         hasUpper: false,
+        start: formatTime(workStart), end: formatTime(workEnd),
       });
     }
   }
 
-  return { results, now: formatTime(now) };
+  const result = { results, now: formatTime(now) };
+  cache.availability.data = result;
+  cache.availability.expiresAt = Date.now() + 60 * 1000; // 60秒
+  return result;
 }
 
 // スケジュール文字列をパース: "11-18上", "1930-25上", "19-24*130" など
@@ -311,6 +359,9 @@ function parseScheduleCell(val) {
 
 // 翌日以降のスケジュールを取得（今日含む翌7日分）
 async function getUpcomingSchedule() {
+  if (cache.upcomingSchedule.data && Date.now() < cache.upcomingSchedule.expiresAt) {
+    return cache.upcomingSchedule.data;
+  }
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
@@ -344,19 +395,18 @@ async function getUpcomingSchedule() {
     const sheetMonth = parseInt(sheetName.replace(/\D/g, '').slice(-2)) || month;
 
     // dayRow から該当日の列インデックスを探す
-    // 月が変わる場合は2回目の出現を使う
+    // 月が変わる場合（例: 3月シートで4月2日を探す）は2回目の出現を使う
     let colIdx = -1;
     let count = 0;
     for (let c = 3; c < dayRow.length; c++) {
       if (String(dayRow[c]).trim() === String(day)) {
         count++;
-        // シート月と一致するか（月をまたぐ場合は2回目がある）
         if (month === sheetMonth && count === 1) { colIdx = c; break; }
         if (month !== sheetMonth && count === 2) { colIdx = c; break; }
-        if (count === 1) colIdx = c; // フォールバック
+        // month !== sheetMonth のときは count===2 を待つ（フォールバックしない）
       }
     }
-    if (colIdx === -1) continue;
+    if (colIdx === -1) continue; // 該当列なし（次月データがシートにない等）
 
     const dateKey = `${month}月${day}日`;
     const staffList = [];
@@ -381,6 +431,8 @@ async function getUpcomingSchedule() {
     if (staffList.length > 0) result[dateKey] = staffList;
   }
 
+  cache.upcomingSchedule.data = result;
+  cache.upcomingSchedule.expiresAt = Date.now() + 5 * 60 * 1000; // 5分
   return result;
 }
 
@@ -434,6 +486,9 @@ async function getDailyReportBookings(dateStr) {
 const INTERVAL_SPREADSHEET_ID = '1sh6MgPL4k2StMofKuys_5QA0-3JiDbdY98qe8bvAJEo';
 
 async function getIntervalMap() {
+  if (cache.intervalMap.data && Date.now() < cache.intervalMap.expiresAt) {
+    return cache.intervalMap.data;
+  }
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
@@ -456,20 +511,35 @@ async function getIntervalMap() {
     }
   }
 
+  cache.intervalMap.data = intervalMap;
+  cache.intervalMap.expiresAt = Date.now() + 5 * 60 * 1000; // 5分
   return intervalMap;
 }
 
 // 日付文字列からDateを生成（例: "2026年3月26日", "明日", "明後日"）
+function getBusinessDate(base = new Date()) {
+  if (base.getHours() < 3) {
+    const d = new Date(base);
+    d.setDate(d.getDate() - 1);
+    return d;
+  }
+  return new Date(base);
+}
+
 function parseDateStr(str, baseDate = new Date()) {
   if (!str) return null;
   str = str.trim();
-  if (str === '今日') return new Date(baseDate);
-  if (str === '明日') { const d = new Date(baseDate); d.setDate(d.getDate() + 1); return d; }
-  if (str === '明後日') { const d = new Date(baseDate); d.setDate(d.getDate() + 2); return d; }
+  const biz = getBusinessDate(baseDate);
+  if (str === '今日' || str === '本日') return biz;
+  if (str === '明日') { const d = new Date(biz); d.setDate(d.getDate() + 1); return d; }
+  if (str === '明後日') { const d = new Date(biz); d.setDate(d.getDate() + 2); return d; }
   const m = str.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
   if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
   const m2 = str.match(/(\d{1,2})月(\d{1,2})日/);
   if (m2) return new Date(baseDate.getFullYear(), parseInt(m2[1]) - 1, parseInt(m2[2]));
+  // DD日のみ（当月として解釈）
+  const m3 = str.match(/^(\d{1,2})日$/);
+  if (m3) return new Date(baseDate.getFullYear(), baseDate.getMonth(), parseInt(m3[1]));
   return null;
 }
 
@@ -477,4 +547,10 @@ function dateToNippoName(date) {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
-module.exports = { getAvailability, getUpcomingSchedule, getDailyReportBookings, getIntervalMap, parseDateStr, dateToNippoName };
+async function warmupCache() {
+  console.log('キャッシュ事前取得中...');
+  await Promise.all([getAvailability(), getUpcomingSchedule(), getIntervalMap()]);
+  console.log('キャッシュ完了');
+}
+
+module.exports = { getAvailability, getUpcomingSchedule, getDailyReportBookings, getIntervalMap, parseDateStr, dateToNippoName, warmupCache, getBusinessDate };

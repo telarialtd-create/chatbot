@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>エスタマ出勤表 自動更新</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 560px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 32px;
+    }
+    .btn {
+      width: 100%;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      background: #2563eb;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover:not(:disabled) { background: #1d4ed8; }
+    .btn:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn.running { background: #6b7280; }
+    .log-box {
+      margin-top: 24px;
+      background: #0f172a;
+      border-radius: 10px;
+      padding: 16px;
+      min-height: 120px;
+      max-height: 360px;
+      overflow-y: auto;
+      display: none;
+    }
+    .log-box.visible { display: block; }
+    .log-line {
+      font-family: 'SF Mono', 'Menlo', monospace;
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-line.success { color: #4ade80; }
+    .log-line.error { color: #f87171; }
+    .log-line.info { color: #60a5fa; }
+    .result {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+    .result.success { background: #dcfce7; color: #15803d; display: block; }
+    .result.error { background: #fee2e2; color: #dc2626; display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>エスタマ出勤表 自動更新</h1>
+    <p class="subtitle">本日の日報から予約を読み取り、エスタマの出勤表に×を自動設定します</p>
+
+    <button class="btn" id="runBtn" onclick="runSync()">
+      今日の予約を反映する
+    </button>
+
+    <div class="log-box" id="logBox"></div>
+    <div class="result" id="result"></div>
+  </div>
+
+  <script>
+    async function runSync() {
+      const btn = document.getElementById('runBtn');
+      const logBox = document.getElementById('logBox');
+      const result = document.getElementById('result');
+
+      btn.disabled = true;
+      btn.textContent = '実行中...';
+      btn.classList.add('running');
+      logBox.innerHTML = '';
+      logBox.classList.add('visible');
+      result.className = 'result';
+      result.textContent = '';
+
+      const addLog = (text, type = '') => {
+        const line = document.createElement('div');
+        line.className = 'log-line' + (type ? ' ' + type : '');
+        line.textContent = '> ' + text;
+        logBox.appendChild(line);
+        logBox.scrollTop = logBox.scrollHeight;
+      };
+
+      try {
+        const res = await fetch('/api/estama-sync');
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = JSON.parse(line.slice(6));
+
+            if (data.error) {
+              addLog(data.error, 'error');
+              result.className = 'result error';
+              result.textContent = 'エラーが発生しました: ' + data.error;
+            } else if (data.done) {
+              const msg = `完了 ✓  ${data.processed}名処理 / ${data.totalChanged}スロット更新 / ${data.skipped}名スキップ`;
+              addLog(msg, 'success');
+              result.className = 'result success';
+              result.textContent = msg;
+            } else {
+              const type = data.message.includes('エラー') ? 'error'
+                         : data.message.includes('完了') || data.message.includes('保存') ? 'success'
+                         : data.message.includes('ログイン') || data.message.includes('対象') ? 'info'
+                         : '';
+              addLog(data.message, type);
+            }
+          }
+        }
+      } catch (e) {
+        result.className = 'result error';
+        result.textContent = 'エラー: ' + e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '今日の予約を反映する';
+        btn.classList.remove('running');
+      }
+    }
+  </script>
+</body>
+</html>
