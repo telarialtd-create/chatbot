@@ -7,7 +7,7 @@
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
 const { google } = require('googleapis');
-const puppeteer = require('puppeteer');
+const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
@@ -106,107 +106,115 @@ async function fetchCellsData(spreadsheetId) {
   return res.data.sheets?.[0]?.data?.[0];
 }
 
-// ── セルデータ → HTML テーブル ────────────────────────────
-function escapeHtml(str) {
+// ── セルデータ → SVG ─────────────────────────────────────
+function escapeXml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-function colorStyle(colorObj) {
-  if (!colorObj) return '';
+function toRgb(colorObj) {
+  if (!colorObj) return '#ffffff';
   const r = Math.round((colorObj.red   || 0) * 255);
   const g = Math.round((colorObj.green || 0) * 255);
   const b = Math.round((colorObj.blue  || 0) * 255);
   return `rgb(${r},${g},${b})`;
 }
 
-function buildHtml(gridData) {
+function buildSvg(gridData) {
   const rows = gridData?.rowData || [];
+  // Sheetsが返す列・行のサイズ（ピクセル換算）
+  const colMeta = gridData?.columnMetadata || [];
+  const rowMeta = gridData?.rowMetadata    || [];
 
-  const tableRows = rows.map(row => {
-    const cells = row.values || [];
-    const tds = cells.map(cell => {
+  const COL_DEFAULT = 60;
+  const ROW_DEFAULT = 21;
+  const FONT_SIZE   = 10;
+  const PAD         = 3;
+
+  // 各列幅・行高を決定（Sheetsはポイント単位で返す）
+  const numCols = rows.reduce((m, r) => Math.max(m, (r.values || []).length), 0);
+  const numRows = rows.length;
+
+  const colWidths = Array.from({ length: numCols }, (_, i) => {
+    const px = colMeta[i]?.pixelSize;
+    return px ? Math.max(px * 0.8, 30) : COL_DEFAULT;
+  });
+  const rowHeights = Array.from({ length: numRows }, (_, i) => {
+    const px = rowMeta[i]?.pixelSize;
+    return px ? Math.max(px * 0.8, 18) : ROW_DEFAULT;
+  });
+
+  const totalW = colWidths.reduce((s, w) => s + w, 0);
+  const totalH = rowHeights.reduce((s, h) => s + h, 0);
+
+  let rects = '';
+  let texts = '';
+  let y = 0;
+
+  for (let ri = 0; ri < rows.length; ri++) {
+    const cells = rows[ri].values || [];
+    let x = 0;
+    for (let ci = 0; ci < numCols; ci++) {
+      const cell  = cells[ci] || {};
       const value = cell.formattedValue ?? '';
       const fmt   = cell.effectiveFormat || {};
       const tf    = fmt.textFormat || {};
 
-      const styles = [];
+      const w = colWidths[ci];
+      const h = rowHeights[ri];
 
-      // 背景色（白でなければ適用）
+      // 背景色
       const bg = fmt.backgroundColor;
-      if (bg && !(bg.red === 1 && bg.green === 1 && bg.blue === 1)) {
-        styles.push(`background-color:${colorStyle(bg)}`);
+      const bgColor = (bg && !(bg.red === 1 && bg.green === 1 && bg.blue === 1))
+        ? toRgb(bg) : '#ffffff';
+
+      rects += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${bgColor}" stroke="#cccccc" stroke-width="0.5"/>`;
+
+      // テキスト
+      if (value) {
+        const fg       = tf.foregroundColor;
+        const color    = fg ? toRgb(fg) : '#000000';
+        const bold     = tf.bold ? 'bold' : 'normal';
+        const fontSize = tf.fontSize ? tf.fontSize * 0.8 : FONT_SIZE;
+        const ha       = fmt.horizontalAlignment;
+        let tx, anchor;
+        if (ha === 'CENTER') { tx = x + w / 2; anchor = 'middle'; }
+        else if (ha === 'RIGHT') { tx = x + w - PAD; anchor = 'end'; }
+        else { tx = x + PAD; anchor = 'start'; }
+        const ty = y + h / 2 + fontSize * 0.35;
+
+        texts += `<text x="${tx}" y="${ty}" font-size="${fontSize}" font-weight="${bold}" fill="${color}" text-anchor="${anchor}" font-family="Arial,sans-serif" clip-path="url(#c${ri}_${ci})">${escapeXml(value)}</text>`;
+        rects  += `<clipPath id="c${ri}_${ci}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath>`;
       }
 
-      // 文字色
-      const fg = tf.foregroundColor;
-      if (fg) styles.push(`color:${colorStyle(fg)}`);
+      x += w;
+    }
+    y += rowHeights[ri];
+  }
 
-      // 太字・フォントサイズ
-      if (tf.bold)     styles.push('font-weight:bold');
-      if (tf.fontSize) styles.push(`font-size:${tf.fontSize}pt`);
-
-      // 水平配置
-      const ha = fmt.horizontalAlignment;
-      if (ha === 'CENTER') styles.push('text-align:center');
-      else if (ha === 'RIGHT') styles.push('text-align:right');
-
-      // 折り返し
-      const wrap = fmt.wrapStrategy;
-      if (wrap === 'WRAP') styles.push('white-space:normal');
-
-      return `<td style="${styles.join(';')}">${escapeHtml(value)}</td>`;
-    }).join('');
-
-    return `<tr>${tds}</tr>`;
-  }).join('\n');
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  body  { margin:0; padding:6px; background:#fff; font-family:"Noto Sans JP",Arial,sans-serif; }
-  table { border-collapse:collapse; font-size:10px; }
-  td    { border:1px solid #bbb; padding:2px 4px; min-width:28px; white-space:nowrap; vertical-align:middle; }
-</style>
-</head>
-<body>
-<table>${tableRows}</table>
-</body>
-</html>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}">
+<rect width="${totalW}" height="${totalH}" fill="#ffffff"/>
+${rects}
+${texts}
+</svg>`;
 }
 
-// ── puppeteer でスクリーンショット ────────────────────────
+// ── sharp で SVG → PNG ───────────────────────────────────
 async function screenshotCells(spreadsheetId) {
   const gridData = await fetchCellsData(spreadsheetId);
-  const html     = buildHtml(gridData);
+  const svg      = buildSvg(gridData);
 
   if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
   const filename   = `sheet_${Date.now()}.png`;
   const outputPath = path.join(TEMP_DIR, filename);
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  await sharp(Buffer.from(svg)).png().toFile(outputPath);
 
-  try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const tableEl = await page.$('table');
-    if (!tableEl) throw new Error('テーブル要素が見つかりません');
-    await tableEl.screenshot({ path: outputPath });
-  } finally {
-    await browser.close();
-  }
-
-  // 1時間後に一時ファイルを削除
   setTimeout(() => fs.unlink(outputPath, () => {}), 60 * 60 * 1000);
-
   return filename;
 }
 
