@@ -210,16 +210,16 @@ async function screenshotCells(spreadsheetId) {
   return filename;
 }
 
-// ── LINE イベントハンドラ ─────────────────────────────────
-async function handleLineEvent(event) {
-  if (event.type !== 'message' || event.message.type !== 'text') return;
+// ── Push 送信先を取得（グループ or ユーザー） ─────────────
+function getPushTarget(event) {
+  if (event.source?.groupId)  return event.source.groupId;
+  if (event.source?.roomId)   return event.source.roomId;
+  if (event.source?.userId)   return event.source.userId;
+  return process.env.LINE_GROUP_ID || process.env.LINE_USER_ID;
+}
 
-  const text = event.message.text.trim();
-  // 「(教えて)」「（教えて）」どちらも対応
-  if (!text.includes('(教えて)') && !text.includes('（教えて）')) return;
-
-  const client = createLineClient();
-
+// ── バックグラウンドでスクショしてPush送信 ────────────────
+async function processAndPush(target, client) {
   try {
     const date          = getSheetBusinessDate();
     const spreadsheetId = await findSpreadsheetId(date);
@@ -228,10 +228,10 @@ async function handleLineEvent(event) {
     const baseUrl  = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
     const imageUrl = `${baseUrl}/temp/${filename}`;
 
-    console.log(`[LINE] 画像送信: ${imageUrl}`);
+    console.log(`[LINE] Push送信: ${imageUrl} → ${target}`);
 
-    await client.replyMessage({
-      replyToken: event.replyToken,
+    await client.pushMessage({
+      to: target,
       messages: [{
         type: 'image',
         originalContentUrl: imageUrl,
@@ -240,12 +240,28 @@ async function handleLineEvent(event) {
     });
 
   } catch (err) {
-    console.error('[LINE] エラー:', err.message);
-    await client.replyMessage({
-      replyToken: event.replyToken,
+    console.error('[LINE] Push エラー:', err.message);
+    await client.pushMessage({
+      to: target,
       messages: [{ type: 'text', text: `エラー: ${err.message}` }],
-    });
+    }).catch(() => {});
   }
+}
+
+// ── LINE イベントハンドラ（200を即返してバックグラウンド処理） ──
+function handleLineEvent(event) {
+  if (event.type !== 'message' || event.message.type !== 'text') return;
+
+  const text = event.message.text.trim();
+  if (!text.includes('(教えて)') && !text.includes('（教えて）')) return;
+
+  const client = createLineClient();
+  const target = getPushTarget(event);
+
+  console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
+
+  // 即座にreturn（200をLINEに返す）し、裏でスクショ＆Push
+  setImmediate(() => processAndPush(target, client));
 }
 
 module.exports = { lineConfig, handleLineEvent, middleware };
