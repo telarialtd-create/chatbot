@@ -210,12 +210,11 @@ async function screenshotCells(spreadsheetId) {
   return filename;
 }
 
-// ── Push 送信先を取得（グループ or ユーザー） ─────────────
+// ── Push 送信先: スクショは必ず個人（userId）に送る ──────
 function getPushTarget(event) {
-  if (event.source?.groupId)  return event.source.groupId;
-  if (event.source?.roomId)   return event.source.roomId;
-  if (event.source?.userId)   return event.source.userId;
-  return process.env.LINE_GROUP_ID || process.env.LINE_USER_ID;
+  // イベント送信者のuserIdを優先、なければ環境変数のUSER_IDを使用
+  if (event.source?.userId) return event.source.userId;
+  return process.env.LINE_USER_ID;
 }
 
 // ── バックグラウンドでスクショしてPush送信 ────────────────

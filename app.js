@@ -476,6 +476,61 @@ app.get('/api/estama-sync', async (req, res) => {
   res.end();
 });
 
+// デバッグ: Renderでスクショ＆Push全体をテスト
+app.get('/api/test-line-screenshot', async (req, res) => {
+  const steps = [];
+  try {
+    const { findSpreadsheetId, screenshotCells, getSheetBusinessDate, dateToNippoName } = require('./line_handler').__test || {};
+
+    // line_handler内部を直接テスト
+    const { google } = require('googleapis');
+    const puppeteer = require('puppeteer');
+    const fs = require('fs'), path = require('path');
+
+    steps.push('start');
+
+    // 日付
+    const now = new Date();
+    const d = now.getHours() < 6 ? new Date(now.getTime() - 86400000) : now;
+    const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+    steps.push(`date: ${dateStr}`);
+
+    // Drive
+    const oauthKeys = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '/root', '.config/gcp-oauth.keys.json')));
+    const credentials = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '/root', '.config/gdrive-server-credentials.json')));
+    const oauth2Client = new (require('googleapis').google.auth.OAuth2)(oauthKeys.installed.client_id, oauthKeys.installed.client_secret, 'http://localhost');
+    oauth2Client.setCredentials({ access_token: credentials.access_token, refresh_token: credentials.refresh_token });
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const driveRes = await drive.files.list({
+      q: `'1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ' in parents and name contains '${dateStr}'`,
+      fields: 'files(id,name)', pageSize: 5,
+    });
+    steps.push(`drive: ${JSON.stringify(driveRes.data.files)}`);
+
+    // puppeteer
+    steps.push('launching puppeteer...');
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent('<table><tr><td style="border:1px solid #ccc;padding:4px">テスト</td></tr></table>');
+    const el = await page.$('table');
+    const tmpDir = path.join(__dirname, 'public', 'temp');
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const tmpFile = path.join(tmpDir, `debug_${Date.now()}.png`);
+    await el.screenshot({ path: tmpFile });
+    await browser.close();
+    const stat = fs.statSync(tmpFile);
+    steps.push(`screenshot OK: ${stat.size} bytes → ${path.basename(tmpFile)}`);
+
+    const imageUrl = `${process.env.LINE_BOT_SERVER_URL}/temp/${path.basename(tmpFile)}`;
+    steps.push(`imageUrl: ${imageUrl}`);
+
+    res.json({ ok: true, steps });
+  } catch (e) {
+    steps.push(`ERROR: ${e.message}`);
+    res.json({ ok: false, steps, error: e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`サーバー起動: http://localhost:${PORT}`);
