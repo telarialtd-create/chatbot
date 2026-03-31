@@ -11,15 +11,8 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
-// リポジトリ同梱の日本語フォント（base64）
+// リポジトリ同梱の日本語フォント
 const FONT_PATH = path.join(__dirname, 'fonts', 'NotoSansJP.otf');
-let _fontBase64 = null;
-function getFontBase64() {
-  if (!_fontBase64) {
-    _fontBase64 = fs.readFileSync(FONT_PATH).toString('base64');
-  }
-  return _fontBase64;
-}
 
 const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
 const TARGET_GID = 1873674341;
@@ -131,8 +124,8 @@ function buildSvg(gridData) {
   const totalW = colWidths.reduce((s,w)=>s+w,0);
   const totalH = rowHeights.reduce((s,h)=>s+h,0);
 
-  const fontB64 = getFontBase64();
-  let defs = `<defs><style>@font-face{font-family:'NotoJP';src:url('data:font/otf;base64,${fontB64}') format('opentype');}</style>`;
+  const fontUrl = `file://${FONT_PATH}`;
+  let defs = `<defs><style>@font-face{font-family:'NotoJP';src:url('${fontUrl}') format('opentype');}</style>`;
   let rects = '', texts = '';
   let y = 0;
 
