@@ -56,19 +56,25 @@ function createAuthClient() {
 }
 
 // ── 日付ユーティリティ ────────────────────────────────────
-// 朝6時〜翌5時59分 = 当日（6時以前は前日扱い）
-function getSheetBusinessDate() {
+// サーバーはUTC → JST(+9h)に変換してから判定
+function getJSTDate() {
   const now = new Date();
-  if (now.getHours() < 6) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 1);
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000);
+}
+
+// 朝6時〜翌5時59分 = 当日（6時以前は前日扱い）※JST基準
+function getSheetBusinessDate() {
+  const jst = getJSTDate();
+  if (jst.getUTCHours() < 6) {
+    const d = new Date(jst);
+    d.setUTCDate(d.getUTCDate() - 1);
     return d;
   }
-  return now;
+  return jst;
 }
 
 function dateToNippoName(date) {
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+  return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
 }
 
 // ── Drive からスプレッドシート ID を取得 ──────────────────
@@ -215,6 +221,7 @@ function getPushTarget(event) {
 async function processAndPush(target, client) {
   try {
     const date          = getSheetBusinessDate();
+    console.log(`[LINE] 検索日付(JST): ${dateToNippoName(date)}`);
     const spreadsheetId = await findSpreadsheetId(date);
     const filename      = await screenshotCells(spreadsheetId);
 
