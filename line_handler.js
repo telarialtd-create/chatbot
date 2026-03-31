@@ -7,12 +7,13 @@
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
 const { google } = require('googleapis');
-const sharp = require('sharp');
+const { createCanvas, registerFont } = require('canvas');
 const fs = require('fs');
 const path = require('path');
 
-// リポジトリ同梱の日本語フォント
-const FONT_PATH = path.join(__dirname, 'fonts', 'NotoSansJP.otf');
+// リポジトリ同梱の日本語フォントを登録
+const FONT_PATH = path.join(__dirname, 'fonts', 'NotoSansJP.ttf');
+registerFont(FONT_PATH, { family: 'NotoJP' });
 
 const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
 const TARGET_GID = 1873674341;
@@ -104,31 +105,38 @@ async function fetchCellsData(spreadsheetId) {
   return res.data.sheets?.[0]?.data?.[0];
 }
 
-// ── セルデータ → SVG（日本語フォント埋め込み） ───────────
-function escapeXml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ── canvas で PNG 生成 ────────────────────────────────────
+function toRgba(c, fallback = '#ffffff') {
+  if (!c) return fallback;
+  const r = Math.round((c.red   || 0) * 255);
+  const g = Math.round((c.green || 0) * 255);
+  const b = Math.round((c.blue  || 0) * 255);
+  return `rgb(${r},${g},${b})`;
 }
-function toRgb(c) {
-  if (!c) return '#ffffff';
-  return `rgb(${Math.round((c.red||0)*255)},${Math.round((c.green||0)*255)},${Math.round((c.blue||0)*255)})`;
-}
 
-function buildSvg(gridData) {
-  const rows    = gridData?.rowData || [];
-  const colMeta = gridData?.columnMetadata || [];
-  const rowMeta = gridData?.rowMetadata || [];
-  const numCols = rows.reduce((m,r) => Math.max(m,(r.values||[]).length), 0);
+async function screenshotCells(spreadsheetId) {
+  const gridData = await fetchCellsData(spreadsheetId);
+  const rows     = gridData?.rowData || [];
+  const colMeta  = gridData?.columnMetadata || [];
+  const rowMeta  = gridData?.rowMetadata || [];
+  const numCols  = rows.reduce((m, r) => Math.max(m, (r.values || []).length), 0);
 
-  const colWidths  = Array.from({length:numCols}, (_,i) => colMeta[i]?.pixelSize ? Math.max(colMeta[i].pixelSize*0.8,28) : 56);
-  const rowHeights = rows.map((_,i) => rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize*0.8,17) : 20);
-  const totalW = colWidths.reduce((s,w)=>s+w,0);
-  const totalH = rowHeights.reduce((s,h)=>s+h,0);
+  const colWidths  = Array.from({ length: numCols }, (_, i) =>
+    colMeta[i]?.pixelSize ? Math.max(colMeta[i].pixelSize * 0.85, 28) : 56);
+  const rowHeights = rows.map((_, i) =>
+    rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize * 0.85, 17) : 20);
 
-  const fontUrl = `file://${FONT_PATH}`;
-  let defs = `<defs><style>@font-face{font-family:'NotoJP';src:url('${fontUrl}') format('opentype');}</style>`;
-  let rects = '', texts = '';
+  const totalW = colWidths.reduce((s, w) => s + w, 0);
+  const totalH = rowHeights.reduce((s, h) => s + h, 0);
+
+  const canvas = createCanvas(totalW, totalH);
+  const ctx    = canvas.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, totalW, totalH);
+
   let y = 0;
-
   for (let ri = 0; ri < rows.length; ri++) {
     const cells = rows[ri].values || [];
     let x = 0;
@@ -139,41 +147,60 @@ function buildSvg(gridData) {
       const tf    = fmt.textFormat || {};
       const w = colWidths[ci], h = rowHeights[ri];
 
+      // 背景色
       const bg = fmt.backgroundColor;
-      const bgColor = (bg && !(bg.red===1&&bg.green===1&&bg.blue===1)) ? toRgb(bg) : '#ffffff';
-      rects += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${bgColor}" stroke="#cccccc" stroke-width="0.4"/>`;
+      const isWhite = !bg || (bg.red===1 && bg.green===1 && bg.blue===1) || (!bg.red && !bg.green && !bg.blue);
+      if (!isWhite) {
+        ctx.fillStyle = toRgba(bg);
+        ctx.fillRect(x, y, w, h);
+      }
 
+      // 枠線
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x + 0.25, y + 0.25, w - 0.5, h - 0.5);
+
+      // テキスト
       if (value) {
-        const color    = tf.foregroundColor ? toRgb(tf.foregroundColor) : '#000000';
-        const bold     = tf.bold ? 'bold' : 'normal';
-        const fontSize = tf.fontSize ? tf.fontSize * 0.78 : 9;
-        const ha       = fmt.horizontalAlignment;
-        let tx, anchor;
-        if (ha==='CENTER')      { tx=x+w/2; anchor='middle'; }
-        else if (ha==='RIGHT')  { tx=x+w-2; anchor='end'; }
-        else                    { tx=x+2;   anchor='start'; }
-        const ty = y + h/2 + fontSize*0.35;
-        const clipId = `c${ri}_${ci}`;
-        defs  += `<clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath>`;
-        texts += `<text x="${tx}" y="${ty}" font-size="${fontSize}" font-weight="${bold}" fill="${color}" text-anchor="${anchor}" font-family="NotoJP,Arial,sans-serif" clip-path="url(#${clipId})">${escapeXml(value)}</text>`;
+        const fontSize = tf.fontSize ? Math.round(tf.fontSize * 0.82) : 9;
+        const bold     = tf.bold ? 'bold ' : '';
+        ctx.font = `${bold}${fontSize}px "NotoJP"`;
+        ctx.fillStyle = tf.foregroundColor ? toRgba(tf.foregroundColor, '#000000') : '#000000';
+
+        const ha = fmt.horizontalAlignment;
+        let tx;
+        if (ha === 'CENTER')     { ctx.textAlign = 'center'; tx = x + w / 2; }
+        else if (ha === 'RIGHT') { ctx.textAlign = 'right';  tx = x + w - 2; }
+        else                     { ctx.textAlign = 'left';   tx = x + 2; }
+
+        const ty = y + h / 2 + fontSize * 0.36;
+
+        // クリップして描画
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        ctx.fillText(value, tx, ty);
+        ctx.restore();
       }
       x += w;
     }
     y += rowHeights[ri];
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}">${defs}</defs><rect width="${totalW}" height="${totalH}" fill="#fff"/>${rects}${texts}</svg>`;
-}
-
-// ── sharp で SVG → PNG ───────────────────────────────────
-async function screenshotCells(spreadsheetId) {
-  const gridData = await fetchCellsData(spreadsheetId);
-  const svg      = buildSvg(gridData);
   if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
   const filename   = `sheet_${Date.now()}.png`;
   const outputPath = path.join(TEMP_DIR, filename);
-  await sharp(Buffer.from(svg)).png().toFile(outputPath);
-  setTimeout(() => fs.unlink(outputPath, () => {}), 60*60*1000);
+
+  await new Promise((resolve, reject) => {
+    const out    = fs.createWriteStream(outputPath);
+    const stream = canvas.createPNGStream();
+    stream.pipe(out);
+    out.on('finish', resolve);
+    out.on('error', reject);
+  });
+
+  setTimeout(() => fs.unlink(outputPath, () => {}), 60 * 60 * 1000);
   return filename;
 }
 
