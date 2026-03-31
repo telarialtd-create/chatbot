@@ -8,30 +8,19 @@ const { lineConfig, handleLineEvent, middleware: lineMiddleware } = require('./l
 const app = express();
 app.use(express.static('public'));
 
-// LINE webhook は署名検証のため raw body が必要 → express.json() より先に登録
-if (process.env.LINE_CHANNEL_ACCESS_TOKEN) {
-  if (process.env.LINE_CHANNEL_SECRET) {
-    app.post(
-      '/webhook/line',
-      express.raw({ type: 'application/json' }),
-      lineMiddleware(lineConfig),
-      (req, res) => {
-        Promise.all(req.body.events.map(handleLineEvent))
-          .then(() => res.status(200).end())
-          .catch(err => { console.error('[LINE webhook]', err); res.status(500).end(); });
-      }
-    );
-    console.log('LINE webhook 有効（署名検証あり）: POST /webhook/line');
-  } else {
-    app.post('/webhook/line', express.json(), (req, res) => {
-      const events = req.body?.events || [];
-      Promise.all(events.map(handleLineEvent))
-        .then(() => res.status(200).end())
-        .catch(err => { console.error('[LINE webhook]', err); res.status(500).end(); });
-    });
-    console.warn('LINE webhook 有効（署名検証なし）: POST /webhook/line');
-  }
-}
+// LINE webhook（署名検証なし・シンプル版でデバッグ）
+app.post('/webhook/line', express.json(), (req, res) => {
+  const events = req.body?.events || [];
+  console.log('[LINE webhook] 受信 events:', events.length, JSON.stringify(events).slice(0, 300));
+  events.forEach(ev => {
+    if (ev.type === 'message' && ev.message?.type === 'text') {
+      console.log('[LINE webhook] テキスト:', JSON.stringify(ev.message.text));
+    }
+  });
+  res.status(200).end();
+  Promise.all(events.map(handleLineEvent)).catch(err => console.error('[LINE webhook] エラー:', err.message));
+});
+console.log('LINE webhook 有効: POST /webhook/line');
 
 app.use(express.json());
 
