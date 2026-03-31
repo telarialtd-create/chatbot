@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "estama": "node estama_attendance.js"
+    "estama": "node estama_attendance.js",
+    "seo": "node seo_monitor_worker.js"
   },
   "keywords": [],
   "author": "",

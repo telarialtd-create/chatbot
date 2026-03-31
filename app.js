@@ -573,6 +573,220 @@ app.get('/api/test-line-full', async (req, res) => {
   });
 });
 
+// ===== 月末AM6:00に翌月シートを自動作成 =====
+const SCHEDULE_SPREADSHEET_ID_FOR_MONTHLY = '10siqLe6B9A7uvNWgRUdHb462RqxCxkGEGMEKTPhY-S8';
+
+async function maybeCreateNextMonthSheet() {
+  const now = new Date();
+  // AM6:00の1分間だけ実行
+  if (now.getHours() !== 6 || now.getMinutes() !== 0) return;
+
+  // 翌日が1日 = 今日が月末
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (tomorrow.getDate() !== 1) return;
+
+  const nextMonth = tomorrow.getMonth() + 1;
+  const newSheetName = `${tomorrow.getFullYear()}年${nextMonth}月`;
+
+  try {
+    const { google } = require('googleapis');
+    const auth = (() => {
+      const c = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        'http://localhost'
+      );
+      c.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+      return c;
+    })();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const ID = SCHEDULE_SPREADSHEET_ID_FOR_MONTHLY;
+
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: ID });
+    if (meta.data.sheets.some(s => s.properties.title === newSheetName)) {
+      console.log(`[月次シート] ${newSheetName} は既に存在します`);
+      return;
+    }
+
+    // 当月シートのA1:AQ全行を取得
+    const currentSheetName = `${now.getFullYear()}年${now.getMonth() + 1}月`;
+    const marchRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: ID,
+      range: `'${currentSheetName}'!A1:AQ60`,
+      valueRenderOption: 'FORMATTED_VALUE',
+    });
+    const curRows = marchRes.data.values || [];
+
+    // 翌月1日の曜日を計算
+    const dayNames = ['日','月','火','水','木','金','土'];
+    const next1stDay = tomorrow.getDay();
+    // 翌月の日数
+    const daysInNextMonth = new Date(tomorrow.getFullYear(), nextMonth, 0).getDate();
+
+    // 行1: 月名（"4月"形式）+ 空白3 + 日付1〜月末 + 翌翌月1日
+    const row1 = [String(nextMonth) + '月', '', '', ''];
+    for (let d = 1; d <= daysInNextMonth; d++) row1.push(String(d));
+    row1.push('1');
+
+    // 行2: URL + 空白2 + "出勤日数" + 翌月の曜日（翌翌月1日まで）
+    const url = (curRows[1] || [])[0] || '';
+    const row2 = [url, '', '', '出勤日数'];
+    for (let d = 0; d <= daysInNextMonth; d++) row2.push(dayNames[(next1stDay + d) % 7]);
+
+    // 行3: A-Dキープ、E以降空白
+    const row3base = (curRows[2] || []).slice(0, 4);
+    while (row3base.length < 4) row3base.push('');
+    const row3 = [...row3base, ...Array(daysInNextMonth + 1).fill('')];
+
+    // 行4以降: A-Dキープ + 当月AJ-AQ(翌月1-8日分)をE-Lへ + 残りクリア
+    const staffRows = [];
+    for (let i = 3; i < curRows.length; i++) {
+      const r = curRows[i] || [];
+      const base = r.slice(0, 4);
+      while (base.length < 4) base.push('');
+      const ajaq = r.slice(35, 43); // AJ-AQ
+      while (ajaq.length < 8) ajaq.push('');
+      staffRows.push([...base, ...ajaq, ...Array(daysInNextMonth + 1 - 8).fill('')]);
+    }
+
+    // 新シートを左端（index 0）に作成
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: ID,
+      requestBody: { requests: [{ addSheet: { properties: { title: newSheetName, index: 0 } } }] },
+    });
+
+    // データ書き込み
+    const writeData = [
+      { range: `'${newSheetName}'!A1`, values: [row1] },
+      { range: `'${newSheetName}'!A2`, values: [row2] },
+      { range: `'${newSheetName}'!A3`, values: [row3] },
+    ];
+    if (staffRows.length > 0) {
+      writeData.push({ range: `'${newSheetName}'!A4`, values: staffRows });
+    }
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: ID,
+      requestBody: { valueInputOption: 'USER_ENTERED', data: writeData },
+    });
+
+    console.log(`[月次シート] ${newSheetName} を作成しました（左端・曜日正確・AJ-AQ移植）`);
+  } catch (e) {
+    console.error('[月次シート] 作成エラー:', e.message);
+  }
+}
+
+// 1分ごとにチェック
+setInterval(maybeCreateNextMonthSheet, 60 * 1000);
+// ==========================================
+
+// ==========================================
+// SEOチェック エンドポイント
+// GitHub Actions から毎朝10時(JST)に呼ばれる
+// ==========================================
+const puppeteer = require('puppeteer');
+
+const SEO_KEYWORDS = [
+  'メンズエステ求人',
+  'メンズエステ　求人',
+  'メンエス求人',
+  'メンエス　求人',
+];
+const SEO_STORE_PATTERNS = [/CREA/i, /クレア/, /ふわもこ/, /fuwamoko/i];
+
+function seoContainsStore(text) {
+  return SEO_STORE_PATTERNS.some(p => p.test(text));
+}
+
+async function seoGetFirstPageResults(browser, keyword) {
+  const page = await browser.newPage();
+  await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+  try {
+    await page.goto(`https://www.google.co.jp/search?q=${encodeURIComponent(keyword)}&num=10&hl=ja`, { waitUntil: 'networkidle2', timeout: 30000 });
+    return await page.evaluate(() => {
+      const items = [];
+      document.querySelectorAll('#search .g, #rso > div').forEach(el => {
+        const linkEl = el.querySelector('a[href^="http"]');
+        if (!linkEl) return;
+        items.push({
+          title:   el.querySelector('h3')?.textContent?.trim() || '',
+          snippet: el.querySelector('.VwiC3b, [data-sncf="1"]')?.textContent?.trim() || '',
+          url:     linkEl.href,
+        });
+      });
+      return items;
+    });
+  } finally {
+    await page.close();
+  }
+}
+
+async function seoCheckSite(browser, url) {
+  const page = await browser.newPage();
+  await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const body = await page.evaluate(() => document.body?.innerText || '');
+    return seoContainsStore(body);
+  } catch (_) {
+    return false;
+  } finally {
+    await page.close();
+  }
+}
+
+async function runSeoCheck() {
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const missing = [];
+  try {
+    for (const keyword of SEO_KEYWORDS) {
+      console.log(`[SEO] 検索: ${keyword}`);
+      const results = await seoGetFirstPageResults(browser, keyword);
+      let found = results.some(r => seoContainsStore(`${r.title} ${r.snippet} ${r.url}`));
+
+      if (!found) {
+        for (const r of results) {
+          if (r.url.includes('google.')) continue;
+          found = await seoCheckSite(browser, r.url);
+          if (found) break;
+          await new Promise(res => setTimeout(res, 2000));
+        }
+      }
+
+      console.log(`[SEO] "${keyword}" → ${found ? '掲載あり' : '掲載なし'}`);
+      if (!found) missing.push(keyword);
+      await new Promise(res => setTimeout(res, 5000));
+    }
+  } finally {
+    await browser.close();
+  }
+
+  if (missing.length > 0) {
+    const { messagingApi } = require('@line/bot-sdk');
+    const client = new messagingApi.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
+    const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const timeStr = jst.toISOString().replace('T', ' ').slice(0, 16);
+    await client.pushMessage({
+      to: process.env.LINE_USER_ID,
+      messages: [{ type: 'text', text: `【求人SEO 掲載なし通知】\n\n以下のキーワードでCREA・ふわもこSPAが\nGoogle 1ページ目に見当たりませんでした:\n\n${missing.map(k => `・${k}`).join('\n')}\n\n確認日時(JST): ${timeStr}` }],
+    });
+    console.log('[SEO] LINE通知送信完了');
+  }
+  return missing;
+}
+
+app.post('/seo-check', async (req, res) => {
+  const token = req.headers['x-seo-token'];
+  if (token !== process.env.SEO_CHECK_TOKEN) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  res.json({ status: 'started' });
+  runSeoCheck()
+    .then(missing => console.log('[SEO] 完了 missing:', missing))
+    .catch(err => console.error('[SEO] エラー:', err.message));
+});
+// ==========================================
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`サーバー起動: http://localhost:${PORT}`);
