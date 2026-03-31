@@ -11,6 +11,16 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
+// リポジトリ同梱の日本語フォント（base64）
+const FONT_PATH = path.join(__dirname, 'fonts', 'NotoSansJP.otf');
+let _fontBase64 = null;
+function getFontBase64() {
+  if (!_fontBase64) {
+    _fontBase64 = fs.readFileSync(FONT_PATH).toString('base64');
+  }
+  return _fontBase64;
+}
+
 const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
 const TARGET_GID = 1873674341;
 const RANGE = 'CA3:CR32';
@@ -85,73 +95,45 @@ async function findSpreadsheetId(date) {
   return file.id;
 }
 
-// ── Sheets API でセルデータ取得（値＋書式） ───────────────
+// ── Sheets API でセルデータ取得 ───────────────────────────
 async function fetchCellsData(spreadsheetId) {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
-
-  // シート名を GID から解決
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const sheet = meta.data.sheets.find(s => s.properties.sheetId === TARGET_GID);
   if (!sheet) throw new Error(`シートが見つかりません (gid=${TARGET_GID})`);
   const sheetName = sheet.properties.title;
-
-  // 値＋書式を一括取得
   const res = await sheets.spreadsheets.get({
     spreadsheetId,
     ranges: [`'${sheetName}'!${RANGE}`],
     includeGridData: true,
   });
-
   return res.data.sheets?.[0]?.data?.[0];
 }
 
-// ── セルデータ → SVG ─────────────────────────────────────
+// ── セルデータ → SVG（日本語フォント埋め込み） ───────────
 function escapeXml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
-function toRgb(colorObj) {
-  if (!colorObj) return '#ffffff';
-  const r = Math.round((colorObj.red   || 0) * 255);
-  const g = Math.round((colorObj.green || 0) * 255);
-  const b = Math.round((colorObj.blue  || 0) * 255);
-  return `rgb(${r},${g},${b})`;
+function toRgb(c) {
+  if (!c) return '#ffffff';
+  return `rgb(${Math.round((c.red||0)*255)},${Math.round((c.green||0)*255)},${Math.round((c.blue||0)*255)})`;
 }
 
 function buildSvg(gridData) {
-  const rows = gridData?.rowData || [];
-  // Sheetsが返す列・行のサイズ（ピクセル換算）
+  const rows    = gridData?.rowData || [];
   const colMeta = gridData?.columnMetadata || [];
-  const rowMeta = gridData?.rowMetadata    || [];
+  const rowMeta = gridData?.rowMetadata || [];
+  const numCols = rows.reduce((m,r) => Math.max(m,(r.values||[]).length), 0);
 
-  const COL_DEFAULT = 60;
-  const ROW_DEFAULT = 21;
-  const FONT_SIZE   = 10;
-  const PAD         = 3;
+  const colWidths  = Array.from({length:numCols}, (_,i) => colMeta[i]?.pixelSize ? Math.max(colMeta[i].pixelSize*0.8,28) : 56);
+  const rowHeights = rows.map((_,i) => rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize*0.8,17) : 20);
+  const totalW = colWidths.reduce((s,w)=>s+w,0);
+  const totalH = rowHeights.reduce((s,h)=>s+h,0);
 
-  // 各列幅・行高を決定（Sheetsはポイント単位で返す）
-  const numCols = rows.reduce((m, r) => Math.max(m, (r.values || []).length), 0);
-  const numRows = rows.length;
-
-  const colWidths = Array.from({ length: numCols }, (_, i) => {
-    const px = colMeta[i]?.pixelSize;
-    return px ? Math.max(px * 0.8, 30) : COL_DEFAULT;
-  });
-  const rowHeights = Array.from({ length: numRows }, (_, i) => {
-    const px = rowMeta[i]?.pixelSize;
-    return px ? Math.max(px * 0.8, 18) : ROW_DEFAULT;
-  });
-
-  const totalW = colWidths.reduce((s, w) => s + w, 0);
-  const totalH = rowHeights.reduce((s, h) => s + h, 0);
-
-  let rects = '';
-  let texts = '';
+  const fontB64 = getFontBase64();
+  let defs = `<defs><style>@font-face{font-family:'NotoJP';src:url('data:font/otf;base64,${fontB64}') format('opentype');}</style>`;
+  let rects = '', texts = '';
   let y = 0;
 
   for (let ri = 0; ri < rows.length; ri++) {
@@ -162,59 +144,43 @@ function buildSvg(gridData) {
       const value = cell.formattedValue ?? '';
       const fmt   = cell.effectiveFormat || {};
       const tf    = fmt.textFormat || {};
+      const w = colWidths[ci], h = rowHeights[ri];
 
-      const w = colWidths[ci];
-      const h = rowHeights[ri];
-
-      // 背景色
       const bg = fmt.backgroundColor;
-      const bgColor = (bg && !(bg.red === 1 && bg.green === 1 && bg.blue === 1))
-        ? toRgb(bg) : '#ffffff';
+      const bgColor = (bg && !(bg.red===1&&bg.green===1&&bg.blue===1)) ? toRgb(bg) : '#ffffff';
+      rects += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${bgColor}" stroke="#cccccc" stroke-width="0.4"/>`;
 
-      rects += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${bgColor}" stroke="#cccccc" stroke-width="0.5"/>`;
-
-      // テキスト
       if (value) {
-        const fg       = tf.foregroundColor;
-        const color    = fg ? toRgb(fg) : '#000000';
+        const color    = tf.foregroundColor ? toRgb(tf.foregroundColor) : '#000000';
         const bold     = tf.bold ? 'bold' : 'normal';
-        const fontSize = tf.fontSize ? tf.fontSize * 0.8 : FONT_SIZE;
+        const fontSize = tf.fontSize ? tf.fontSize * 0.78 : 9;
         const ha       = fmt.horizontalAlignment;
         let tx, anchor;
-        if (ha === 'CENTER') { tx = x + w / 2; anchor = 'middle'; }
-        else if (ha === 'RIGHT') { tx = x + w - PAD; anchor = 'end'; }
-        else { tx = x + PAD; anchor = 'start'; }
-        const ty = y + h / 2 + fontSize * 0.35;
-
-        texts += `<text x="${tx}" y="${ty}" font-size="${fontSize}" font-weight="${bold}" fill="${color}" text-anchor="${anchor}" font-family="Arial,sans-serif" clip-path="url(#c${ri}_${ci})">${escapeXml(value)}</text>`;
-        rects  += `<clipPath id="c${ri}_${ci}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath>`;
+        if (ha==='CENTER')      { tx=x+w/2; anchor='middle'; }
+        else if (ha==='RIGHT')  { tx=x+w-2; anchor='end'; }
+        else                    { tx=x+2;   anchor='start'; }
+        const ty = y + h/2 + fontSize*0.35;
+        const clipId = `c${ri}_${ci}`;
+        defs  += `<clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath>`;
+        texts += `<text x="${tx}" y="${ty}" font-size="${fontSize}" font-weight="${bold}" fill="${color}" text-anchor="${anchor}" font-family="NotoJP,Arial,sans-serif" clip-path="url(#${clipId})">${escapeXml(value)}</text>`;
       }
-
       x += w;
     }
     y += rowHeights[ri];
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}">
-<rect width="${totalW}" height="${totalH}" fill="#ffffff"/>
-${rects}
-${texts}
-</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}">${defs}</defs><rect width="${totalW}" height="${totalH}" fill="#fff"/>${rects}${texts}</svg>`;
 }
 
 // ── sharp で SVG → PNG ───────────────────────────────────
 async function screenshotCells(spreadsheetId) {
   const gridData = await fetchCellsData(spreadsheetId);
   const svg      = buildSvg(gridData);
-
   if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
-
   const filename   = `sheet_${Date.now()}.png`;
   const outputPath = path.join(TEMP_DIR, filename);
-
   await sharp(Buffer.from(svg)).png().toFile(outputPath);
-
-  setTimeout(() => fs.unlink(outputPath, () => {}), 60 * 60 * 1000);
+  setTimeout(() => fs.unlink(outputPath, () => {}), 60*60*1000);
   return filename;
 }
 
@@ -260,7 +226,7 @@ function handleLineEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return;
 
   const text = event.message.text.trim();
-  if (!text.includes('(教えて)') && !text.includes('（教えて）')) return;
+  if (!text.includes('教えて')) return;
 
   const client = createLineClient();
   const target = getPushTarget(event);
