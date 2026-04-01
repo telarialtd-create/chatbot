@@ -42,10 +42,12 @@ async function safeWaitForNav(page, timeout = 8000) {
 
 // ログイン
 async function login(page) {
-  console.log('[login] ログイン中...');
+  const user = process.env.ESTAMA_USER || '';
+  const pass = process.env.ESTAMA_PASS || '';
+  console.log('[login] ログイン中... user=' + (user ? user.substring(0, 5) + '***' : 'EMPTY'));
   await page.goto('https://estama.jp/login/?r=/admin/', { waitUntil: 'networkidle2' });
-  await page.type('#inputEmail', process.env.ESTAMA_USER, { delay: 30 });
-  await page.type('#inputPassword', process.env.ESTAMA_PASS, { delay: 30 });
+  await page.type('#inputEmail', user, { delay: 30 });
+  await page.type('#inputPassword', pass, { delay: 30 });
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }),
     page.click('a[data-post="login_shop"]'),
