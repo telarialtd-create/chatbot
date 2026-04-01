@@ -97,21 +97,30 @@ async function runRealtimeKyakka(page) {
   await clickByText(page, '新しいメッセージを書く');
   await safeWaitForNav(page);
 
-  // テンプレート選択
-  const selected = await page.evaluate(() => {
-    const option = [...document.querySelectorAll('option')]
-      .find(e => e.textContent.includes('新人入店記念キャンペーン'));
-    if (option) {
-      option.selected = true;
-      option.closest('select').dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    }
-    return false;
+  // テンプレート選択（対象テンプレートがなければ最初のオプションを使用）
+  const templateResult = await page.evaluate(() => {
+    const options = [...document.querySelectorAll('option')].filter(e => e.value && e.value !== '');
+    if (options.length === 0) return 'no_options';
+    const target = options.find(e => e.textContent.includes('新人入店記念キャンペーン'));
+    const chosen = target || options[0];
+    chosen.selected = true;
+    chosen.closest('select').dispatchEvent(new Event('change', { bubbles: true }));
+    return chosen.textContent.trim();
   });
-  if (!selected) console.warn('[集客] テンプレートが見つかりませんでした');
+  if (templateResult === 'no_options') {
+    console.warn('[集客] テンプレートが存在しないためスキップ');
+    return;
+  }
+  console.log('[集客] テンプレート選択:', templateResult);
   await new Promise(r => setTimeout(r, 1500));
 
-  await clickByText(page, '投稿する');
+  const posted = await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('a,button,input[type="submit"]')]
+      .find(e => e.innerText && e.innerText.includes('投稿'));
+    if (btn) { btn.click(); return true; }
+    return false;
+  });
+  if (!posted) { console.warn('[集客] 投稿ボタンが見つかりません'); return; }
   await safeWaitForNav(page);
 
   console.log('[集客] 完了');
@@ -190,11 +199,11 @@ async function main() {
 
     } catch (err) {
       console.error('[エラー]', err.message);
-      // エラー時は再ログインを試みる
+      // セッション切れの場合のみ再ログイン
       try {
-        await login(page);
+        await ensureLoggedIn(page);
       } catch (e) {
-        console.error('[再ログイン失敗]', e.message);
+        console.error('[セッション確認失敗]', e.message);
       }
     }
 
