@@ -1,0 +1,33 @@
+name: 週次スケジュールLINE送信（毎日JST 03:00）
+
+on:
+  schedule:
+    # JST 03:00 = UTC 18:00（前日）
+    - cron: '0 18 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  send-schedule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 依存パッケージをインストール
+        run: |
+          pip install --quiet pymupdf Pillow numpy
+
+      - name: スケジュールをLINE送信
+        env:
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+        run: |
+          python scripts/send_schedule_line.py
