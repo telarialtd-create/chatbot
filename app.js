@@ -497,80 +497,17 @@ app.get('/api/test-line', async (req, res) => {
   }
 });
 
-// デバッグ: 手動で (教えて) フロー全体を実行
+// デバッグ: 手動で (教えて) フロー全体を実行（line_handler.js の実処理を直接呼ぶ）
 app.get('/api/test-line-full', async (req, res) => {
-  res.json({ ok: true, message: 'バックグラウンドでスクショ処理開始' });
   const { messagingApi } = require('@line/bot-sdk');
-  const client = new messagingApi.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
-  const target = process.env.LINE_USER_ID;
-  setImmediate(async () => {
-    try {
-      const { findSpreadsheetId, screenshotCells, getSheetBusinessDate } = require('./line_handler_test');
-    } catch(e) {}
-    // line_handler の processAndPush と同じ処理をここで直接実行
-    try {
-      const { google } = require('googleapis');
-      const sharp = require('sharp');
-      const fs = require('fs'), path = require('path');
-
-      const now = new Date();
-      const d = now.getHours() < 6 ? new Date(now.getTime() - 86400000) : now;
-      const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
-      console.log('[TEST] 検索日:', dateStr);
-
-      const auth = (() => {
-        const client_id = process.env.GOOGLE_CLIENT_ID;
-        const client_secret = process.env.GOOGLE_CLIENT_SECRET;
-        const refresh_token = process.env.GOOGLE_REFRESH_TOKEN;
-        const c = new google.auth.OAuth2(client_id, client_secret, 'http://localhost');
-        c.setCredentials({ refresh_token });
-        return c;
-      })();
-
-      const drive = google.drive({ version: 'v3', auth });
-      const res2 = await drive.files.list({
-        q: `'1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ' in parents and name contains '${dateStr}'`,
-        fields: 'files(id,name)', pageSize: 5,
-      });
-      const file = res2.data.files?.[0];
-      if (!file) throw new Error(`ファイルなし: ${dateStr}`);
-      console.log('[TEST] ファイル:', file.name);
-
-      const sheets = google.sheets({ version: 'v4', auth });
-      const meta = await sheets.spreadsheets.get({ spreadsheetId: file.id });
-      const sheet = meta.data.sheets.find(s => s.properties.sheetId === 1873674341);
-      console.log('[TEST] シート:', sheet?.properties?.title);
-
-      const sheetData = await sheets.spreadsheets.get({
-        spreadsheetId: file.id,
-        ranges: [`'${sheet.properties.title}'!CA3:CR32`],
-        includeGridData: true,
-      });
-      const gridData = sheetData.data.sheets?.[0]?.data?.[0];
-      const rows = gridData?.rowData || [];
-      console.log('[TEST] 行数:', rows.length);
-
-      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="50"><rect width="200" height="50" fill="#fff" stroke="#ccc"/><text x="5" y="30" font-size="14">取得OK: ' + rows.length + '行</text></svg>';
-      const tmpDir = path.join(__dirname, 'public', 'temp');
-      fs.mkdirSync(tmpDir, { recursive: true });
-      const tmpFile = path.join(tmpDir, `full_${Date.now()}.png`);
-      await sharp(Buffer.from(svg)).png().toFile(tmpFile);
-      console.log('[TEST] sharp OK');
-
-      const { messagingApi: ma } = require('@line/bot-sdk');
-      const c2 = new ma.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
-      const imageUrl = `${process.env.LINE_BOT_SERVER_URL}/temp/${path.basename(tmpFile)}`;
-      await c2.pushMessage({ to: target, messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }] });
-      console.log('[TEST] Push OK:', imageUrl);
-    } catch(e) {
-      console.error('[TEST] エラー:', e.message);
-      try {
-        const { messagingApi: ma } = require('@line/bot-sdk');
-        const c2 = new ma.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
-        await c2.pushMessage({ to: target, messages: [{ type: 'text', text: `[デバッグ]エラー: ${e.message}` }] });
-      } catch(_) {}
-    }
-  });
+  const { handleLineEvent } = require('./line_handler');
+  const fakeEvent = {
+    type: 'message',
+    message: { type: 'text', text: '教えて' },
+    source: { userId: process.env.LINE_USER_ID },
+  };
+  handleLineEvent(fakeEvent);
+  res.json({ ok: true, message: 'バックグラウンドでスクショ処理開始（line_handler経由）' });
 });
 
 // ===== 月末AM6:00に翌月シートを自動作成 =====
