@@ -141,11 +141,22 @@ async function runRealtimeKyujin(page) {
 // メインループ
 // ─────────────────────────────────────────
 async function main() {
+  console.log('[起動] ESTAMA_USER=' + (process.env.ESTAMA_USER ? process.env.ESTAMA_USER.substring(0, 5) + '***' : 'EMPTY'));
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+    ],
   });
   const page = await browser.newPage();
+  page.setDefaultNavigationTimeout(60000);
   await page.setViewport({ width: 1280, height: 900 });
   await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
