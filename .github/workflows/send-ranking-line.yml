@@ -1,0 +1,28 @@
+name: ランキングLINE送信（毎日JST 12:00）
+
+on:
+  schedule:
+    # JST 12:00 = UTC 03:00
+    - cron: '0 3 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  send-ranking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: ランキングをLINE送信
+        env:
+          LINE_TOKEN:    ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:  ${{ secrets.LINE_USER_ID }}
+        run: |
+          python scripts/ranking_check.py
