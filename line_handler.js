@@ -224,15 +224,46 @@ async function screenshotCells(spreadsheetId) {
 // 以下の形式をすべてサポート:
 //   【4月7日、ここあ】  【4月7日,ここあ】
 //   4月7日 ここあ  4月7日　ここあ（全角スペース）
+//   複数行形式:
+//     日時　4月7日
+//     名前　ここあ
+//     交通費　片道      ← 省略可（省略時はH18の値をそのまま使用）
 function parseMeisaiRequest(text) {
+  // 複数行フォーマット（日時・名前・交通費）
+  if (/日時/.test(text) && /名前/.test(text)) {
+    const dateMatch      = text.match(/日時[\s　:：]*(.+)/);
+    const nameMatch      = text.match(/名前[\s　:：]*(.+)/);
+    const transportMatch = text.match(/交通費[\s　:：]*(.+)/);
+    if (dateMatch && nameMatch) {
+      const transportRaw = transportMatch ? transportMatch[1].trim() : null;
+      // 片道/往復/P のいずれかに正規化（それ以外は null）
+      const transportType = normalizeTransportType(transportRaw);
+      return {
+        dateStr:       dateMatch[1].trim(),
+        name:          nameMatch[1].trim(),
+        transportType,
+      };
+    }
+  }
+
   // 【】形式
   const bracketMatch = text.match(/【(.+?)[,、](.+?)】/);
-  if (bracketMatch) return { dateStr: bracketMatch[1].trim(), name: bracketMatch[2].trim() };
+  if (bracketMatch) return { dateStr: bracketMatch[1].trim(), name: bracketMatch[2].trim(), transportType: null };
 
-  // 「日付 名前」スペース区切り形式（日付は〇月〇日 or 〇/〇 を含む）
+  // 「日付 名前」スペース区切り形式（日付は〇月〇日 を含む）
   const spaceMatch = text.match(/^((?:\d{4}年)?\d{1,2}月\d{1,2}日)[\s　]+(\S+)$/);
-  if (spaceMatch) return { dateStr: spaceMatch[1].trim(), name: spaceMatch[2].trim() };
+  if (spaceMatch) return { dateStr: spaceMatch[1].trim(), name: spaceMatch[2].trim(), transportType: null };
 
+  return null;
+}
+
+// 交通費種別を正規化（片道/往復/P → そのまま返す、それ以外はnull）
+function normalizeTransportType(raw) {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (s === '片道') return '片道';
+  if (s === '往復') return '往復';
+  if (s.toUpperCase() === 'P' || s === 'ｐ') return 'P';
   return null;
 }
 
@@ -472,10 +503,14 @@ async function screenshotMeisai(spreadsheetId) {
 }
 
 // 明細処理本体（バックグラウンド）
-async function processMeisaiAndPush(target, client, dateStr, name) {
+async function processMeisaiAndPush(target, client, dateStr, name, transportType = null) {
   try {
     const spreadsheetId = await findSpreadsheetByDateStr(dateStr);
     await writeCellValue(spreadsheetId, MEISAI_SHEET_NAME, MEISAI_NAME_CELL, name);
+    // 交通費種別が指定されていればH18に書き込む（省略時はシートの既存値を使用）
+    if (transportType !== null) {
+      await writeCellValue(spreadsheetId, MEISAI_SHEET_NAME, 'H18', transportType);
+    }
     await runAppsScript(spreadsheetId);
     // スクリプト完了を3秒待つ
     await new Promise(r => setTimeout(r, 3000));
@@ -545,8 +580,8 @@ function handleLineEvent(event) {
   const meisai = parseMeisaiRequest(text);
   if (meisai) {
     const target = event.source?.groupId || event.source?.userId || process.env.LINE_USER_ID;
-    console.log(`[LINE] 明細リクエスト受信: ${meisai.dateStr} / ${meisai.name} → target=${target}`);
-    setImmediate(() => processMeisaiAndPush(target, client, meisai.dateStr, meisai.name));
+    console.log(`[LINE] 明細リクエスト受信: ${meisai.dateStr} / ${meisai.name} / 交通費=${meisai.transportType ?? '指定なし'} → target=${target}`);
+    setImmediate(() => processMeisaiAndPush(target, client, meisai.dateStr, meisai.name, meisai.transportType));
     return;
   }
 
