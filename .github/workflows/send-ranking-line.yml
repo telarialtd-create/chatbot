@@ -7,8 +7,8 @@ on:
         description: 'CREAの前日アクセス数（VPSから取得）'
         required: false
         default: ''
-      crea_admin_rank:
-        description: 'CREAの24時間ランキング（VPSから取得）'
+      fuwa_access:
+        description: 'ふわもこSPAの前日アクセス数（VPSから取得）'
         required: false
         default: ''
 
@@ -31,6 +31,6 @@ jobs:
           LINE_TOKEN:         ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID:       ${{ secrets.LINE_USER_ID }}
           CREA_ACCESS:        ${{ inputs.crea_access }}
-          CREA_ADMIN_RANK:    ${{ inputs.crea_admin_rank }}
+          FUWA_ACCESS:        ${{ inputs.fuwa_access }}
         run: |
           python scripts/ranking_check.py

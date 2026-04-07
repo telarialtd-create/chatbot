@@ -11,7 +11,7 @@ LINE_TOKEN = os.environ["LINE_TOKEN"]
 LINE_USER_ID = os.environ["LINE_USER_ID"]
 # VPSから渡されるエスタマ管理画面データ
 CREA_ACCESS = os.environ.get("CREA_ACCESS", "")
-CREA_ADMIN_RANK = os.environ.get("CREA_ADMIN_RANK", "")
+FUWA_ACCESS = os.environ.get("FUWA_ACCESS", "")
 
 TARGETS = ["CREA", "ふわもこ"]
 
@@ -124,19 +124,18 @@ def get_rankings():
             results[site_name] = {t: "取得失敗" for t in TARGETS}
     return results
 
-def build_message(results, crea_access=None, crea_ranking=None):
+def build_message(results, crea_access=None, fuwa_access=None):
     today = datetime.now().strftime("%Y/%m/%d")
     lines = [f"📊 ランキング通知 {today}\n"]
 
-    # CREAアクセス数（管理画面から取得）
-    if crea_access is not None:
-        lines.append("【CREA 管理画面データ】")
-        lines.append(f"  前日アクセス数：{crea_access}")
-        lines.append("")
+    admin_data = {"CREA": crea_access, "ふわもこ": fuwa_access}
 
     for shop in TARGETS:
         label = "CREA" if shop == "CREA" else "ふわもこSPA"
         lines.append(f"【{label}】")
+        access = admin_data.get(shop)
+        if access:
+            lines.append(f"  前日アクセス数：{access}")
         for site, ranks in results.items():
             r = ranks[shop]
             rank_str = f"{r}位" if isinstance(r, int) else r
@@ -163,10 +162,10 @@ def send_line(message):
 if __name__ == "__main__":
     # VPSから渡されたエスタマ管理画面データを使用
     crea_access = CREA_ACCESS if CREA_ACCESS else None
-    crea_ranking = CREA_ADMIN_RANK if CREA_ADMIN_RANK else None
+    fuwa_access = FUWA_ACCESS if FUWA_ACCESS else None
 
     results = get_rankings()
-    message = build_message(results, crea_access, crea_ranking)
+    message = build_message(results, crea_access, fuwa_access)
     print(message)
     send_line(message)
     print("送信完了")
