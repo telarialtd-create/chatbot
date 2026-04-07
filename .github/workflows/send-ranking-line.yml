@@ -1,7 +1,16 @@
 name: ランキングLINE送信（毎日JST 12:00）
 
 on:
-  workflow_dispatch: # 手動実行のみ（VPS crontabに移行済み: UTC 03:00 = JST 12:00）
+  workflow_dispatch:
+    inputs:
+      crea_access:
+        description: 'CREAの前日アクセス数（VPSから取得）'
+        required: false
+        default: ''
+      crea_admin_rank:
+        description: 'CREAの24時間ランキング（VPSから取得）'
+        required: false
+        default: ''
 
 jobs:
   send-ranking:
@@ -21,7 +30,7 @@ jobs:
         env:
           LINE_TOKEN:         ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID:       ${{ secrets.LINE_USER_ID }}
-          ESTAMA_CREA_USER:   ${{ secrets.ESTAMA_CREA_USER }}
-          ESTAMA_CREA_PASS:   ${{ secrets.ESTAMA_CREA_PASS }}
+          CREA_ACCESS:        ${{ inputs.crea_access }}
+          CREA_ADMIN_RANK:    ${{ inputs.crea_admin_rank }}
         run: |
           python scripts/ranking_check.py

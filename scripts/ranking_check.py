@@ -9,8 +9,9 @@ from datetime import datetime
 
 LINE_TOKEN = os.environ["LINE_TOKEN"]
 LINE_USER_ID = os.environ["LINE_USER_ID"]
-ESTAMA_CREA_USER = os.environ.get("ESTAMA_CREA_USER", "")
-ESTAMA_CREA_PASS = os.environ.get("ESTAMA_CREA_PASS", "")
+# VPSから渡されるエスタマ管理画面データ
+CREA_ACCESS = os.environ.get("CREA_ACCESS", "")
+CREA_ADMIN_RANK = os.environ.get("CREA_ADMIN_RANK", "")
 
 TARGETS = ["CREA", "ふわもこ"]
 
@@ -161,15 +162,9 @@ def send_line(message):
         return r.read().decode()
 
 if __name__ == "__main__":
-    # エスタマ管理画面からCREAのアクセスデータ取得
-    crea_access, crea_ranking = None, None
-    if ESTAMA_CREA_USER and ESTAMA_CREA_PASS:
-        try:
-            crea_access, crea_ranking = get_estama_admin_data(ESTAMA_CREA_USER, ESTAMA_CREA_PASS)
-            print(f"CREA 前日アクセス数: {crea_access} / 24hランキング: {crea_ranking}")
-        except Exception as e:
-            print(f"CREA管理画面取得失敗: {e}")
-            crea_access, crea_ranking = "取得失敗", "取得失敗"
+    # VPSから渡されたエスタマ管理画面データを使用
+    crea_access = CREA_ACCESS if CREA_ACCESS else None
+    crea_ranking = CREA_ADMIN_RANK if CREA_ADMIN_RANK else None
 
     results = get_rankings()
     message = build_message(results, crea_access, crea_ranking)
