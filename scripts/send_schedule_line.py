@@ -10,7 +10,9 @@ import tempfile
 import time
 import urllib.request
 import urllib.parse
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
+
+JST = timezone(timedelta(hours=9))
 
 SHEET_ID   = "10siqLe6B9A7uvNWgRUdHb462RqxCxkGEGMEKTPhY-S8"
 LINE_TOKEN  = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN",
@@ -80,7 +82,7 @@ def get_access_token():
 
 
 def get_sheet_info(access_token):
-    today  = date.today()
+    today  = datetime.now(JST).date()
     target = f"{today.year}年{today.month}月"
     url    = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}?fields=sheets.properties"
     raw    = http_get_with_retry(url, {"Authorization": f"Bearer {access_token}"})
@@ -103,7 +105,7 @@ def get_sheet_info(access_token):
 
 
 def get_date_column(access_token, sheet_title):
-    today   = date.today()
+    today   = datetime.now(JST).date()
     encoded = urllib.parse.quote(sheet_title)
     url     = (f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/"
                f"{encoded}!1:1?majorDimension=ROWS")
