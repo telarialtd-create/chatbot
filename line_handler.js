@@ -272,38 +272,121 @@ async function writeCellValue(spreadsheetId, sheetName, cell, value) {
   console.log(`[明細] ${sheetName}!${cell} に書き込み完了: ${value}`);
 }
 
-// Apps Script Web App を呼び出す（MEISAI_WEBAPP_URL 環境変数が必要）
+// setMeisaiFromUriage 相当の処理を Node.js で直接実装
+// 売上シートから名前でフィルタし、明細シートに書き込む
 async function runAppsScript(spreadsheetId) {
-  const webAppUrl = process.env.MEISAI_WEBAPP_URL;
-  if (!webAppUrl) {
-    console.log('[明細] MEISAI_WEBAPP_URL 未設定: スクリプト実行スキップ');
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // --- 1. 明細!H5:K5 から源氏名を取得 ---
+  const nameRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${MEISAI_SHEET_NAME}'!H5:K5`,
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const nameRow = (nameRes.data.values || [[]])[0] || [];
+  const genjimei = nameRow.find(v => v && String(v).trim() !== '') || '';
+  if (!genjimei) {
+    console.log('[明細] 源氏名が未設定のためスキップ');
     return;
   }
-  const https = require('https');
-  const http = require('http');
-  const url = new URL(webAppUrl);
-  const body = JSON.stringify({ spreadsheetId });
-  const options = {
-    hostname: url.hostname,
-    path: url.pathname + url.search,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-  };
-  await new Promise((resolve, reject) => {
-    const mod = url.protocol === 'https:' ? https : http;
-    const req = mod.request(options, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => {
-        console.log('[明細] Web App 応答:', data.slice(0, 200));
-        resolve();
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
+  console.log(`[明細] 源氏名: ${genjimei}`);
+
+  // --- 2. 明細!H18 から交通費種別を取得 ---
+  const transportRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${MEISAI_SHEET_NAME}'!H18`,
+    valueRenderOption: 'FORMATTED_VALUE',
   });
-  console.log('[明細] スクリプト実行完了');
+  const transportType = ((transportRes.data.values || [[]])[0] || [])[0] || '';
+
+  // --- 3. マスターシートから交通費を取得 ---
+  const MASTER_SS_ID = '1sh6MgPL4k2StMofKuys_5QA0-3JiDbdY98qe8bvAJEo';
+  let baseTransportFee = 0;
+  try {
+    const masterRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: MASTER_SS_ID,
+      range: 'E:F',
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    const masterRows = masterRes.data.values || [];
+    for (const row of masterRows) {
+      if (row[0] === genjimei) { baseTransportFee = Number(row[1]) || 0; break; }
+    }
+  } catch (e) {
+    console.log('[明細] マスターシート取得エラー（交通費=0）:', e.message);
+  }
+  const finalTransportFee =
+    transportType === '片道' ? baseTransportFee :
+    transportType === '往復' ? baseTransportFee * 2 : 0;
+
+  // --- 4. 前回分を取得（明細!Q30:R500 または T30:U500） ---
+  let zenkaiValue = 0;
+  try {
+    const z1Res = await sheets.spreadsheets.values.get({
+      spreadsheetId, range: `'${MEISAI_SHEET_NAME}'!Q30:R500`, valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    const z2Res = await sheets.spreadsheets.values.get({
+      spreadsheetId, range: `'${MEISAI_SHEET_NAME}'!T30:U500`, valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    const findZenkai = (rows) => {
+      for (const r of (rows || [])) { if (r[0] === genjimei) return Number(r[1]) || 0; }
+      return null;
+    };
+    zenkaiValue = findZenkai(z1Res.data.values) ?? findZenkai(z2Res.data.values) ?? 0;
+  } catch (e) {
+    console.log('[明細] 前回分取得エラー（=0）:', e.message);
+  }
+
+  // --- 5. 売上シートから該当名のデータを取得（AN:BB列） ---
+  // AN=本数, AO=店名, AP=源氏名, AQ=指名, AR=OP, AV=コース, AZ=料金(×1000), BB=給料(×1000)
+  const urRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "'売上'!AN:BB",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const urRows = (urRes.data.values || []).slice(1); // ヘッダー除く
+  const toK = v => (v === '' || v === null || v === undefined || isNaN(Number(v))) ? '' : Number(v) * 1000;
+  const meisaiRows = [];
+  let cashlessTotal = 0;
+
+  for (const row of urRows) {
+    if (row[2] !== genjimei) continue; // AP列=源氏名
+    const honsu   = row[0]  || '';  // AN=本数
+    const course  = row[8]  || '';  // AV=コース
+    const shimei  = row[3]  || '';  // AQ=指名
+    const ryokin  = toK(row[12]);   // AZ=料金
+    const kyuryo  = toK(row[14]);   // BB=給料
+    const option  = row[4]  || '';  // AR=OP
+    meisaiRows.push([honsu, course, shimei, ryokin, kyuryo, option]);
+    if (/カード|ペイペイ|paypay/i.test(String(option)) && ryokin !== '') {
+      cashlessTotal += Number(ryokin);
+    }
+  }
+  console.log(`[明細] 売上データ: ${meisaiRows.length}件`);
+
+  // --- 6. 明細シートへの書き込み ---
+  const batchData = [];
+
+  // H8:M15 をクリアしてから書き込み
+  batchData.push({ range: `'${MEISAI_SHEET_NAME}'!H8:M15`, values: Array(8).fill(Array(6).fill('')) });
+  batchData.push({ range: `'${MEISAI_SHEET_NAME}'!H36:M55`, values: Array(20).fill(Array(6).fill('')) });
+  if (meisaiRows.length > 0) {
+    batchData.push({ range: `'${MEISAI_SHEET_NAME}'!H8`, values: meisaiRows });
+    batchData.push({ range: `'${MEISAI_SHEET_NAME}'!H36`, values: meisaiRows });
+  }
+  // 交通費・前回分・キャッシュレス合計
+  batchData.push({ range: `'${MEISAI_SHEET_NAME}'!H21`, values: [[finalTransportFee]] });
+  batchData.push({ range: `'${MEISAI_SHEET_NAME}'!K21`, values: [[zenkaiValue]] });
+  if (cashlessTotal > 0) {
+    batchData.push({ range: `'${MEISAI_SHEET_NAME}'!L21`, values: [[cashlessTotal]] });
+  }
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: { valueInputOption: 'USER_ENTERED', data: batchData },
+  });
+  console.log('[明細] setMeisaiFromUriage 完了（交通費:', finalTransportFee, '前回分:', zenkaiValue, 'キャッシュレス:', cashlessTotal, '）');
 }
 
 // 明細シート H2:M25 をスクショ
