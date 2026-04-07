@@ -229,7 +229,12 @@ function parseMeisaiRequest(text) {
 }
 
 // 日付文字列でファイルを検索（部分一致）
+// MEISAI_TEST_ID が設定されている場合はそのスプレッドシートを使用
 async function findSpreadsheetByDateStr(dateStr) {
+  if (process.env.MEISAI_TEST_ID) {
+    console.log(`[明細] テストモード: MEISAI_TEST_ID=${process.env.MEISAI_TEST_ID}`);
+    return process.env.MEISAI_TEST_ID;
+  }
   const auth = createAuthClient();
   const drive = google.drive({ version: 'v3', auth });
   const res = await drive.files.list({
