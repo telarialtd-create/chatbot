@@ -132,7 +132,6 @@ def build_message(results, crea_access=None, crea_ranking=None):
     if crea_access is not None:
         lines.append("【CREA 管理画面データ】")
         lines.append(f"  前日アクセス数：{crea_access}")
-        lines.append(f"  24時間ランキング：{crea_ranking}")
         lines.append("")
 
     for shop in TARGETS:
