@@ -173,8 +173,8 @@ async function screenshotCells(spreadsheetId) {
   const rowHeights = rows.map((_, i) =>
     rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize * 0.85, 17) : 20);
 
-  const totalW = colWidths.reduce((s, w) => s + w, 0);
-  const totalH = rowHeights.reduce((s, h) => s + h, 0);
+  const totalW = Math.round(colWidths.reduce((s, w) => s + w, 0));
+  const totalH = Math.round(rowHeights.reduce((s, h) => s + h, 0));
 
   const canvas = createCanvas(totalW, totalH);
   const ctx    = canvas.getContext('2d');
@@ -520,8 +520,8 @@ async function screenshotMeisai(spreadsheetId) {
   const rowHeights = rows.map((_, i) =>
     rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize * 0.85, 17) : 20);
 
-  const totalW = colWidths.reduce((s, w) => s + w, 0);
-  const totalH = rowHeights.reduce((s, h) => s + h, 0);
+  const totalW = Math.round(colWidths.reduce((s, w) => s + w, 0));
+  const totalH = Math.round(rowHeights.reduce((s, h) => s + h, 0));
   const canvas = createCanvas(totalW, totalH);
   const ctx    = canvas.getContext('2d');
   ctx.fillStyle = '#ffffff';
