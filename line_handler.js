@@ -289,13 +289,14 @@ function parseMeisaiRequest(text) {
   return null;
 }
 
-// 交通費種別を正規化（片道/往復/P → そのまま返す、それ以外はnull）
+// 交通費種別を正規化（片道/往復/P/なし → そのまま返す、それ以外はnull）
 function normalizeTransportType(raw) {
   if (!raw) return null;
   const s = raw.trim();
   if (s === '片道') return '片道';
   if (s === '往復') return '往復';
   if (s.toUpperCase() === 'P' || s === 'ｐ') return 'P';
+  if (s === 'なし' || s === 'ナシ' || s === 'なし') return 'なし';
   return null;
 }
 
