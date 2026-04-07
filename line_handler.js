@@ -613,7 +613,11 @@ async function processMeisaiAndPush(target, client, dateStr, name, transportType
     await writeCellValue(spreadsheetId, MEISAI_SHEET_NAME, MEISAI_NAME_CELL, name);
     // 交通費種別が指定されていればH18に書き込む（省略時はシートの既存値を使用）
     if (transportType !== null) {
+      console.log(`[明細] 交通費種別をH18に書き込み: "${transportType}"`);
       await writeCellValue(spreadsheetId, MEISAI_SHEET_NAME, 'H18', transportType);
+      console.log(`[明細] H18書き込み完了`);
+    } else {
+      console.log(`[明細] 交通費省略 → H18はそのまま`);
     }
     await runAppsScript(spreadsheetId);
     // スクリプト完了を3秒待つ
