@@ -418,7 +418,7 @@ async function runAppsScript(spreadsheetId) {
   console.log('[明細] setMeisaiFromUriage 完了（交通費:', finalTransportFee, '前回分:', zenkaiValue, 'キャッシュレス:', cashlessTotal, '）');
 }
 
-// 明細シート H2:M25 をスクショ
+// 明細シート H2:M25 をスクショ（結合セル対応）
 async function screenshotMeisai(spreadsheetId) {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
@@ -427,13 +427,45 @@ async function screenshotMeisai(spreadsheetId) {
     ranges: [`'${MEISAI_SHEET_NAME}'!${MEISAI_RANGE}`],
     includeGridData: true,
   });
-  const gridData = res.data.sheets?.[0]?.data?.[0];
-  const rows = gridData?.rowData || [];
+
+  const sheetData = res.data.sheets?.[0];
+  const gridData  = sheetData?.data?.[0];
+  const allMerges = sheetData?.merges || [];
+
+  const rows    = gridData?.rowData || [];
   const colMeta = gridData?.columnMetadata || [];
   const rowMeta = gridData?.rowMetadata || [];
   const numCols = rows.reduce((m, r) => Math.max(m, (r.values || []).length), 0);
 
-  const colWidths = Array.from({ length: numCols }, (_, i) =>
+  // H2:M25 のシートグローバル座標オフセット（0-indexed）
+  // H = 列8(1-based) = 列7(0-based) / 行2(1-based) = 行1(0-based)
+  const ROW_OFFSET = 1;
+  const COL_OFFSET = 7;
+
+  // 結合セルマップを構築
+  // mergeMap["ri,ci"] = { rowSpan, colSpan }  ← 結合の左上セル
+  // mergedSet          = 結合に含まれる「左上以外」のセル集合
+  const mergeMap  = {};
+  const mergedSet = new Set();
+
+  for (const m of allMerges) {
+    const r0 = m.startRowIndex    - ROW_OFFSET;
+    const c0 = m.startColumnIndex - COL_OFFSET;
+    const r1 = m.endRowIndex      - ROW_OFFSET;
+    const c1 = m.endColumnIndex   - COL_OFFSET;
+    if (r1 <= 0 || c1 <= 0 || r0 >= rows.length || c0 >= numCols) continue;
+    const sr = Math.max(r0, 0);
+    const sc = Math.max(c0, 0);
+    mergeMap[`${sr},${sc}`] = { rowSpan: r1 - sr, colSpan: c1 - sc };
+    for (let r = sr; r < r1; r++) {
+      for (let c = sc; c < c1; c++) {
+        if (r === sr && c === sc) continue;
+        mergedSet.add(`${r},${c}`);
+      }
+    }
+  }
+
+  const colWidths  = Array.from({ length: numCols }, (_, i) =>
     colMeta[i]?.pixelSize ? Math.max(colMeta[i].pixelSize * 0.85, 28) : 56);
   const rowHeights = rows.map((_, i) =>
     rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize * 0.85, 17) : 20);
@@ -441,7 +473,7 @@ async function screenshotMeisai(spreadsheetId) {
   const totalW = colWidths.reduce((s, w) => s + w, 0);
   const totalH = rowHeights.reduce((s, h) => s + h, 0);
   const canvas = createCanvas(totalW, totalH);
-  const ctx = canvas.getContext('2d');
+  const ctx    = canvas.getContext('2d');
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, totalW, totalH);
 
@@ -450,36 +482,57 @@ async function screenshotMeisai(spreadsheetId) {
     const cells = rows[ri].values || [];
     let x = 0;
     for (let ci = 0; ci < numCols; ci++) {
-      const cell = cells[ci] || {};
-      const value = cell.formattedValue ?? '';
-      const fmt = cell.effectiveFormat || {};
-      const tf = fmt.textFormat || {};
-      const w = colWidths[ci], h = rowHeights[ri];
+      const w = colWidths[ci];
+      const h = rowHeights[ri];
 
+      if (mergedSet.has(`${ri},${ci}`)) {
+        // 結合の左上以外のセル → 描画スキップ（背景・枠線とも左上セル側で描画済み）
+        x += w;
+        continue;
+      }
+
+      const cell  = cells[ci] || {};
+      const fmt   = cell.effectiveFormat || {};
+      const tf    = fmt.textFormat || {};
+
+      // 結合セルの左上なら結合範囲分の幅・高さを計算
+      const mergeInfo = mergeMap[`${ri},${ci}`];
+      let cellW = w, cellH = h;
+      if (mergeInfo) {
+        for (let dc = 1; dc < mergeInfo.colSpan; dc++) cellW += (colWidths[ci + dc] || 0);
+        for (let dr = 1; dr < mergeInfo.rowSpan; dr++) cellH += (rowHeights[ri + dr] || 0);
+      }
+
+      // 背景色
       const bg = fmt.backgroundColor;
       const isWhite = !bg || (bg.red === 1 && bg.green === 1 && bg.blue === 1) || (!bg.red && !bg.green && !bg.blue);
       if (!isWhite) {
         ctx.fillStyle = toRgba(bg);
-        ctx.fillRect(x, y, w, h);
+        ctx.fillRect(x, y, cellW, cellH);
       }
-      ctx.strokeStyle = '#cccccc';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(x + 0.25, y + 0.25, w - 0.5, h - 0.5);
 
+      // 枠線
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth   = 0.5;
+      ctx.strokeRect(x + 0.25, y + 0.25, cellW - 0.5, cellH - 0.5);
+
+      // テキスト（チェックボックス等のbool値はスキップ）
+      const isBoolean = cell.userEnteredValue?.boolValue !== undefined;
+      const value     = isBoolean ? '' : (cell.formattedValue ?? '');
       if (value) {
         const fontSize = tf.fontSize ? Math.round(tf.fontSize * 0.82) : 9;
-        const bold = tf.bold ? 'bold ' : '';
-        ctx.font = `${bold}${fontSize}px "NotoJP"`;
-        ctx.fillStyle = tf.foregroundColor ? toRgba(tf.foregroundColor, '#000000') : '#000000';
+        const bold     = tf.bold ? 'bold ' : '';
+        ctx.font       = `${bold}${fontSize}px "NotoJP"`;
+        ctx.fillStyle  = tf.foregroundColor ? toRgba(tf.foregroundColor, '#000000') : '#000000';
         const ha = fmt.horizontalAlignment;
         let tx;
-        if (ha === 'CENTER') { ctx.textAlign = 'center'; tx = x + w / 2; }
-        else if (ha === 'RIGHT') { ctx.textAlign = 'right'; tx = x + w - 2; }
-        else { ctx.textAlign = 'left'; tx = x + 2; }
-        const ty = y + h / 2 + fontSize * 0.36;
+        if (ha === 'CENTER')     { ctx.textAlign = 'center'; tx = x + cellW / 2; }
+        else if (ha === 'RIGHT') { ctx.textAlign = 'right';  tx = x + cellW - 2; }
+        else                     { ctx.textAlign = 'left';   tx = x + 2; }
+        const ty = y + cellH / 2 + fontSize * 0.36;
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x, y, w, h);
+        ctx.rect(x, y, cellW, cellH);
         ctx.clip();
         ctx.fillText(value, tx, ty);
         ctx.restore();
@@ -490,7 +543,7 @@ async function screenshotMeisai(spreadsheetId) {
   }
 
   if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
-  const filename = `meisai_${Date.now()}.png`;
+  const filename   = `meisai_${Date.now()}.png`;
   const outputPath = path.join(TEMP_DIR, filename);
   await new Promise((resolve, reject) => {
     const out = fs.createWriteStream(outputPath);
