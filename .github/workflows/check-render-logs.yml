@@ -1,22 +1,30 @@
-name: Check Render Logs Temp
+name: Restore Render Env Vars
 
 on:
   workflow_dispatch:
 
 jobs:
-  logs:
+  restore:
     runs-on: ubuntu-latest
     steps:
-      - name: Get latest deploy and logs
+      - name: Restore all env vars
         run: |
-          echo "=== Service Status ==="
-          curl -s \
+          curl -s -X PUT \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}" \
-            | python3 -c "import json,sys; d=json.load(sys.stdin); print('status:', d.get('suspended','?'), d.get('serviceDetails',{}).get('env','?'))"
-          
-          echo "=== Env Vars ==="
-          curl -s \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
             "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/env-vars" \
-            | python3 -c "import json,sys; [print(e['envVar']['key']) for e in json.load(sys.stdin)]"
+            -d '[
+              {"key":"ANTHROPIC_API_KEY","value":"${{ secrets.ANTHROPIC_API_KEY }}"},
+              {"key":"GOOGLE_CLIENT_ID","value":"${{ secrets.GOOGLE_CLIENT_ID }}"},
+              {"key":"GOOGLE_CLIENT_SECRET","value":"${{ secrets.GOOGLE_CLIENT_SECRET }}"},
+              {"key":"GOOGLE_REFRESH_TOKEN","value":"${{ secrets.GOOGLE_REFRESH_TOKEN }}"},
+              {"key":"LINE_CHANNEL_ACCESS_TOKEN","value":"${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}"},
+              {"key":"LINE_CHANNEL_SECRET","value":"${{ secrets.LINE_CHANNEL_SECRET }}"},
+              {"key":"LINE_USER_ID","value":"${{ secrets.LINE_USER_ID }}"},
+              {"key":"LINE_GROUP_ID","value":"${{ secrets.LINE_GROUP_ID }}"},
+              {"key":"LINE_BOT_SERVER_URL","value":"https://chatbot-z9qe.onrender.com"},
+              {"key":"PORT","value":"3000"},
+              {"key":"MEISAI_TEST_ID","value":"1gMAdEiZI1uuffhX3ot6K_dn4_xZV6bp0FaMTnj5NwUk"},
+              {"key":"SEO_CHECK_TOKEN","value":"${{ secrets.SEO_CHECK_TOKEN }}"}
+            ]'
+          echo "Done"
