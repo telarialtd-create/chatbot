@@ -129,6 +129,38 @@ function toRgba(c, fallback = '#ffffff') {
   return `rgb(${r},${g},${b})`;
 }
 
+// 半角カタカナ → 全角カタカナ変換（NotoJPフォントで正常描画するため）
+// 例: ｺｰｽ → コース
+function toFullWidth(str) {
+  // 半角カタカナの基本マッピング（濁点・半濁点付きは2文字→1文字に合成）
+  const map = {
+    'ｦ':'ヲ','ｧ':'ァ','ｨ':'ィ','ｩ':'ゥ','ｪ':'ェ','ｫ':'ォ','ｬ':'ャ','ｭ':'ュ','ｮ':'ョ','ｯ':'ッ',
+    'ｰ':'ー','ｱ':'ア','ｲ':'イ','ｳ':'ウ','ｴ':'エ','ｵ':'オ','ｶ':'カ','ｷ':'キ','ｸ':'ク','ｹ':'ケ',
+    'ｺ':'コ','ｻ':'サ','ｼ':'シ','ｽ':'ス','ｾ':'セ','ｿ':'ソ','ﾀ':'タ','ﾁ':'チ','ﾂ':'ツ','ﾃ':'テ',
+    'ﾄ':'ト','ﾅ':'ナ','ﾆ':'ニ','ﾇ':'ヌ','ﾈ':'ネ','ﾉ':'ノ','ﾊ':'ハ','ﾋ':'ヒ','ﾌ':'フ','ﾍ':'ヘ',
+    'ﾎ':'ホ','ﾏ':'マ','ﾐ':'ミ','ﾑ':'ム','ﾒ':'メ','ﾓ':'モ','ﾔ':'ヤ','ﾕ':'ユ','ﾖ':'ヨ','ﾗ':'ラ',
+    'ﾘ':'リ','ﾙ':'ル','ﾚ':'レ','ﾛ':'ロ','ﾜ':'ワ','ｦ':'ヲ','ﾝ':'ン',
+  };
+  // 濁点・半濁点付き合成 (例: ｶﾞ→ガ)
+  const dakuMap = {
+    'カ':'ガ','キ':'ギ','ク':'グ','ケ':'ゲ','コ':'ゴ','サ':'ザ','シ':'ジ','ス':'ズ','セ':'ゼ','ソ':'ゾ',
+    'タ':'ダ','チ':'ヂ','ツ':'ヅ','テ':'デ','ト':'ド','ハ':'バ','ヒ':'ビ','フ':'ブ','ヘ':'ベ','ホ':'ボ',
+    'ウ':'ヴ',
+  };
+  const handakuMap = {
+    'ハ':'パ','ヒ':'ピ','フ':'プ','ヘ':'ペ','ホ':'ポ',
+  };
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch   = map[str[i]] || str[i];
+    const next = str[i + 1];
+    if (next === 'ﾞ' && dakuMap[ch])    { result += dakuMap[ch];    i++; }
+    else if (next === 'ﾟ' && handakuMap[ch]) { result += handakuMap[ch]; i++; }
+    else                                 { result += ch; }
+  }
+  return result;
+}
+
 async function screenshotCells(spreadsheetId) {
   const gridData = await fetchCellsData(spreadsheetId);
   const rows     = gridData?.rowData || [];
@@ -157,7 +189,7 @@ async function screenshotCells(spreadsheetId) {
     let x = 0;
     for (let ci = 0; ci < numCols; ci++) {
       const cell  = cells[ci] || {};
-      const value = cell.formattedValue ?? '';
+      const value = toFullWidth(cell.formattedValue ?? '');
       const fmt   = cell.effectiveFormat || {};
       const tf    = fmt.textFormat || {};
       const w = colWidths[ci], h = rowHeights[ri];
@@ -536,7 +568,7 @@ async function screenshotMeisai(spreadsheetId) {
 
       // テキスト（チェックボックス等のbool値はスキップ）
       const isBoolean = cell.userEnteredValue?.boolValue !== undefined;
-      const value     = isBoolean ? '' : (cell.formattedValue ?? '');
+      const value     = isBoolean ? '' : toFullWidth(cell.formattedValue ?? '');
       if (value) {
         const fontSize = tf.fontSize ? Math.round(tf.fontSize * 0.82) : 9;
         const bold     = tf.bold ? 'bold ' : '';
