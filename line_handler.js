@@ -352,12 +352,12 @@ async function runAppsScript(spreadsheetId) {
 
   for (const row of urRows) {
     if (row[2] !== genjimei) continue; // AP列=源氏名
-    const honsu   = row[0]  || '';  // AN=本数
-    const course  = row[8]  || '';  // AV=コース
-    const shimei  = row[3]  || '';  // AQ=指名
+    const honsu   = row[0]  ?? '';  // AN=本数（0も有効値なので ?? を使う）
+    const course  = row[8]  ?? '';  // AV=コース
+    const shimei  = row[3]  ?? '';  // AQ=指名
     const ryokin  = toK(row[12]);   // AZ=料金
     const kyuryo  = toK(row[14]);   // BB=給料
-    const option  = row[4]  || '';  // AR=OP
+    const option  = row[4]  ?? '';  // AR=OP
     meisaiRows.push([honsu, course, shimei, ryokin, kyuryo, option]);
     if (/カード|ペイペイ|paypay/i.test(String(option)) && ryokin !== '') {
       cashlessTotal += Number(ryokin);
@@ -375,12 +375,10 @@ async function runAppsScript(spreadsheetId) {
     batchData.push({ range: `'${MEISAI_SHEET_NAME}'!H8`, values: meisaiRows });
     batchData.push({ range: `'${MEISAI_SHEET_NAME}'!H36`, values: meisaiRows });
   }
-  // 交通費・前回分・キャッシュレス合計
+  // 交通費・前回分・キャッシュレス合計（L21は毎回上書き）
   batchData.push({ range: `'${MEISAI_SHEET_NAME}'!H21`, values: [[finalTransportFee]] });
   batchData.push({ range: `'${MEISAI_SHEET_NAME}'!K21`, values: [[zenkaiValue]] });
-  if (cashlessTotal > 0) {
-    batchData.push({ range: `'${MEISAI_SHEET_NAME}'!L21`, values: [[cashlessTotal]] });
-  }
+  batchData.push({ range: `'${MEISAI_SHEET_NAME}'!L21`, values: [[cashlessTotal > 0 ? cashlessTotal : '']] });
 
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
