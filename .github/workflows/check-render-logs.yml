@@ -24,7 +24,6 @@ jobs:
               {"key":"LINE_GROUP_ID","value":"${{ secrets.LINE_GROUP_ID }}"},
               {"key":"LINE_BOT_SERVER_URL","value":"https://chatbot-z9qe.onrender.com"},
               {"key":"PORT","value":"3000"},
-              {"key":"MEISAI_TEST_ID","value":"1gMAdEiZI1uuffhX3ot6K_dn4_xZV6bp0FaMTnj5NwUk"},
-              {"key":"SEO_CHECK_TOKEN","value":"${{ secrets.SEO_CHECK_TOKEN }}"}
+{"key":"SEO_CHECK_TOKEN","value":"${{ secrets.SEO_CHECK_TOKEN }}"}
             ]'
           echo "Done"
