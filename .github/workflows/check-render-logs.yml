@@ -1,0 +1,22 @@
+name: Check Render Logs Temp
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get latest deploy and logs
+        run: |
+          echo "=== Service Status ==="
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}" \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); print('status:', d.get('suspended','?'), d.get('serviceDetails',{}).get('env','?'))"
+          
+          echo "=== Env Vars ==="
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/env-vars" \
+            | python3 -c "import json,sys; [print(e['envVar']['key']) for e in json.load(sys.stdin)]"
