@@ -267,7 +267,17 @@ function normalizeTransportType(raw) {
   return null;
 }
 
-// 日付文字列でファイルを検索（部分一致）
+// 「4月7日」→「2026年4月7日」のように年を補完する
+function normalizeDateStr(dateStr) {
+  // すでに年が含まれている場合はそのまま
+  if (/\d{4}年/.test(dateStr)) return dateStr;
+  // 現在のJST年を取得
+  const jst = getJSTDate();
+  const year = jst.getUTCFullYear();
+  return `${year}年${dateStr}`;
+}
+
+// 日付文字列でファイルを検索
 // MEISAI_TEST_ID が設定されている場合はそのスプレッドシートを使用
 async function findSpreadsheetByDateStr(dateStr) {
   if (process.env.MEISAI_TEST_ID) {
@@ -276,17 +286,25 @@ async function findSpreadsheetByDateStr(dateStr) {
   }
   const auth = createAuthClient();
   const drive = google.drive({ version: 'v3', auth });
+
+  // 年を補完して検索精度を上げる（「4月7日」→「2026年4月7日」）
+  const normalizedDate = normalizeDateStr(dateStr);
+  console.log(`[明細] 検索キー: "${dateStr}" → "${normalizedDate}"`);
+
   const res = await drive.files.list({
-    q: `'${NIPPO_FOLDER_ID}' in parents and name contains '${dateStr}'`,
+    q: `'${NIPPO_FOLDER_ID}' in parents and name contains '${normalizedDate}'`,
     fields: 'files(id, name)',
     orderBy: 'createdTime desc',
-    pageSize: 5,
+    pageSize: 10,
   });
   const files = res.data.files || [];
   console.log(`[明細] 検索結果 (${files.length}件):`, files.map(f => f.name).join(', '));
+  if (!files.length) throw new Error(`ファイルが見つかりません: ${normalizedDate}`);
+
+  // 複数ヒット時は名前が短いもの（店舗名サフィックスがない本体ファイル）を優先
+  files.sort((a, b) => a.name.length - b.name.length);
   const file = files[0];
-  if (!file) throw new Error(`ファイルが見つかりません: ${dateStr}`);
-  console.log(`[明細] ファイル発見: ${file.name} (${file.id})`);
+  console.log(`[明細] 選択ファイル: ${file.name} (${file.id})`);
   return file.id;
 }
 
