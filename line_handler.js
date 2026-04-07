@@ -221,11 +221,19 @@ async function screenshotCells(spreadsheetId) {
 
 // ── 明細機能 ──────────────────────────────────────────────
 
-// 【4月7日、ここあ】 または 【4/7、ここあ】 をパース
+// 以下の形式をすべてサポート:
+//   【4月7日、ここあ】  【4月7日,ここあ】
+//   4月7日 ここあ  4月7日　ここあ（全角スペース）
 function parseMeisaiRequest(text) {
-  const match = text.match(/【(.+?)[,、](.+?)】/);
-  if (!match) return null;
-  return { dateStr: match[1].trim(), name: match[2].trim() };
+  // 【】形式
+  const bracketMatch = text.match(/【(.+?)[,、](.+?)】/);
+  if (bracketMatch) return { dateStr: bracketMatch[1].trim(), name: bracketMatch[2].trim() };
+
+  // 「日付 名前」スペース区切り形式（日付は〇月〇日 or 〇/〇 を含む）
+  const spaceMatch = text.match(/^((?:\d{4}年)?\d{1,2}月\d{1,2}日)[\s　]+(\S+)$/);
+  if (spaceMatch) return { dateStr: spaceMatch[1].trim(), name: spaceMatch[2].trim() };
+
+  return null;
 }
 
 // 日付文字列でファイルを検索（部分一致）
