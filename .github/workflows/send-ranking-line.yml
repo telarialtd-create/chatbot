@@ -1,10 +1,7 @@
 name: ランキングLINE送信（毎日JST 12:00）
 
 on:
-  schedule:
-    # JST 12:00 = UTC 03:00
-    - cron: '0 3 * * *'
-  workflow_dispatch: # 手動実行も可能
+  workflow_dispatch: # 手動実行のみ（VPS crontabに移行済み: UTC 03:00 = JST 12:00）
 
 jobs:
   send-ranking:
