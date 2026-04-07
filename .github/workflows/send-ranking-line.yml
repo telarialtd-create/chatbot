@@ -19,7 +19,9 @@ jobs:
 
       - name: ランキングをLINE送信
         env:
-          LINE_TOKEN:    ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          LINE_USER_ID:  ${{ secrets.LINE_USER_ID }}
+          LINE_TOKEN:         ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:       ${{ secrets.LINE_USER_ID }}
+          ESTAMA_CREA_USER:   ${{ secrets.ESTAMA_CREA_USER }}
+          ESTAMA_CREA_PASS:   ${{ secrets.ESTAMA_CREA_PASS }}
         run: |
           python scripts/ranking_check.py

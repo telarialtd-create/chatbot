@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import urllib.request
+import urllib.parse
+import http.cookiejar
 import re
 import json
 import os
@@ -7,6 +9,8 @@ from datetime import datetime
 
 LINE_TOKEN = os.environ["LINE_TOKEN"]
 LINE_USER_ID = os.environ["LINE_USER_ID"]
+ESTAMA_CREA_USER = os.environ.get("ESTAMA_CREA_USER", "")
+ESTAMA_CREA_PASS = os.environ.get("ESTAMA_CREA_PASS", "")
 
 TARGETS = ["CREA", "ふわもこ"]
 
@@ -52,6 +56,56 @@ def parse_ekichika():
     matches = re.findall(r'"position":(\d+),"url":"[^"]+","name":"([^"]+)"', html)
     return [(name, int(pos)) for pos, name in matches]
 
+def get_estama_admin_data(user, password):
+    """エスタマ管理画面にログインして前日アクセス数と24時間ランキングを取得"""
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    opener.addheaders = [("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")]
+
+    # ログインページ取得（CSRFトークン取得）
+    login_url = "https://estama.jp/login/?r=/admin/"
+    resp = opener.open(login_url, timeout=30)
+    html = resp.read().decode("utf-8", errors="ignore")
+    csrf_match = re.search(r'name=["\']csrfmiddlewaretoken["\'][^>]+value=["\']([^"\']+)', html)
+    csrf_token = csrf_match.group(1) if csrf_match else ""
+
+    # ログイン POST
+    data = urllib.parse.urlencode({
+        "csrfmiddlewaretoken": csrf_token,
+        "email": user,
+        "password": password,
+        "next": "/admin/",
+    }).encode("utf-8")
+    login_req = urllib.request.Request(
+        "https://estama.jp/login/",
+        data=data,
+        headers={
+            "Referer": login_url,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+    )
+    opener.open(login_req, timeout=30)
+
+    # 管理画面取得
+    admin_resp = opener.open("https://estama.jp/admin/", timeout=30)
+    admin_html = admin_resp.read().decode("utf-8", errors="ignore")
+
+    # 前日のアクセス数
+    access_match = re.search(
+        r'前日のアクセス数.*?<[^>]+>\s*([0-9,]+)\s*</[^>]+>', admin_html, re.DOTALL
+    )
+    access_count = access_match.group(1).strip() if access_match else "取得失敗"
+
+    # 24時間集計ランキング
+    rank_match = re.search(
+        r'24時間集計.*?お店のランキング.*?<[^>]+>\s*(\d+)\s*位', admin_html, re.DOTALL
+    )
+    ranking = rank_match.group(1) + "位" if rank_match else "取得失敗"
+
+    return access_count, ranking
+
+
 def get_rankings():
     sites = [
         ("エステ魂 アクセス", parse_estama_access),
@@ -69,9 +123,17 @@ def get_rankings():
             results[site_name] = {t: "取得失敗" for t in TARGETS}
     return results
 
-def build_message(results):
+def build_message(results, crea_access=None, crea_ranking=None):
     today = datetime.now().strftime("%Y/%m/%d")
     lines = [f"📊 ランキング通知 {today}\n"]
+
+    # CREAアクセス数（管理画面から取得）
+    if crea_access is not None:
+        lines.append("【CREA 管理画面データ】")
+        lines.append(f"  前日アクセス数：{crea_access}")
+        lines.append(f"  24時間ランキング：{crea_ranking}")
+        lines.append("")
+
     for shop in TARGETS:
         label = "CREA" if shop == "CREA" else "ふわもこSPA"
         lines.append(f"【{label}】")
@@ -99,8 +161,18 @@ def send_line(message):
         return r.read().decode()
 
 if __name__ == "__main__":
+    # エスタマ管理画面からCREAのアクセスデータ取得
+    crea_access, crea_ranking = None, None
+    if ESTAMA_CREA_USER and ESTAMA_CREA_PASS:
+        try:
+            crea_access, crea_ranking = get_estama_admin_data(ESTAMA_CREA_USER, ESTAMA_CREA_PASS)
+            print(f"CREA 前日アクセス数: {crea_access} / 24hランキング: {crea_ranking}")
+        except Exception as e:
+            print(f"CREA管理画面取得失敗: {e}")
+            crea_access, crea_ranking = "取得失敗", "取得失敗"
+
     results = get_rankings()
-    message = build_message(results)
+    message = build_message(results, crea_access, crea_ranking)
     print(message)
     send_line(message)
     print("送信完了")
