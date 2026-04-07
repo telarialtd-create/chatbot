@@ -8,22 +8,65 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Restore all env vars
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
+          SEO_CHECK_TOKEN: ${{ secrets.SEO_CHECK_TOKEN }}
         run: |
+          cat > /tmp/env_vars.json << 'ENDJSON'
+          [
+            {"key":"ANTHROPIC_API_KEY","value":"PLACEHOLDER_ANTHROPIC"},
+            {"key":"GOOGLE_CLIENT_ID","value":"PLACEHOLDER_GCID"},
+            {"key":"GOOGLE_CLIENT_SECRET","value":"PLACEHOLDER_GCSECRET"},
+            {"key":"GOOGLE_REFRESH_TOKEN","value":"PLACEHOLDER_GRTOKEN"},
+            {"key":"LINE_CHANNEL_ACCESS_TOKEN","value":"PLACEHOLDER_LCAT"},
+            {"key":"LINE_CHANNEL_SECRET","value":"PLACEHOLDER_LCS"},
+            {"key":"LINE_USER_ID","value":"PLACEHOLDER_LUI"},
+            {"key":"LINE_GROUP_ID","value":"PLACEHOLDER_LGI"},
+            {"key":"LINE_BOT_SERVER_URL","value":"https://chatbot-z9qe.onrender.com"},
+            {"key":"PORT","value":"3000"},
+            {"key":"SEO_CHECK_TOKEN","value":"PLACEHOLDER_SEO"}
+          ]
+          ENDJSON
+
+          python3 - << 'PYEOF'
+          import json, os
+
+          with open('/tmp/env_vars.json') as f:
+              data = json.load(f)
+
+          mapping = {
+              'PLACEHOLDER_ANTHROPIC': os.environ['ANTHROPIC_API_KEY'],
+              'PLACEHOLDER_GCID': os.environ['GOOGLE_CLIENT_ID'],
+              'PLACEHOLDER_GCSECRET': os.environ['GOOGLE_CLIENT_SECRET'],
+              'PLACEHOLDER_GRTOKEN': os.environ['GOOGLE_REFRESH_TOKEN'],
+              'PLACEHOLDER_LCAT': os.environ['LINE_CHANNEL_ACCESS_TOKEN'],
+              'PLACEHOLDER_LCS': os.environ['LINE_CHANNEL_SECRET'],
+              'PLACEHOLDER_LUI': os.environ['LINE_USER_ID'],
+              'PLACEHOLDER_LGI': os.environ['LINE_GROUP_ID'],
+              'PLACEHOLDER_SEO': os.environ['SEO_CHECK_TOKEN'],
+          }
+
+          for item in data:
+              if item['value'] in mapping:
+                  item['value'] = mapping[item['value']]
+
+          with open('/tmp/env_vars_final.json', 'w') as f:
+              json.dump(data, f)
+          print('JSON prepared')
+          PYEOF
+
           curl -s -X PUT \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
-            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/env-vars" \
-            -d '[
-              {"key":"ANTHROPIC_API_KEY","value":"${{ secrets.ANTHROPIC_API_KEY }}"},
-              {"key":"GOOGLE_CLIENT_ID","value":"${{ secrets.GOOGLE_CLIENT_ID }}"},
-              {"key":"GOOGLE_CLIENT_SECRET","value":"${{ secrets.GOOGLE_CLIENT_SECRET }}"},
-              {"key":"GOOGLE_REFRESH_TOKEN","value":"${{ secrets.GOOGLE_REFRESH_TOKEN }}"},
-              {"key":"LINE_CHANNEL_ACCESS_TOKEN","value":"${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}"},
-              {"key":"LINE_CHANNEL_SECRET","value":"${{ secrets.LINE_CHANNEL_SECRET }}"},
-              {"key":"LINE_USER_ID","value":"${{ secrets.LINE_USER_ID }}"},
-              {"key":"LINE_GROUP_ID","value":"${{ secrets.LINE_GROUP_ID }}"},
-              {"key":"LINE_BOT_SERVER_URL","value":"https://chatbot-z9qe.onrender.com"},
-              {"key":"PORT","value":"3000"},
-{"key":"SEO_CHECK_TOKEN","value":"${{ secrets.SEO_CHECK_TOKEN }}"}
-            ]'
+            "https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars" \
+            -d @/tmp/env_vars_final.json
           echo "Done"
