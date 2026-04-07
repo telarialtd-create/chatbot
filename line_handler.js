@@ -1,8 +1,8 @@
 /**
  * line_handler.js
- * LINEで「(教えて)」と送ると、当日の日報スプレッドシートCA3:CR32のスクショを返す
- *
- * 日付ルール: 朝6時〜翌5時59分 = 同日（29時制）
+ * ・「教えて」→ 当日の日報 CA3:CR32 スクショを個人に送信
+ * ・「【日付、名前】」→ 指定日の日報の明細シートH5に名前を入力し
+ *   setMeisaiFromUriage スクリプトを実行、H2:M25 スクショをグループに送信
  */
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
@@ -19,6 +19,12 @@ const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
 const TARGET_GID = 1873674341;
 const RANGE = 'CA3:CR32';
 const TEMP_DIR = path.join(__dirname, 'public', 'temp');
+
+// ── 明細機能の定数 ────────────────────────────────────────
+const MEISAI_SHEET_NAME = '明細';
+const MEISAI_RANGE = 'H2:M25';
+const MEISAI_NAME_CELL = 'H5';
+const MEISAI_SCRIPT_FUNCTION = 'setMeisaiFromUriage';
 
 // ── LINE クライアント ─────────────────────────────────────
 const lineConfig = {
@@ -62,10 +68,10 @@ function getJSTDate() {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000);
 }
 
-// 朝6時〜翌5時59分 = 当日（6時以前は前日扱い）※JST基準
+// 朝3時〜翌2時59分 = 当日（3時以前は前日扱い）※JST基準
 function getSheetBusinessDate() {
   const jst = getJSTDate();
-  if (jst.getUTCHours() < 6) {
+  if (jst.getUTCHours() < 3) {
     const d = new Date(jst);
     d.setUTCDate(d.getUTCDate() - 1);
     return d;
@@ -86,10 +92,13 @@ async function findSpreadsheetId(date) {
   const res = await drive.files.list({
     q: `'${NIPPO_FOLDER_ID}' in parents and name contains '${dateStr}'`,
     fields: 'files(id, name)',
+    orderBy: 'createdTime desc',
     pageSize: 5,
   });
 
-  const file = res.data.files?.[0];
+  const files = res.data.files || [];
+  console.log(`[LINE] 検索結果 (${files.length}件):`, files.map(f => f.name).join(', '));
+  const file = files[0];
   if (!file) throw new Error(`本日のファイルが見つかりません: ${dateStr}`);
   console.log(`[LINE] ファイル発見: ${file.name} (${file.id})`);
   return file.id;
@@ -210,6 +219,189 @@ async function screenshotCells(spreadsheetId) {
   return filename;
 }
 
+// ── 明細機能 ──────────────────────────────────────────────
+
+// 【4月7日、ここあ】 または 【4/7、ここあ】 をパース
+function parseMeisaiRequest(text) {
+  const match = text.match(/【(.+?)[,、](.+?)】/);
+  if (!match) return null;
+  return { dateStr: match[1].trim(), name: match[2].trim() };
+}
+
+// 日付文字列でファイルを検索（部分一致）
+async function findSpreadsheetByDateStr(dateStr) {
+  const auth = createAuthClient();
+  const drive = google.drive({ version: 'v3', auth });
+  const res = await drive.files.list({
+    q: `'${NIPPO_FOLDER_ID}' in parents and name contains '${dateStr}'`,
+    fields: 'files(id, name)',
+    orderBy: 'createdTime desc',
+    pageSize: 5,
+  });
+  const files = res.data.files || [];
+  console.log(`[明細] 検索結果 (${files.length}件):`, files.map(f => f.name).join(', '));
+  const file = files[0];
+  if (!file) throw new Error(`ファイルが見つかりません: ${dateStr}`);
+  console.log(`[明細] ファイル発見: ${file.name} (${file.id})`);
+  return file.id;
+}
+
+// 指定セルに値を書き込む
+async function writeCellValue(spreadsheetId, sheetName, cell, value) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${sheetName}'!${cell}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[value]] },
+  });
+  console.log(`[明細] ${sheetName}!${cell} に書き込み完了: ${value}`);
+}
+
+// Apps Script Web App を呼び出す（MEISAI_WEBAPP_URL 環境変数が必要）
+async function runAppsScript(spreadsheetId) {
+  const webAppUrl = process.env.MEISAI_WEBAPP_URL;
+  if (!webAppUrl) {
+    console.log('[明細] MEISAI_WEBAPP_URL 未設定: スクリプト実行スキップ');
+    return;
+  }
+  const https = require('https');
+  const http = require('http');
+  const url = new URL(webAppUrl);
+  const body = JSON.stringify({ spreadsheetId });
+  const options = {
+    hostname: url.hostname,
+    path: url.pathname + url.search,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+  };
+  await new Promise((resolve, reject) => {
+    const mod = url.protocol === 'https:' ? https : http;
+    const req = mod.request(options, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        console.log('[明細] Web App 応答:', data.slice(0, 200));
+        resolve();
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+  console.log('[明細] スクリプト実行完了');
+}
+
+// 明細シート H2:M25 をスクショ
+async function screenshotMeisai(spreadsheetId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    ranges: [`'${MEISAI_SHEET_NAME}'!${MEISAI_RANGE}`],
+    includeGridData: true,
+  });
+  const gridData = res.data.sheets?.[0]?.data?.[0];
+  const rows = gridData?.rowData || [];
+  const colMeta = gridData?.columnMetadata || [];
+  const rowMeta = gridData?.rowMetadata || [];
+  const numCols = rows.reduce((m, r) => Math.max(m, (r.values || []).length), 0);
+
+  const colWidths = Array.from({ length: numCols }, (_, i) =>
+    colMeta[i]?.pixelSize ? Math.max(colMeta[i].pixelSize * 0.85, 28) : 56);
+  const rowHeights = rows.map((_, i) =>
+    rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize * 0.85, 17) : 20);
+
+  const totalW = colWidths.reduce((s, w) => s + w, 0);
+  const totalH = rowHeights.reduce((s, h) => s + h, 0);
+  const canvas = createCanvas(totalW, totalH);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, totalW, totalH);
+
+  let y = 0;
+  for (let ri = 0; ri < rows.length; ri++) {
+    const cells = rows[ri].values || [];
+    let x = 0;
+    for (let ci = 0; ci < numCols; ci++) {
+      const cell = cells[ci] || {};
+      const value = cell.formattedValue ?? '';
+      const fmt = cell.effectiveFormat || {};
+      const tf = fmt.textFormat || {};
+      const w = colWidths[ci], h = rowHeights[ri];
+
+      const bg = fmt.backgroundColor;
+      const isWhite = !bg || (bg.red === 1 && bg.green === 1 && bg.blue === 1) || (!bg.red && !bg.green && !bg.blue);
+      if (!isWhite) {
+        ctx.fillStyle = toRgba(bg);
+        ctx.fillRect(x, y, w, h);
+      }
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x + 0.25, y + 0.25, w - 0.5, h - 0.5);
+
+      if (value) {
+        const fontSize = tf.fontSize ? Math.round(tf.fontSize * 0.82) : 9;
+        const bold = tf.bold ? 'bold ' : '';
+        ctx.font = `${bold}${fontSize}px "NotoJP"`;
+        ctx.fillStyle = tf.foregroundColor ? toRgba(tf.foregroundColor, '#000000') : '#000000';
+        const ha = fmt.horizontalAlignment;
+        let tx;
+        if (ha === 'CENTER') { ctx.textAlign = 'center'; tx = x + w / 2; }
+        else if (ha === 'RIGHT') { ctx.textAlign = 'right'; tx = x + w - 2; }
+        else { ctx.textAlign = 'left'; tx = x + 2; }
+        const ty = y + h / 2 + fontSize * 0.36;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        ctx.fillText(value, tx, ty);
+        ctx.restore();
+      }
+      x += w;
+    }
+    y += rowHeights[ri];
+  }
+
+  if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+  const filename = `meisai_${Date.now()}.png`;
+  const outputPath = path.join(TEMP_DIR, filename);
+  await new Promise((resolve, reject) => {
+    const out = fs.createWriteStream(outputPath);
+    canvas.createPNGStream().pipe(out);
+    out.on('finish', resolve);
+    out.on('error', reject);
+  });
+  setTimeout(() => fs.unlink(outputPath, () => {}), 60 * 60 * 1000);
+  return filename;
+}
+
+// 明細処理本体（バックグラウンド）
+async function processMeisaiAndPush(target, client, dateStr, name) {
+  try {
+    const spreadsheetId = await findSpreadsheetByDateStr(dateStr);
+    await writeCellValue(spreadsheetId, MEISAI_SHEET_NAME, MEISAI_NAME_CELL, name);
+    await runAppsScript(spreadsheetId);
+    // スクリプト完了を3秒待つ
+    await new Promise(r => setTimeout(r, 3000));
+    const filename = await screenshotMeisai(spreadsheetId);
+    const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
+    const imageUrl = `${baseUrl}/temp/${filename}`;
+    console.log(`[明細] Push送信: ${imageUrl} → ${target}`);
+    await client.pushMessage({
+      to: target,
+      messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }],
+    });
+  } catch (err) {
+    console.error('[明細] エラー:', err.message);
+    await client.pushMessage({
+      to: target,
+      messages: [{ type: 'text', text: `明細エラー: ${err.message}` }],
+    }).catch(() => {});
+  }
+}
+
 // ── Push 送信先: スクショは必ず個人（userId）に送る ──────
 function getPushTarget(event) {
   // イベント送信者のuserIdを優先、なければ環境変数のUSER_IDを使用
@@ -253,15 +445,24 @@ function handleLineEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return;
 
   const text = event.message.text.trim();
-  if (!text.includes('教えて')) return;
-
   const client = createLineClient();
-  const target = getPushTarget(event);
 
-  console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
+  // 【日付、名前】形式: 明細スクショ
+  const meisai = parseMeisaiRequest(text);
+  if (meisai) {
+    const target = event.source?.groupId || event.source?.userId || process.env.LINE_USER_ID;
+    console.log(`[LINE] 明細リクエスト受信: ${meisai.dateStr} / ${meisai.name} → target=${target}`);
+    setImmediate(() => processMeisaiAndPush(target, client, meisai.dateStr, meisai.name));
+    return;
+  }
 
-  // 即座にreturn（200をLINEに返す）し、裏でスクショ＆Push
-  setImmediate(() => processAndPush(target, client));
+  // 「教えて」: 日報スクショ（既存機能）
+  if (text.includes('教えて')) {
+    const target = getPushTarget(event);
+    console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
+    setImmediate(() => processAndPush(target, client));
+    return;
+  }
 }
 
 module.exports = { lineConfig, handleLineEvent, middleware };
