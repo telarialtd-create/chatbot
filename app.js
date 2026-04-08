@@ -902,7 +902,7 @@ app.post('/api/contact', async (req, res) => {
       `希望プラン: ${plan}`,
       `メッセージ:\n${message || 'なし'}`,
     ].join('\n');
-    await sendMailViaResend('ec.product@telaria.tech', `【エステツール問い合わせ】${shop} - ${plan}`, body, email);
+    await sendMailViaResend('telaria.ltd@gmail.com', `【エステツール問い合わせ】${shop} - ${plan}`, body, email);
     console.log(`[Contact] 問い合わせ受信: ${shop} (${email}) - ${plan}`);
     res.json({ ok: true });
   } catch (err) {
