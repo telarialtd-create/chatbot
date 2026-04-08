@@ -874,40 +874,34 @@ app.post('/seo-check', async (req, res) => {
 // エステツール 販売API
 // ==========================================
 
-// Resend APIでメール送信
-async function sendMailViaResend(to, subject, body, replyTo) {
-  const { Resend } = require('resend');
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  await resend.emails.send({
-    from: 'エステツール <onboarding@resend.dev>',
-    to,
-    reply_to: replyTo,
-    subject,
-    text: body,
-  });
-}
-
-// お問い合わせフォーム送信
+// お問い合わせフォーム送信（LINE通知）
 app.post('/api/contact', async (req, res) => {
   const { shop, name, email, phone, plan, message } = req.body;
   if (!shop || !name || !email || !plan) {
     return res.status(400).json({ error: '必須項目が不足しています' });
   }
   try {
-    const body = [
-      `店舗名・会社名: ${shop}`,
-      `担当者名: ${name}`,
+    const { messagingApi } = require('@line/bot-sdk');
+    const client = new messagingApi.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
+    const text = [
+      '【エステツール 新規問い合わせ】',
+      '',
+      `店舗名: ${shop}`,
+      `担当者: ${name}`,
       `メール: ${email}`,
-      `電話番号: ${phone || '未記入'}`,
+      `電話: ${phone || '未記入'}`,
       `希望プラン: ${plan}`,
-      `メッセージ:\n${message || 'なし'}`,
+      `メッセージ: ${message || 'なし'}`,
     ].join('\n');
-    await sendMailViaResend('telaria.ltd@gmail.com', `【エステツール問い合わせ】${shop} - ${plan}`, body, email);
+    await client.pushMessage({
+      to: process.env.LINE_USER_ID,
+      messages: [{ type: 'text', text }],
+    });
     console.log(`[Contact] 問い合わせ受信: ${shop} (${email}) - ${plan}`);
     res.json({ ok: true });
   } catch (err) {
-    console.error('[Contact] メール送信エラー:', err.message, err.stack);
-    res.status(500).json({ error: 'メール送信に失敗しました', detail: err.message });
+    console.error('[Contact] LINE通知エラー:', err.message);
+    res.status(500).json({ error: '送信に失敗しました', detail: err.message });
   }
 });
 
