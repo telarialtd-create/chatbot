@@ -874,14 +874,17 @@ app.post('/seo-check', async (req, res) => {
 // エステツール 販売API
 // ==========================================
 
-// Gmail API でメール送信（SMTP不要・Renderでも動作）
+// Gmail API でメール送信（環境変数から認証情報を取得）
 async function sendMailViaGmailApi(to, subject, body, replyTo) {
   const { google } = require('googleapis');
-  const fs = require('fs');
-  const keys = JSON.parse(fs.readFileSync('/Users/hiraokawashin/.config/gcp-oauth.keys.json'));
-  const creds = JSON.parse(fs.readFileSync('/Users/hiraokawashin/.config/gdrive-server-credentials.json'));
-  const auth = new google.auth.OAuth2(keys.installed.client_id, keys.installed.client_secret);
-  auth.setCredentials(creds);
+  const auth = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
+  auth.setCredentials({
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+    access_token: process.env.GOOGLE_ACCESS_TOKEN,
+  });
   const gmail = google.gmail({ version: 'v1', auth });
 
   const headers = [
