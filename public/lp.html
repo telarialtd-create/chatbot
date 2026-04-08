@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>エステツール | 株式会社TeLARIA - エステサロン向け業務自動化ツール</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black: #0a0a0a;
+      --white: #ffffff;
+      --gray-100: #f5f5f5;
+      --gray-200: #e8e8e8;
+      --gray-400: #999999;
+      --gray-600: #555555;
+      --accent: #1a1a1a;
+      --gold: #c9a84c;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      color: var(--black);
+      background: var(--white);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    /* ─── Nav ─── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--gray-200);
+      z-index: 100;
+      padding: 0 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav-logo { font-size: 18px; font-weight: 700; letter-spacing: 0.1em; }
+    .nav-cta {
+      background: var(--black); color: var(--white);
+      padding: 10px 24px; border-radius: 4px;
+      font-size: 13px; text-decoration: none; letter-spacing: 0.05em;
+      transition: background 0.2s;
+    }
+    .nav-cta:hover { background: var(--gray-600); }
+
+    /* ─── Hero ─── */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      text-align: center;
+      padding: 120px 24px 80px;
+      background: var(--black);
+      color: var(--white);
+    }
+    .hero-tag {
+      display: inline-block;
+      border: 1px solid rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.7);
+      font-size: 11px; letter-spacing: 0.2em;
+      padding: 6px 16px; border-radius: 100px;
+      margin-bottom: 40px;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 72px);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 24px;
+    }
+    .hero h1 span { color: var(--gold); }
+    .hero p {
+      font-size: clamp(15px, 2vw, 18px);
+      color: rgba(255,255,255,0.65);
+      max-width: 540px;
+      margin: 0 auto 48px;
+      line-height: 1.9;
+    }
+    .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .btn-primary {
+      background: var(--white); color: var(--black);
+      padding: 16px 40px; border-radius: 4px;
+      font-size: 14px; font-weight: 600; text-decoration: none;
+      letter-spacing: 0.05em;
+      transition: opacity 0.2s;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-outline {
+      border: 1px solid rgba(255,255,255,0.4); color: rgba(255,255,255,0.85);
+      padding: 16px 40px; border-radius: 4px;
+      font-size: 14px; text-decoration: none;
+      letter-spacing: 0.05em;
+      transition: border-color 0.2s;
+    }
+    .btn-outline:hover { border-color: var(--white); }
+
+    /* ─── Stats ─── */
+    .stats {
+      background: var(--gray-100);
+      padding: 60px 40px;
+      display: flex; justify-content: center; gap: 80px; flex-wrap: wrap;
+      text-align: center;
+    }
+    .stat-num { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
+    .stat-label { font-size: 12px; color: var(--gray-400); letter-spacing: 0.1em; margin-top: 4px; }
+
+    /* ─── Section commons ─── */
+    section { padding: 100px 24px; }
+    .section-inner { max-width: 1000px; margin: 0 auto; }
+    .section-tag {
+      font-size: 11px; letter-spacing: 0.2em; color: var(--gray-400);
+      text-transform: uppercase; margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 700; line-height: 1.2;
+      letter-spacing: -0.01em; margin-bottom: 16px;
+    }
+    .section-sub {
+      font-size: 15px; color: var(--gray-600);
+      max-width: 560px; line-height: 1.9;
+    }
+    .divider { width: 40px; height: 2px; background: var(--black); margin: 32px 0; }
+
+    /* ─── Tools grid ─── */
+    #tools { background: var(--white); }
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1px;
+      background: var(--gray-200);
+      border: 1px solid var(--gray-200);
+      margin-top: 60px;
+    }
+    .tool-card {
+      background: var(--white);
+      padding: 36px 32px;
+      transition: background 0.2s;
+    }
+    .tool-card:hover { background: var(--gray-100); }
+    .tool-icon {
+      width: 44px; height: 44px;
+      background: var(--black); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+    }
+    .tool-icon svg { width: 22px; height: 22px; fill: none; stroke: white; stroke-width: 1.5; }
+    .tool-name { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+    .tool-desc { font-size: 13px; color: var(--gray-600); line-height: 1.8; }
+    .tool-badge {
+      display: inline-block; margin-top: 14px;
+      font-size: 10px; letter-spacing: 0.1em;
+      padding: 3px 10px; border-radius: 100px;
+      background: #e8f5e9; color: #2e7d32;
+    }
+    .tool-badge.dev { background: #fff3e0; color: #e65100; }
+
+    /* ─── Pricing ─── */
+    #pricing { background: var(--gray-100); }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px; margin-top: 60px;
+    }
+    .plan-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 40px 32px;
+      position: relative;
+    }
+    .plan-card.featured {
+      background: var(--black);
+      color: var(--white);
+      border-color: var(--black);
+    }
+    .plan-badge {
+      position: absolute; top: -12px; left: 32px;
+      background: var(--gold); color: var(--white);
+      font-size: 11px; letter-spacing: 0.1em;
+      padding: 4px 12px; border-radius: 100px;
+    }
+    .plan-name { font-size: 13px; letter-spacing: 0.15em; color: var(--gray-400); margin-bottom: 12px; }
+    .plan-card.featured .plan-name { color: rgba(255,255,255,0.5); }
+    .plan-price { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .plan-price span { font-size: 16px; font-weight: 400; }
+    .plan-note { font-size: 12px; color: var(--gray-400); margin-bottom: 32px; }
+    .plan-card.featured .plan-note { color: rgba(255,255,255,0.4); }
+    .plan-features { list-style: none; margin-bottom: 36px; }
+    .plan-features li {
+      font-size: 13px; padding: 10px 0;
+      border-bottom: 1px solid var(--gray-200);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .plan-card.featured .plan-features li { border-bottom-color: rgba(255,255,255,0.1); }
+    .plan-features li::before {
+      content: '';
+      width: 16px; height: 16px; flex-shrink: 0;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8l3.5 3.5L13 5' stroke='%230a0a0a' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+    }
+    .plan-card.featured .plan-features li::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8l3.5 3.5L13 5' stroke='white' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+    .plan-btn {
+      display: block; text-align: center;
+      padding: 14px; border-radius: 4px;
+      font-size: 13px; font-weight: 600; text-decoration: none;
+      letter-spacing: 0.05em; transition: opacity 0.2s;
+    }
+    .plan-btn:hover { opacity: 0.8; }
+    .plan-btn-dark { background: var(--black); color: var(--white); }
+    .plan-btn-white { background: var(--white); color: var(--black); }
+
+    /* ─── Flow ─── */
+    #flow { background: var(--white); }
+    .flow-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 40px; margin-top: 60px;
+    }
+    .flow-step { text-align: center; }
+    .flow-num {
+      font-size: 48px; font-weight: 700;
+      color: var(--gray-200); line-height: 1;
+      margin-bottom: 16px;
+    }
+    .flow-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .flow-desc { font-size: 13px; color: var(--gray-600); line-height: 1.8; }
+
+    /* ─── Contact ─── */
+    #contact {
+      background: var(--black); color: var(--white);
+      text-align: center; padding: 100px 24px;
+    }
+    #contact .section-title { color: var(--white); margin: 0 auto 16px; }
+    #contact .section-sub { color: rgba(255,255,255,0.55); margin: 0 auto 48px; }
+    .contact-form {
+      max-width: 480px; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .contact-form input,
+    .contact-form select,
+    .contact-form textarea {
+      width: 100%; padding: 14px 18px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px; color: var(--white);
+      font-size: 14px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .contact-form input::placeholder,
+    .contact-form textarea::placeholder { color: rgba(255,255,255,0.3); }
+    .contact-form input:focus,
+    .contact-form select:focus,
+    .contact-form textarea:focus { border-color: rgba(255,255,255,0.5); }
+    .contact-form select option { background: var(--black); }
+    .contact-form textarea { resize: vertical; min-height: 100px; }
+    .contact-form button {
+      background: var(--white); color: var(--black);
+      border: none; padding: 16px;
+      border-radius: 4px; font-size: 14px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.05em;
+      transition: opacity 0.2s;
+    }
+    .contact-form button:hover { opacity: 0.85; }
+
+    /* ─── Footer ─── */
+    footer {
+      background: var(--black); color: rgba(255,255,255,0.3);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 32px 40px;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 16px; font-size: 12px;
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 640px) {
+      nav { padding: 0 20px; }
+      .stats { gap: 40px; padding: 48px 24px; }
+      footer { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-logo">エステツール <span style="font-size:11px;font-weight:400;color:var(--gray-400);letter-spacing:0.05em;">by TeLARIA</span></div>
+  <a href="#contact" class="nav-cta">無料相談はこちら</a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-tag">ESTHETIC SALON AUTOMATION</div>
+  <h1>エステサロンの<br>業務を、<span>自動化</span>する。</h1>
+  <!-- Service: エステツール -->
+  <p>求人更新・予約対応・売上管理・シフト配信まで。<br>現場の手間を削減し、集客と施術に集中できる環境を提供します。</p>
+  <div class="hero-btns">
+    <a href="#pricing" class="btn-primary">料金プランを見る</a>
+    <a href="#tools" class="btn-outline">ツール一覧</a>
+  </div>
+</section>
+
+<!-- Stats -->
+<div class="stats">
+  <div>
+    <div class="stat-num">8+</div>
+    <div class="stat-label">稼働中ツール数</div>
+  </div>
+  <div>
+    <div class="stat-num">24h</div>
+    <div class="stat-label">365日自動稼働</div>
+  </div>
+  <div>
+    <div class="stat-num">1min</div>
+    <div class="stat-label">最短更新間隔</div>
+  </div>
+  <div>
+    <div class="stat-num">100%</div>
+    <div class="stat-label">エステ特化</div>
+  </div>
+</div>
+
+<!-- Tools -->
+<section id="tools">
+  <div class="section-inner">
+    <div class="section-tag">TOOLS</div>
+    <h2 class="section-title">すべて、自動で動く。</h2>
+    <p class="section-sub">現場で実際に稼働しているツールのみを提供。導入初日から業務時間の削減を実感できます。</p>
+    <div class="divider"></div>
+    <div class="tools-grid">
+
+      <div class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+        </div>
+        <div class="tool-name">エスタマ自動更新</div>
+        <div class="tool-desc">求人掲載状況・案内・集客情報を1分ごとに自動更新。手動作業ゼロで常に最新状態を維持します。</div>
+        <span class="tool-badge">稼働中</span>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+        </div>
+        <div class="tool-name">空き案内チャットボット</div>
+        <div class="tool-desc">LINEで「空き確認」するだけで、当日のスケジュールをリアルタイム返信。24時間対応で機会損失をゼロに。</div>
+        <span class="tool-badge">稼働中</span>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+        </div>
+        <div class="tool-name">SEO求人モニター</div>
+        <div class="tool-desc">毎朝、Google検索の求人1ページ目を自動チェック。自店が未掲載の場合、即LINEで通知します。</div>
+        <span class="tool-badge">稼働中</span>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+        </div>
+        <div class="tool-name">ランキング自動チェック</div>
+        <div class="tool-desc">前日のアクセス数をエスタマ管理画面から自動取得。ランキング推移をLINEで毎日レポートします。</div>
+        <span class="tool-badge">稼働中</span>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+        </div>
+        <div class="tool-name">シフト自動配信</div>
+        <div class="tool-desc">スプレッドシートのシフトを画像化し、毎朝指定時刻にLINEへ自動送信。スタッフへの連絡が不要になります。</div>
+        <span class="tool-badge">稼働中</span>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        </div>
+        <div class="tool-name">売上ダッシュボード</div>
+        <div class="tool-desc">日報データから曜日別・店舗別・タイプ別の売上を自動集計。グラフで可視化し、経営判断をサポート。</div>
+        <span class="tool-badge">稼働中</span>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/></svg>
+        </div>
+        <div class="tool-name">ベンリー自動更新</div>
+        <div class="tool-desc">スプレッドシートのシフトをベンリー管理画面に自動反映。2店舗同時対応、毎月1日に翌月シートも自動作成。</div>
+        <span class="tool-badge">稼働中</span>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
+        <div class="tool-name">カスタムツール開発</div>
+        <div class="tool-desc">「こんな作業を自動化したい」というご要望に応じて、オーダーメイドでツールを開発します。</div>
+        <span class="tool-badge dev">プレミアム限定</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section id="pricing">
+  <div class="section-inner">
+    <div class="section-tag">PRICING</div>
+    <h2 class="section-title">シンプルな料金体系。</h2>
+    <p class="section-sub">必要なツールだけ選んで使えます。契約は月単位で、いつでも変更・解約可能です。</p>
+    <div class="divider"></div>
+    <div class="pricing-grid">
+
+      <!-- Lite -->
+      <div class="plan-card">
+        <div class="plan-name">STARTER</div>
+        <div class="plan-price">¥9,800<span>/月</span></div>
+        <div class="plan-note">税込 ¥10,780</div>
+        <ul class="plan-features">
+          <li>エスタマ自動更新ツール</li>
+          <li>1店舗対応</li>
+          <li>稼働時間カスタマイズ</li>
+          <li>LINE障害通知</li>
+          <li>メールサポート</li>
+        </ul>
+        <a href="#" onclick="startPayment('starter')" class="plan-btn plan-btn-dark">このプランで申し込む</a>
+      </div>
+
+      <!-- Standard (featured) -->
+      <div class="plan-card featured">
+        <div class="plan-badge">人気プラン</div>
+        <div class="plan-name">STANDARD</div>
+        <div class="plan-price">¥19,800<span>/月</span></div>
+        <div class="plan-note">税込 ¥21,780</div>
+        <ul class="plan-features">
+          <li>エスタマ自動更新ツール</li>
+          <li>空き案内チャットボット</li>
+          <li>ランキング自動チェック・LINE通知</li>
+          <li>SEO求人モニター</li>
+          <li>シフト自動配信</li>
+          <li>複数店舗対応</li>
+          <li>優先サポート</li>
+        </ul>
+        <a href="#" onclick="startPayment('standard')" class="plan-btn plan-btn-white">このプランで申し込む</a>
+      </div>
+
+      <!-- Premium -->
+      <div class="plan-card">
+        <div class="plan-name">PREMIUM</div>
+        <div class="plan-price">¥45,000<span>/月</span></div>
+        <div class="plan-note">税込 ¥49,500</div>
+        <ul class="plan-features">
+          <li>スタンダード全機能</li>
+          <li>売上ダッシュボード</li>
+          <li>ベンリー自動更新</li>
+          <li>日報→月報自動集計</li>
+          <li>カスタムツール開発（月1本）</li>
+          <li>専任サポート担当</li>
+          <li>オンライン設定サポート</li>
+        </ul>
+        <a href="#" onclick="startPayment('premium')" class="plan-btn plan-btn-dark">このプランで申し込む</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Flow -->
+<section id="flow">
+  <div class="section-inner">
+    <div class="section-tag">HOW IT WORKS</div>
+    <h2 class="section-title">最短3日で稼働開始。</h2>
+    <p class="section-sub">複雑な設定は不要です。必要な情報をお知らせいただくだけで、すべてこちらで設定します。</p>
+    <div class="divider"></div>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-num">01</div>
+        <div class="flow-title">お問い合わせ</div>
+        <div class="flow-desc">フォームから希望プランと店舗情報をご入力ください。</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">02</div>
+        <div class="flow-title">初期設定</div>
+        <div class="flow-desc">ログイン情報をご提供いただき、こちらで全設定を行います。</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">03</div>
+        <div class="flow-title">動作確認</div>
+        <div class="flow-desc">稼働確認後、ご契約開始。以降は24時間自動稼働します。</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">04</div>
+        <div class="flow-title">サポート</div>
+        <div class="flow-desc">問題があれば即対応。設定変更もお気軽にご連絡ください。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Contact -->
+<section id="contact">
+  <h2 class="section-title">まずは無料相談から。</h2>
+  <p class="section-sub">どのツールが必要か分からない場合も、お気軽にご相談ください。<br>最適なプランをご提案します。</p>
+  <form class="contact-form" onsubmit="handleSubmit(event)">
+    <input type="text" placeholder="店舗名・会社名" required>
+    <input type="text" placeholder="ご担当者名" required>
+    <input type="email" placeholder="メールアドレス" required>
+    <input type="tel" placeholder="電話番号">
+    <select required>
+      <option value="" disabled selected>ご希望のプラン</option>
+      <option>スタータープラン（¥9,800/月）</option>
+      <option>スタンダードプラン（¥19,800/月）</option>
+      <option>プレミアムプラン（¥45,000/月）</option>
+      <option>まだ決めていない・相談したい</option>
+    </select>
+    <textarea placeholder="ご質問・ご要望など（任意）"></textarea>
+    <button type="submit">送信する</button>
+  </form>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:6px;">株式会社TeLARIA</div>
+    <div>© 2026 TeLARIA Inc. All rights reserved.</div>
+  </div>
+  <div style="text-align:right;line-height:1.8;">
+    <div>〒730-0024 広島県広島市中区西平塚町3-17 サニーブライトビル1F</div>
+    <div><a href="https://telarialtd.wixsite.com" style="color:rgba(255,255,255,0.4);text-decoration:none;">telarialtd.wixsite.com</a></div>
+  </div>
+</footer>
+
+<script>
+// KOMOJU決済ページへ遷移（審査完了後に各プランのURLをセット）
+const KOMOJU_LINKS = {
+  starter:  '/api/komoju/checkout?plan=starter',
+  standard: '/api/komoju/checkout?plan=standard',
+  premium:  '/api/komoju/checkout?plan=premium',
+};
+
+function startPayment(plan) {
+  window.location.href = KOMOJU_LINKS[plan];
+}
+
+// お問い合わせフォーム送信
+async function handleSubmit(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.textContent = '送信中...';
+  btn.disabled = true;
+
+  const data = {
+    shop:    e.target[0].value,
+    name:    e.target[1].value,
+    email:   e.target[2].value,
+    phone:   e.target[3].value,
+    plan:    e.target[4].value,
+    message: e.target[5].value,
+  };
+
+  try {
+    const res = await fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      alert('お問い合わせありがとうございます。\n担当者より2営業日以内にご連絡いたします。');
+      e.target.reset();
+    } else {
+      throw new Error('送信失敗');
+    }
+  } catch {
+    alert('送信に失敗しました。お手数ですが ec.product@telaria.tech までメールをお送りください。');
+  } finally {
+    btn.textContent = '送信する';
+    btn.disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>

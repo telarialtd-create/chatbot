@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 const { getAvailability, getUpcomingSchedule, getDailyReportBookings, getIntervalMap, parseDateStr, dateToNippoName, warmupCache, getBusinessDate: sheetsGetBusinessDate } = require('./scheduleReader');
 const { runEstamaSync } = require('./estama_worker');
 const { lineConfig, handleLineEvent, middleware: lineMiddleware } = require('./line_handler');
@@ -27,7 +29,8 @@ app.use(express.json());
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // 空き状況データを読みやすいテキストにまとめる
-function buildAvailabilityText(data) {
+// fullMap: { [name]: true } 満員スタッフのマップ
+function buildAvailabilityText(data, fullMap = {}) {
   const { results, now } = data;
   const lines = [`現在時刻: ${now}`, ''];
 
@@ -51,15 +54,21 @@ function buildAvailabilityText(data) {
   }
 
   if (inService.length > 0) {
-    lines.push('【接客中（新規案内不可）】');
-    inService.forEach(r => lines.push(`  - ${r.name}（接客終了: ${r.serviceEnd}、案内可能: ${r.nextAvailable}〜）`));
-    lines.push('');
+    const nonFull = inService.filter(r => !fullMap[r.name]);
+    if (nonFull.length > 0) {
+      lines.push('【接客中（新規案内不可）】');
+      nonFull.forEach(r => lines.push(`  - ${r.name}（接客終了: ${r.serviceEnd}、案内可能: ${r.nextAvailable}〜）`));
+      lines.push('');
+    }
   }
 
   if (inInterval.length > 0) {
-    lines.push('【インターバル中】');
-    inInterval.forEach(r => lines.push(`  - ${r.name}（案内可能: ${r.nextAvailable}〜）`));
-    lines.push('');
+    const nonFull = inInterval.filter(r => !fullMap[r.name]);
+    if (nonFull.length > 0) {
+      lines.push('【インターバル中】');
+      nonFull.forEach(r => lines.push(`  - ${r.name}（案内可能: ${r.nextAvailable}〜）`));
+      lines.push('');
+    }
   }
 
   if (closed.length > 0) {
@@ -68,12 +77,22 @@ function buildAvailabilityText(data) {
     lines.push('');
   }
 
-  if (comingSoon.length > 0) {
+  const comingSoonNonFull = comingSoon.filter(r => !fullMap[r.name]);
+  if (comingSoonNonFull.length > 0) {
     lines.push('【まもなく出勤】');
-    comingSoon.forEach(r => {
+    comingSoonNonFull.forEach(r => {
       const timeNote = r.hasUpper ? `${r.workEnd}終了` : `${r.workEnd}までにご来店で案内可能`;
       lines.push(`  - ${r.name}（出勤予定: ${r.nextAvailable}〜${timeNote}）`);
     });
+  }
+
+  // 満員スタッフをまとめて最後に表示
+  const fullStaff = results.filter(r =>
+    fullMap[r.name] && r.status !== '退勤済み' && r.status !== '本日出勤なし' && r.status !== '受付終了'
+  );
+  if (fullStaff.length > 0) {
+    lines.push('');
+    lines.push(`【本日満員・案内不可】${fullStaff.map(r => r.name).join('・')}`);
   }
 
   return lines.join('\n');
@@ -93,9 +112,17 @@ const SYSTEM_PROMPT = `あなたはお店の出勤・予約案内専用アシス
 - 「〜ご来店なら案内可」と「○○以降案内可」の間の時間帯は全て案内不可です
 
 【今日の空き状況ルール】
+- 「今空いている子は誰ですか」「今日出勤している子は？」などの質問には、今すぐ案内できる子だけでなく、本日出勤予定（まもなく出勤含む）の全員を案内してください
+  - 表示順ルール（この順番を必ず守ること）：
+    1. 今すぐ案内可能な子（空き）
+    2. 接客中・インターバル中の子（「○○〜ご案内可能です」）
+    3. まもなく出勤の子（「○○出勤予定、ご案内可能です」）（「予約なし」などの余計な言葉は付けないでください）
+    4. 最後に一行：「※〇〇・△△は本日満員のため案内不可です」
+  - 満員の子は上記1〜3のリストに絶対に含めないでください。必ず最後の一行にだけ登場させてください
+  - 受付終了の子は回答から除外してください
 - 「接客中」の子は絶対に「空き」と言わないでください。案内可能時間（nextAvailable）を伝えてください
 - 「インターバル中」の子も案内可能時間を伝えてください
-- 「受付終了」の子は本日受付終了と伝えてください
+- 「受付終了」の子は回答から除外してください
 - 「空き」の子だけが今すぐ案内できます
 - (上)あり → lastAcceptまでに来店必要、以降は案内不可
 - (上)なし → workEndまでにご来店で案内可能
@@ -234,10 +261,18 @@ app.post('/api/chat', async (req, res) => {
       getDailyReportBookings(todayNippoName).catch(e => { console.error('今日の日報取得エラー:', e.message); return { bookings: [] }; }),
     ]);
     const intervalMap = intervalMapResult;
-    const availText = buildAvailabilityText(availability);
 
     // 今日の予約状況テキストを構築（常にコンテキストに含める）
     const todayStaff = availability.results.filter(r => r.start && r.end);
+
+    // 満員マップを先に計算して buildAvailabilityText に渡す
+    const rawNowMinsForFull = timeToMins(availability.now);
+    const nowMinsForFull = (new Date()).getHours() < 3 ? rawNowMinsForFull + 1440 : rawNowMinsForFull;
+    const fullMapToday = {};
+    for (const s of todayStaff) {
+      fullMapToday[s.name] = isFullyBooked(s, todayNippo.bookings, intervalMap, nowMinsForFull);
+    }
+    const availText = buildAvailabilityText(availability, fullMapToday);
     let todayBookingText = `\n\n【今日（${todayNippoName}）の予約状況と案内可否】\n`;
     if (todayNippo.bookings.length === 0) {
       todayBookingText += '予約データなし（全員案内可能）\n';
@@ -248,11 +283,8 @@ app.post('/api/chat', async (req, res) => {
           todayBookingText += `  - ${s.name}: 【予約なし・案内可能】\n`;
           continue;
         }
-        const rawNowMins = timeToMins(availability.now);
-        // 深夜0〜2時は営業日の延長（24:xx扱い）
-        const nowMins = (new Date()).getHours() < 3 ? rawNowMins + 1440 : rawNowMins;
-        const full = isFullyBooked(s, todayNippo.bookings, intervalMap, nowMins);
-        const nextMins = getNextAvailableMins(s, todayNippo.bookings, intervalMap, nowMins);
+        const full = fullMapToday[s.name] ?? isFullyBooked(s, todayNippo.bookings, intervalMap, nowMinsForFull);
+        const nextMins = getNextAvailableMins(s, todayNippo.bookings, intervalMap, nowMinsForFull);
         const intervalMin = intervalMap[s.name] || 0;
 
         if (full) {
@@ -514,14 +546,18 @@ app.get('/api/test-line-full', async (req, res) => {
 const SCHEDULE_SPREADSHEET_ID_FOR_MONTHLY = '10siqLe6B9A7uvNWgRUdHb462RqxCxkGEGMEKTPhY-S8';
 
 async function maybeCreateNextMonthSheet() {
-  const now = new Date();
-  // AM6:00の1分間だけ実行
-  if (now.getHours() !== 6 || now.getMinutes() !== 0) return;
+  // JST（UTC+9）で判定
+  const nowUtc = Date.now();
+  const jstOffset = 9 * 60 * 60 * 1000;
+  const now = new Date(nowUtc + jstOffset);
 
-  // 翌日が1日 = 今日が月末
+  // JST AM6:00の1分間だけ実行
+  if (now.getUTCHours() !== 6 || now.getUTCMinutes() !== 0) return;
+
+  // 翌日が1日 = 今日が月末（JST基準）
   const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  if (tomorrow.getDate() !== 1) return;
+  tomorrow.setUTCDate(now.getUTCDate() + 1);
+  if (tomorrow.getUTCDate() !== 1) return;
 
   const nextMonth = tomorrow.getMonth() + 1;
   const newSheetName = `${tomorrow.getFullYear()}年${nextMonth}月`;
@@ -546,68 +582,178 @@ async function maybeCreateNextMonthSheet() {
       return;
     }
 
-    // 当月シートのA1:AQ全行を取得
     const currentSheetName = `${now.getFullYear()}年${now.getMonth() + 1}月`;
-    const marchRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: ID,
-      range: `'${currentSheetName}'!A1:AQ60`,
-      valueRenderOption: 'FORMATTED_VALUE',
-    });
-    const curRows = marchRes.data.values || [];
+    const curSheet = meta.data.sheets.find(s => s.properties.title === currentSheetName);
+    if (!curSheet) { console.error(`[月次シート] 当月シートが見つかりません: ${currentSheetName}`); return; }
 
-    // 翌月1日の曜日を計算
-    const dayNames = ['日','月','火','水','木','金','土'];
+    // 曜日・色の定義
+    const DAY_NAMES = ['日','月','火','水','木','金','土'];
+    const DAY_COLORS = {
+      0: { red:1, green:0, blue:0 },
+      1: { red:1, green:1, blue:1 },
+      2: { red:1, green:1, blue:1 },
+      3: { red:1, green:1, blue:1 },
+      4: { red:0, green:0.6901961, blue:0.3137255 },
+      5: { red:1, green:1, blue:0 },
+      6: { red:0, green:0.4392157, blue:0.7529412 },
+    };
+    const WHITE = { red:1, green:1, blue:1 };
+
     const next1stDay = tomorrow.getDay();
-    // 翌月の日数
     const daysInNextMonth = new Date(tomorrow.getFullYear(), nextMonth, 0).getDate();
+    // 翌翌月1日の曜日
+    const nextNext1stDay = new Date(tomorrow.getFullYear(), nextMonth, 1).getDay();
 
-    // 行1: 月名（"4月"形式）+ 空白3 + 日付1〜月末 + 翌翌月1日
-    const row1 = [String(nextMonth) + '月', '', '', ''];
-    for (let d = 1; d <= daysInNextMonth; d++) row1.push(String(d));
-    row1.push('1');
+    // STEP1: 当月シートをコピー（書式・関数・行高・全行保持）
+    const copyRes = await sheets.spreadsheets.sheets.copyTo({
+      spreadsheetId: ID, sheetId: curSheet.properties.sheetId,
+      requestBody: { destinationSpreadsheetId: ID },
+    });
+    const newGid = copyRes.data.sheetId;
 
-    // 行2: URL + 空白2 + "出勤日数" + 翌月の曜日（翌翌月1日まで）
-    const url = (curRows[1] || [])[0] || '';
-    const row2 = [url, '', '', '出勤日数'];
-    for (let d = 0; d <= daysInNextMonth; d++) row2.push(dayNames[(next1stDay + d) % 7]);
-
-    // 行3: A-Dキープ、E以降空白
-    const row3base = (curRows[2] || []).slice(0, 4);
-    while (row3base.length < 4) row3base.push('');
-    const row3 = [...row3base, ...Array(daysInNextMonth + 1).fill('')];
-
-    // 行4以降: A-Dキープ + 当月AJ-AQ(翌月1-8日分)をE-Lへ + 残りクリア
-    const staffRows = [];
-    for (let i = 3; i < curRows.length; i++) {
-      const r = curRows[i] || [];
-      const base = r.slice(0, 4);
-      while (base.length < 4) base.push('');
-      const ajaq = r.slice(35, 43); // AJ-AQ
-      while (ajaq.length < 8) ajaq.push('');
-      staffRows.push([...base, ...ajaq, ...Array(daysInNextMonth + 1 - 8).fill('')]);
-    }
-
-    // 新シートを左端（index 0）に作成
+    // STEP2: シート名・左端へ移動
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: newSheetName, index: 0 } } }] },
+      requestBody: { requests: [{ updateSheetProperties: {
+        properties: { sheetId: newGid, title: newSheetName, index: 0 },
+        fields: 'title,index',
+      }}]},
     });
 
-    // データ書き込み
-    const writeData = [
-      { range: `'${newSheetName}'!A1`, values: [row1] },
-      { range: `'${newSheetName}'!A2`, values: [row2] },
-      { range: `'${newSheetName}'!A3`, values: [row3] },
-    ];
-    if (staffRows.length > 0) {
-      writeData.push({ range: `'${newSheetName}'!A4`, values: staffRows });
+    // STEP3: 当月AJ-AQの値＋色を取得（翌月1-8日分）
+    const curGrid = await sheets.spreadsheets.get({
+      spreadsheetId: ID,
+      ranges: [`'${currentSheetName}'!A1:AQ120`],
+      includeGridData: true,
+    });
+    const curRowData = curGrid.data.sheets[0].data[0].rowData || [];
+    const totalRows = curRowData.length;
+
+    // STEP4: 行1・行2の値を更新（月名・日付・曜日・URL）
+    const row1vals = [String(nextMonth) + '月', '', '', ''];
+    for (let d = 1; d <= daysInNextMonth; d++) row1vals.push(String(d));
+    row1vals.push('1'); // 翌翌月1日
+    row1vals.push('');  // AJ列クリア
+
+    const url = curRowData[1]?.values?.[0]?.formattedValue || '';
+    const row2vals = [url, '', '', '出勤日数'];
+    for (let d = 0; d <= daysInNextMonth; d++) row2vals.push(DAY_NAMES[(next1stDay + d) % 7]);
+    row2vals.push('');
+
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: ID,
+      requestBody: { valueInputOption: 'USER_ENTERED', data: [
+        { range: `'${newSheetName}'!A1:AJ1`, values: [row1vals] },
+        { range: `'${newSheetName}'!A2:AJ2`, values: [row2vals] },
+      ]},
+    });
+
+    // STEP5: 行1・行2の曜日色を更新（E〜AI = 翌月1日〜翌翌月1日）
+    const dateCols = daysInNextMonth + 1; // 月末 + 翌月1日
+    const colorCellsDate = [];
+    for (let d = 0; d < dateCols; d++) {
+      colorCellsDate.push({ userEnteredFormat: { backgroundColor: DAY_COLORS[(next1stDay + d) % 7] } });
+    }
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: ID,
+      requestBody: { requests: [
+        { updateCells: { rows: [{ values: colorCellsDate }], fields: 'userEnteredFormat.backgroundColor',
+          range: { sheetId: newGid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 4, endColumnIndex: 4 + dateCols } } },
+        { updateCells: { rows: [{ values: colorCellsDate }], fields: 'userEnteredFormat.backgroundColor',
+          range: { sheetId: newGid, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 4, endColumnIndex: 4 + dateCols } } },
+      ]},
+    });
+
+    // STEP6: 行3のCOUNTIF関数を復元（E〜AI列）
+    const colIndexToLetter = (i) => {
+      let n = i + 1, letter = '';
+      while (n > 0) { n--; letter = String.fromCharCode(65 + (n % 26)) + letter; n = Math.floor(n / 26); }
+      return letter;
+    };
+    const formulaRow = [];
+    for (let i = 4; i <= 4 + daysInNextMonth; i++) {
+      const col = colIndexToLetter(i);
+      formulaRow.push(`=COUNTIF(${col}4:${col}96,"*-*")`);
+    }
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: ID,
+      range: `'${newSheetName}'!E3`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [formulaRow] },
+    });
+
+    // STEP7: 行3のD列から・行4以降のE-AI列をクリア（値・色）、AJ以降もクリア
+    const clearRequests = [];
+    // 行3 E-AI クリア（値はSTEP6で上書き済みなので色だけ）
+    clearRequests.push({ updateCells: {
+      rows: [{ values: Array(daysInNextMonth + 1).fill({ userEnteredFormat: { backgroundColor: WHITE } }) }],
+      fields: 'userEnteredFormat.backgroundColor',
+      range: { sheetId: newGid, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 4, endColumnIndex: 4 + daysInNextMonth + 1 },
+    }});
+
+    // 行4以降: E-AI（M以降=空白・白）とAJ以降クリア
+    const staffCellRows = [];
+    for (let i = 3; i < totalRows; i++) {
+      const r = curRowData[i]?.values || [];
+      const rowCells = [];
+      // E-L（8列）: 当月AJ-AQの値＋色コピー
+      for (let c = 0; c < 8; c++) {
+        const src = r[35 + c] || {};
+        rowCells.push({
+          userEnteredValue: { stringValue: src.formattedValue || '' },
+          userEnteredFormat: { backgroundColor: src.effectiveFormat?.backgroundColor || WHITE },
+        });
+      }
+      // M-AI（翌月9日以降）: 空白・白
+      for (let c = 0; c < daysInNextMonth - 7; c++) {
+        rowCells.push({ userEnteredValue: { stringValue: '' }, userEnteredFormat: { backgroundColor: WHITE } });
+      }
+      staffCellRows.push({ values: rowCells });
+    }
+    clearRequests.push({ updateCells: {
+      rows: staffCellRows,
+      fields: 'userEnteredValue,userEnteredFormat.backgroundColor',
+      range: { sheetId: newGid, startRowIndex: 3, endRowIndex: 3 + staffCellRows.length, startColumnIndex: 4, endColumnIndex: 4 + daysInNextMonth + 1 },
+    }});
+
+    // AJ以降（col35〜）を全クリア（行1-2は翌翌月データで上書き後クリア、行3以降も）
+    clearRequests.push({ updateCells: {
+      rows: Array(totalRows).fill({ values: Array(10).fill({ userEnteredValue: { stringValue: '' }, userEnteredFormat: { backgroundColor: WHITE } }) }),
+      fields: 'userEnteredValue,userEnteredFormat.backgroundColor',
+      range: { sheetId: newGid, startRowIndex: 0, endRowIndex: totalRows, startColumnIndex: 35, endColumnIndex: 45 },
+    }});
+
+    await sheets.spreadsheets.batchUpdate({ spreadsheetId: ID, requestBody: { requests: clearRequests } });
+
+    // STEP8: AJ-AP列に翌翌月2-8日の日付・曜日・色・関数を追加
+    const overflowDayNames = [], overflowDates = [], overflowFormulas = [], overflowColors = [];
+    const colsAJAP = ['AJ','AK','AL','AM','AN','AO','AP'];
+    for (let i = 0; i < 7; i++) {
+      const dayIdx = (nextNext1stDay + 1 + i) % 7;
+      overflowDates.push(String(i + 2));
+      overflowDayNames.push(DAY_NAMES[dayIdx]);
+      overflowFormulas.push(`=COUNTIF(${colsAJAP[i]}4:${colsAJAP[i]}96,"*-*")`);
+      overflowColors.push({ userEnteredFormat: { backgroundColor: DAY_COLORS[dayIdx] } });
     }
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: ID,
-      requestBody: { valueInputOption: 'USER_ENTERED', data: writeData },
+      requestBody: { valueInputOption: 'USER_ENTERED', data: [
+        { range: `'${newSheetName}'!AJ1:AP1`, values: [overflowDates] },
+        { range: `'${newSheetName}'!AJ2:AP2`, values: [overflowDayNames] },
+        { range: `'${newSheetName}'!AJ3:AP3`, values: [overflowFormulas] },
+      ]},
+    });
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: ID,
+      requestBody: { requests: [
+        { updateCells: { rows: [{ values: overflowColors }], fields: 'userEnteredFormat.backgroundColor',
+          range: { sheetId: newGid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 35, endColumnIndex: 42 } } },
+        { updateCells: { rows: [{ values: overflowColors }], fields: 'userEnteredFormat.backgroundColor',
+          range: { sheetId: newGid, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 35, endColumnIndex: 42 } } },
+      ]},
     });
 
-    console.log(`[月次シート] ${newSheetName} を作成しました（左端・曜日正確・AJ-AQ移植）`);
+    console.log(`[月次シート] ${newSheetName} を作成しました`);
   } catch (e) {
     console.error('[月次シート] 作成エラー:', e.message);
   }
@@ -722,6 +868,160 @@ app.post('/seo-check', async (req, res) => {
     .then(missing => console.log('[SEO] 完了 missing:', missing))
     .catch(err => console.error('[SEO] エラー:', err.message));
 });
+// ==========================================
+
+// ==========================================
+// エステツール 販売API
+// ==========================================
+
+// メール送信トランスポーター
+function createMailTransport() {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+}
+
+// お問い合わせフォーム送信
+app.post('/api/contact', async (req, res) => {
+  const { shop, name, email, phone, plan, message } = req.body;
+  if (!shop || !name || !email || !plan) {
+    return res.status(400).json({ error: '必須項目が不足しています' });
+  }
+  try {
+    const transport = createMailTransport();
+    await transport.sendMail({
+      from: `"エステツール問い合わせ" <${process.env.SMTP_USER}>`,
+      to: 'ec.product@telaria.tech',
+      replyTo: email,
+      subject: `【エステツール問い合わせ】${shop} - ${plan}`,
+      text: [
+        `店舗名・会社名: ${shop}`,
+        `担当者名: ${name}`,
+        `メール: ${email}`,
+        `電話番号: ${phone || '未記入'}`,
+        `希望プラン: ${plan}`,
+        `メッセージ:\n${message || 'なし'}`,
+      ].join('\n'),
+    });
+    console.log(`[Contact] 問い合わせ受信: ${shop} (${email}) - ${plan}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Contact] メール送信エラー:', err.message);
+    res.status(500).json({ error: 'メール送信に失敗しました' });
+  }
+});
+
+// KOMOJUプラン情報
+const KOMOJU_PLANS = {
+  starter:  { name: 'スタータープラン', price: 9800,  url: process.env.KOMOJU_URL_STARTER },
+  standard: { name: 'スタンダードプラン', price: 19800, url: process.env.KOMOJU_URL_STANDARD },
+  premium:  { name: 'プレミアムプラン', price: 45000, url: process.env.KOMOJU_URL_PREMIUM },
+};
+
+// KOMOJU決済ページへリダイレクト
+app.get('/api/komoju/checkout', (req, res) => {
+  const { plan } = req.query;
+  const planData = KOMOJU_PLANS[plan];
+  if (!planData) return res.status(400).send('不正なプランです');
+  if (!planData.url) {
+    // KOMOJU未設定時はお問い合わせページへ
+    return res.redirect('/#contact');
+  }
+  res.redirect(planData.url);
+});
+
+// KOMOJU Webhookエンドポイント
+app.post('/webhook/komoju', express.raw({ type: 'application/json' }), async (req, res) => {
+  // 署名検証
+  const secret = process.env.KOMOJU_WEBHOOK_SECRET;
+  if (secret) {
+    const sig = req.headers['x-komoju-signature'];
+    const hash = crypto.createHmac('sha256', secret).update(req.body).digest('hex');
+    if (sig !== hash) {
+      console.error('[KOMOJU] 署名検証失敗');
+      return res.status(401).end();
+    }
+  }
+
+  let event;
+  try {
+    event = JSON.parse(req.body.toString());
+  } catch (e) {
+    return res.status(400).end();
+  }
+
+  console.log(`[KOMOJU] イベント受信: ${event.type}`, JSON.stringify(event).slice(0, 200));
+  res.status(200).end();
+
+  try {
+    await handleKomojoEvent(event);
+  } catch (err) {
+    console.error('[KOMOJU] イベント処理エラー:', err.message);
+  }
+});
+
+async function handleKomojoEvent(event) {
+  const { google } = require('googleapis');
+  const fs = require('fs');
+  const creds = JSON.parse(fs.readFileSync('/Users/hiraokawashin/.config/gdrive-server-credentials.json'));
+  const keys = JSON.parse(fs.readFileSync('/Users/hiraokawashin/.config/gcp-oauth.keys.json'));
+  const auth = new google.auth.OAuth2(keys.installed.client_id, keys.installed.client_secret);
+  auth.setCredentials(creds);
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // 顧客情報の取得
+  const sub = event.data?.subscription || event.data?.payment;
+  const email = sub?.customer?.email || sub?.email || '';
+  const name  = sub?.customer?.name  || sub?.name  || '';
+  const planId = sub?.metadata?.plan || '';
+
+  if (event.type === 'subscription.activated' || event.type === 'payment.captured') {
+    // 管理シートにONで追加
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.KOMOJU_SHEET_ID || '11kXCaL4TpnVsdVESo5lMmgoHvXbTkhQt_TDkaZewLUs',
+      range: 'エステツール顧客!A:I',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[
+          '', // 管理番号（手動付与）
+          name,
+          email,
+          KOMOJU_PLANS[planId]?.name || planId,
+          'ON',
+          sub?.payment_method_types?.[0] || 'card',
+          sub?.current_period_end || '',
+          sub?.id || '',
+          new Date().toISOString().slice(0, 10),
+        ]],
+      },
+    });
+    console.log(`[KOMOJU] 顧客登録: ${name} (${email}) - ${planId} → ON`);
+
+  } else if (event.type === 'subscription.canceled' || event.type === 'subscription.deactivated') {
+    // メールで行を検索してOFFに
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.KOMOJU_SHEET_ID || '11kXCaL4TpnVsdVESo5lMmgoHvXbTkhQt_TDkaZewLUs',
+      range: 'エステツール顧客!A:I',
+    });
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(r => r[2] === email);
+    if (rowIndex >= 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.KOMOJU_SHEET_ID || '11kXCaL4TpnVsdVESo5lMmgoHvXbTkhQt_TDkaZewLUs',
+        range: `エステツール顧客!E${rowIndex + 1}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [['OFF']] },
+      });
+      console.log(`[KOMOJU] 顧客停止: ${email} → OFF`);
+    }
+  }
+}
 // ==========================================
 
 const PORT = process.env.PORT || 3000;
