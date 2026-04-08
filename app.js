@@ -874,30 +874,17 @@ app.post('/seo-check', async (req, res) => {
 // エステツール 販売API
 // ==========================================
 
-// Gmail API でメール送信（環境変数から認証情報を取得）
-async function sendMailViaGmailApi(to, subject, body, replyTo) {
-  const { google } = require('googleapis');
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
-  );
-  auth.setCredentials({
-    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-    access_token: process.env.GOOGLE_ACCESS_TOKEN,
+// Resend APIでメール送信
+async function sendMailViaResend(to, subject, body, replyTo) {
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  await resend.emails.send({
+    from: 'エステツール <onboarding@resend.dev>',
+    to,
+    reply_to: replyTo,
+    subject,
+    text: body,
   });
-  const gmail = google.gmail({ version: 'v1', auth });
-
-  const headers = [
-    `To: ${to}`,
-    `Reply-To: ${replyTo}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
-    'Content-Type: text/plain; charset=UTF-8',
-    '',
-    body,
-  ].join('\r\n');
-
-  const encoded = Buffer.from(headers).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-  await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encoded } });
 }
 
 // お問い合わせフォーム送信
@@ -915,7 +902,7 @@ app.post('/api/contact', async (req, res) => {
       `希望プラン: ${plan}`,
       `メッセージ:\n${message || 'なし'}`,
     ].join('\n');
-    await sendMailViaGmailApi('ec.product@telaria.tech', `【エステツール問い合わせ】${shop} - ${plan}`, body, email);
+    await sendMailViaResend('ec.product@telaria.tech', `【エステツール問い合わせ】${shop} - ${plan}`, body, email);
     console.log(`[Contact] 問い合わせ受信: ${shop} (${email}) - ${plan}`);
     res.json({ ok: true });
   } catch (err) {

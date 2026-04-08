@@ -24,6 +24,7 @@
     "nodemailer": "^8.0.5",
     "puppeteer": "^24.40.0",
     "qrcode": "^1.5.4",
+    "resend": "^6.10.0",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
