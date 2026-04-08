@@ -874,17 +874,27 @@ app.post('/seo-check', async (req, res) => {
 // エステツール 販売API
 // ==========================================
 
-// メール送信トランスポーター
-function createMailTransport() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+// Gmail API でメール送信（SMTP不要・Renderでも動作）
+async function sendMailViaGmailApi(to, subject, body, replyTo) {
+  const { google } = require('googleapis');
+  const fs = require('fs');
+  const keys = JSON.parse(fs.readFileSync('/Users/hiraokawashin/.config/gcp-oauth.keys.json'));
+  const creds = JSON.parse(fs.readFileSync('/Users/hiraokawashin/.config/gdrive-server-credentials.json'));
+  const auth = new google.auth.OAuth2(keys.installed.client_id, keys.installed.client_secret);
+  auth.setCredentials(creds);
+  const gmail = google.gmail({ version: 'v1', auth });
+
+  const headers = [
+    `To: ${to}`,
+    `Reply-To: ${replyTo}`,
+    `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    body,
+  ].join('\r\n');
+
+  const encoded = Buffer.from(headers).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encoded } });
 }
 
 // お問い合わせフォーム送信
@@ -894,21 +904,15 @@ app.post('/api/contact', async (req, res) => {
     return res.status(400).json({ error: '必須項目が不足しています' });
   }
   try {
-    const transport = createMailTransport();
-    await transport.sendMail({
-      from: `"エステツール問い合わせ" <${process.env.SMTP_USER}>`,
-      to: 'ec.product@telaria.tech',
-      replyTo: email,
-      subject: `【エステツール問い合わせ】${shop} - ${plan}`,
-      text: [
-        `店舗名・会社名: ${shop}`,
-        `担当者名: ${name}`,
-        `メール: ${email}`,
-        `電話番号: ${phone || '未記入'}`,
-        `希望プラン: ${plan}`,
-        `メッセージ:\n${message || 'なし'}`,
-      ].join('\n'),
-    });
+    const body = [
+      `店舗名・会社名: ${shop}`,
+      `担当者名: ${name}`,
+      `メール: ${email}`,
+      `電話番号: ${phone || '未記入'}`,
+      `希望プラン: ${plan}`,
+      `メッセージ:\n${message || 'なし'}`,
+    ].join('\n');
+    await sendMailViaGmailApi('ec.product@telaria.tech', `【エステツール問い合わせ】${shop} - ${plan}`, body, email);
     console.log(`[Contact] 問い合わせ受信: ${shop} (${email}) - ${plan}`);
     res.json({ ok: true });
   } catch (err) {
