@@ -981,7 +981,7 @@ async function handleKomojoEvent(event) {
   const name  = sub?.customer?.name  || sub?.name  || '';
   const planId = sub?.metadata?.plan || '';
 
-  if (event.type === 'subscription.activated' || event.type === 'payment.captured') {
+  if (event.type === 'subscription.created' || event.type === 'subscription.captured' || event.type === 'payment.captured') {
     // 管理シートにONで追加
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.KOMOJU_SHEET_ID || '11kXCaL4TpnVsdVESo5lMmgoHvXbTkhQt_TDkaZewLUs',
@@ -1003,7 +1003,7 @@ async function handleKomojoEvent(event) {
     });
     console.log(`[KOMOJU] 顧客登録: ${name} (${email}) - ${planId} → ON`);
 
-  } else if (event.type === 'subscription.canceled' || event.type === 'subscription.deactivated') {
+  } else if (event.type === 'subscription.failed' || event.type === 'subscription.suspended' || event.type === 'subscription.deleted') {
     // メールで行を検索してOFFに
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.KOMOJU_SHEET_ID || '11kXCaL4TpnVsdVESo5lMmgoHvXbTkhQt_TDkaZewLUs',
