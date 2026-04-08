@@ -906,8 +906,8 @@ app.post('/api/contact', async (req, res) => {
     console.log(`[Contact] 問い合わせ受信: ${shop} (${email}) - ${plan}`);
     res.json({ ok: true });
   } catch (err) {
-    console.error('[Contact] メール送信エラー:', err.message);
-    res.status(500).json({ error: 'メール送信に失敗しました' });
+    console.error('[Contact] メール送信エラー:', err.message, err.stack);
+    res.status(500).json({ error: 'メール送信に失敗しました', detail: err.message });
   }
 });
 
