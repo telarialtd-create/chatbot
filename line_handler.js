@@ -678,8 +678,8 @@ async function processAndPush(target, client) {
 }
 
 // ── 店舗LINE登録シート ────────────────────────────────────
-const STORES_SHEET_ID  = '1arBovYG4hwHHZ4GxejUpzlExRPNXEuRHRNmPbxpXN0s';
-const LINE_REG_SHEET   = 'LINE登録';
+const STORES_SHEET_ID  = '19LgvtnN12QGQzqwQgOVpmFckg111C2RzbyjxI2_hkvA';
+const LINE_REG_SHEET   = '📱 LINE登録';
 
 async function getLineRegistrations() {
   const auth   = createAuthClient();
