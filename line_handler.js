@@ -677,29 +677,157 @@ async function processAndPush(target, client) {
   }
 }
 
+// ── 店舗LINE登録シート ────────────────────────────────────
+const STORES_SHEET_ID  = '1arBovYG4hwHHZ4GxejUpzlExRPNXEuRHRNmPbxpXN0s';
+const LINE_REG_SHEET   = 'LINE登録';
+
+async function getLineRegistrations() {
+  const auth   = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: STORES_SHEET_ID,
+    range: `${LINE_REG_SHEET}!A2:D200`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  return res.data.values || [];
+}
+
+async function saveLineRegistration(userId, storeName, status) {
+  const auth   = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const jst    = new Date(Date.now() + 9 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 16);
+
+  // 既存のuserIdを検索
+  const rows = await getLineRegistrations();
+  const idx  = rows.findIndex(r => r[1] === userId);
+
+  if (idx >= 0) {
+    // 既存行を更新
+    const rowNum = idx + 2;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: STORES_SHEET_ID,
+      range: `${LINE_REG_SHEET}!A${rowNum}:D${rowNum}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[storeName, userId, jst, status]] },
+    });
+  } else {
+    // 新規追加
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: STORES_SHEET_ID,
+      range: `${LINE_REG_SHEET}!A:D`,
+      valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: [[storeName, userId, jst, status]] },
+    });
+  }
+}
+
+// 店舗名からuserIdを取得
+async function getUserIdByStoreName(storeName) {
+  const rows = await getLineRegistrations();
+  const row  = rows.find(r => r[0] === storeName && r[3] === '完了');
+  return row ? row[1] : null;
+}
+
+// 店舗に個別Push送信（外部から使用可）
+async function pushToStore(storeName, message) {
+  const userId = await getUserIdByStoreName(storeName);
+  if (!userId) throw new Error(`店舗「${storeName}」のLINE登録が見つかりません`);
+  const client = createLineClient();
+  console.log(`[LINE] 店舗Push: ${storeName} → ${userId}`);
+  await client.pushMessage({
+    to: userId,
+    messages: [{ type: 'text', text: message }],
+  });
+}
+
 // ── LINE イベントハンドラ（200を即返してバックグラウンド処理） ──
 function handleLineEvent(event) {
-  if (event.type !== 'message' || event.message.type !== 'text') return;
-
-  const text = event.message.text.trim();
   const client = createLineClient();
 
-  // 【日付、名前】形式: 明細スクショ
-  const meisai = parseMeisaiRequest(text);
-  if (meisai) {
-    const target = event.source?.groupId || event.source?.userId || process.env.LINE_USER_ID;
-    console.log(`[LINE] 明細リクエスト受信: ${meisai.dateStr} / ${meisai.name} / 交通費=${meisai.transportType ?? '指定なし'} → target=${target}`);
-    setImmediate(() => processMeisaiAndPush(target, client, meisai.dateStr, meisai.name, meisai.transportType));
+  // フォローイベント（友達追加）
+  if (event.type === 'follow') {
+    const userId = event.source?.userId;
+    if (!userId) return;
+    console.log(`[LINE] 友達追加: ${userId}`);
+    setImmediate(async () => {
+      try {
+        await saveLineRegistration(userId, '', '登録中');
+        await client.pushMessage({
+          to: userId,
+          messages: [{ type: 'text', text: 'kiraku botを友達追加ありがとうございます！\n\n店舗名を入力してください。\n例：CREA' }],
+        });
+      } catch (err) {
+        console.error('[LINE] フォロー処理エラー:', err.message);
+      }
+    });
     return;
   }
 
-  // 「教えて」: 日報スクショ（既存機能）
+  if (event.type !== 'message' || event.message.type !== 'text') return;
+
+  const text = event.message.text.trim();
+  const userId = event.source?.userId;
+
+  // 店舗名登録フロー（1対1トークのみ）
+  if (event.source?.type === 'user' && userId) {
+    setImmediate(async () => {
+      try {
+        const rows = await getLineRegistrations();
+        const row  = rows.find(r => r[1] === userId);
+        if (row && row[3] === '登録中' && !text.includes('教えて')) {
+          // 店舗名として登録
+          const storeName = text;
+          await saveLineRegistration(userId, storeName, '完了');
+          console.log(`[LINE] 店舗登録完了: ${storeName} → ${userId}`);
+          await client.pushMessage({
+            to: userId,
+            messages: [{ type: 'text', text: `「${storeName}」として登録しました！\nこれからkiraku botから通知が届きます。` }],
+          });
+          return;
+        }
+      } catch (err) {
+        console.error('[LINE] 登録フロー エラー:', err.message);
+      }
+
+      // 既存コマンド処理
+      // 【日付、名前】形式: 明細スクショ
+      const meisai = parseMeisaiRequest(text);
+      if (meisai) {
+        const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+        console.log(`[LINE] 明細リクエスト受信: ${meisai.dateStr} / ${meisai.name} / 交通費=${meisai.transportType ?? '指定なし'} → target=${target}`);
+        processMeisaiAndPush(target, client, meisai.dateStr, meisai.name, meisai.transportType).catch(err => console.error('[明細] 未処理エラー:', err.message));
+        return;
+      }
+
+      // 「教えて」: 日報スクショ
+      if (text.includes('教えて')) {
+        const target = getPushTarget(event);
+        console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
+        processAndPush(target, client).catch(err => console.error('[LINE] 未処理エラー:', err.message));
+        return;
+      }
+    });
+    return;
+  }
+
+  // グループからのコマンド
+  // 【日付、名前】形式: 明細スクショ
+  const meisai = parseMeisaiRequest(text);
+  if (meisai) {
+    const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+    console.log(`[LINE] 明細リクエスト受信: ${meisai.dateStr} / ${meisai.name} / 交通費=${meisai.transportType ?? '指定なし'} → target=${target}`);
+    setImmediate(() => processMeisaiAndPush(target, client, meisai.dateStr, meisai.name, meisai.transportType).catch(err => console.error('[明細] 未処理エラー:', err.message)));
+    return;
+  }
+
+  // 「教えて」: 日報スクショ
   if (text.includes('教えて')) {
     const target = getPushTarget(event);
     console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
-    setImmediate(() => processAndPush(target, client));
+    setImmediate(() => processAndPush(target, client).catch(err => console.error('[LINE] 未処理エラー:', err.message)));
     return;
   }
 }
 
-module.exports = { lineConfig, handleLineEvent, middleware };
+module.exports = { lineConfig, handleLineEvent, middleware, pushToStore };
