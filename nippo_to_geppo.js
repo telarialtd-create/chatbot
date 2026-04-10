@@ -19,7 +19,8 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
 
-const GEPPO_SHEET_ID = process.env.GEPPO_SHEET_ID || '1tikBFx4F0mnEx2sxyVSVRb4RROJtNv_auDrmH5orbUw';
+const GEPPO_SHEET_ID        = process.env.GEPPO_SHEET_ID        || '1tikBFx4F0mnEx2sxyVSVRb4RROJtNv_auDrmH5orbUw'; // CREA月報
+const FUWAMOKO_GEPPO_ID     = process.env.FUWAMOKO_GEPPO_ID     || '1wYQ5YYU9zSbGZ7VDnPp89mTMX_JGIUdNNNFBVgBneQ4'; // ふわもこSPA月報
 const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
 
 // 朝/昼/夜の出勤時刻境界（例: 12.0 = 12:00）
@@ -57,9 +58,16 @@ function createAuthClient() {
   return oauth2Client;
 }
 
-// ── 日付 → 月報の列文字（G=1日, H=2日...） ────────────────
+// ── 日付 → 月報売上シートの列文字（G=1日, H=2日...） ────────
 function dayToCol(day) {
   const idx = 6 + (day - 1); // G=6 (0-indexed: A=0)
+  if (idx < 26) return String.fromCharCode(65 + idx);
+  return 'A' + String.fromCharCode(65 + idx - 26);
+}
+
+// ── 日付 → 回収シートの列文字（E=1日, F=2日...） ────────────
+function dayToKaishuuCol(day) {
+  const idx = 4 + (day - 1); // E=4 (0-indexed: A=0)
   if (idx < 26) return String.fromCharCode(65 + idx);
   return 'A' + String.fromCharCode(65 + idx - 26);
 }
@@ -75,18 +83,69 @@ async function findNippoFileId(jstDate) {
   const drive = google.drive({ version: 'v3', auth });
 
   const res = await drive.files.list({
-    q: `'${NIPPO_FOLDER_ID}' in parents and name contains '${dateStr}' and trashed = false`,
+    q: `'${NIPPO_FOLDER_ID}' in parents and name = '${dateStr}' and trashed = false`,
     fields: 'files(id, name)',
-    orderBy: 'createdTime desc',
     pageSize: 5,
   });
 
   const files = res.data.files || [];
   console.log(`[月報] 日報検索 "${dateStr}": ${files.map(f => f.name).join(', ') || 'なし'}`);
 
-  // 「2026年4月7日」に完全一致するものを優先（スペースや別店舗名を除外）
+  // 完全一致のみ返す（部分一致・別店舗は除外）
   const exact = files.find(f => f.name.trim() === dateStr);
-  return (exact || files[0])?.id || null;
+  return exact?.id || null;
+}
+
+// CA/CB（出勤・退勤時刻）から朝/昼/夜の出勤カウントを計算
+// シフトが複数時間帯をまたぐ場合は各帯でカウント
+function calcShukkinBySlot(caRows, startRow, endRow) {
+  let am = 0, pm = 0, night = 0;
+  const overlaps = (shiftStart, shiftEnd, ps, pe) => shiftStart < pe && shiftEnd > ps;
+
+  for (let i = startRow - 1; i <= endRow - 1; i++) { // 0-indexed (行3=index0 for CA3:CB35)
+    const row = caRows[i];
+    if (!row) continue;
+    const ca = Number(row[0]);
+    const cb = Number(row[1]);
+    if (isNaN(ca) || ca === 0 || isNaN(cb) || cb === 0) continue;
+    if (typeof row[0] === 'string') continue; // ヘッダー行スキップ
+
+    if (overlaps(ca, cb, 9,  15)) am++;
+    if (overlaps(ca, cb, 15, 21)) pm++;
+    if (overlaps(ca, cb, 21, 30)) night++;
+  }
+  return { am, pm, night };
+}
+
+// BD列の小数時刻 → 時間（h）に変換（翌日分は+24）
+function bdToHour(bd) {
+  let h = bd * 24;
+  if (h < 9) h += 24; // 深夜0〜8時台 → 24〜32時扱い
+  return h;
+}
+
+// 時間（h）→ 朝/昼/夜 分類
+function timeSlot(h) {
+  if (h >= 9  && h < 15) return 'am';
+  if (h >= 15 && h < 21) return 'pm';
+  if (h >= 21 && h <= 30) return 'night';
+  return null;
+}
+
+// BD列から朝/昼/夜本数を集計（startRow〜endRow: 1-indexed、BD列はindex0）
+function calcHonsuByBd(bdRows, startRow, endRow) {
+  let am = 0, pm = 0, night = 0;
+  for (let i = startRow - 2; i <= endRow - 2; i++) { // BD2=index0
+    const row = bdRows[i];
+    if (!row) continue;
+    const bd = Number(row[0]);
+    if (isNaN(bd) || bd <= 0 || bd > 10) continue; // 異常値スキップ
+    const slot = timeSlot(bdToHour(bd));
+    if (slot === 'am')    am++;
+    else if (slot === 'pm')    pm++;
+    else if (slot === 'night') night++;
+  }
+  return { am, pm, night };
 }
 
 // ── 日報ファイルからデータ読み取り ────────────────────────
@@ -101,54 +160,96 @@ async function readNippoData(fileId) {
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const totRow = r1.data.values?.[0] || [];
-  // CL=0 ('C'), CM=1 (総売上), CO=3 (女子給), CQ=5 (店取り分)
   const totalSales  = Number(totRow[1]) || 0;
   const staffSalary = Number(totRow[3]) || 0;
 
-  // CA4:CK35（CREA + ふわもこSPA 全スタッフ行）
-  // CA=出勤, CB=退勤, CC=本数, CD=名前, CK=待機時間
+  // CA4:CK21（CREAスタッフ行）- 出勤数・待機合計用
   const r2 = await sheets.spreadsheets.values.get({
     spreadsheetId: fileId,
-    range: "'売上'!CA4:CK35",
+    range: "'売上'!CA4:CK21",
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const rows = r2.data.values || [];
 
-  let am_hon = 0, pm_hon = 0, night_hon = 0;
-  let am_count = 0, pm_count = 0, night_count = 0;
   let total_stay = 0;
-
+  let total_count = 0;
   for (const row of rows) {
-    const shukkin = Number(row[0]); // CA: 出勤時刻（例: 11, 15.5, 23.5）
-    const honsu   = Number(row[2]); // CC: 本数
-    const stay    = Number(row[10]);// CK: 待機時間
-
-    // 出勤時刻が数値でない行（ヘッダー行など）はスキップ
-    if (!row[0] || isNaN(shukkin) || shukkin === 0) continue;
-    if (isNaN(honsu)) continue;
-
+    if (!row[0] || typeof row[0] === 'string') continue;
+    const ca = Number(row[0]);
+    if (isNaN(ca) || ca === 0) continue;
+    total_count++; // 行にデータが入っている人数（実出勤人数）
+    const stay = Number(row[10]);
     total_stay += isNaN(stay) ? 0 : stay;
-
-    if (shukkin < AM_END) {
-      am_count++;
-      am_hon += honsu;
-    } else if (shukkin < PM_END) {
-      pm_count++;
-      pm_hon += honsu;
-    } else {
-      night_count++;
-      night_hon += honsu;
-    }
   }
 
-  const total_hon   = am_hon + pm_hon + night_hon;
-  const total_count = am_count + pm_count + night_count;
+  // CA/CB列でシフト重複ありの朝/昼/夜出勤カウント（1スタッフが複数時間帯をまたぐ場合は複数カウント）
+  const { am: am_count, pm: pm_count, night: night_count } = calcShukkinBySlot(rows, 1, rows.length);
+
+  // BD列（CREA: 行3〜46）で朝/昼/夜本数を集計
+  const rBd = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'売上'!BD2:BD46",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const { am: am_hon, pm: pm_hon, night: night_hon } = calcHonsuByBd(rBd.data.values || [], 3, 46);
+  const total_hon = am_hon + pm_hon + night_hon;
 
   return { totalSales, staffSalary, am_hon, pm_hon, night_hon, total_hon, am_count, pm_count, night_count, total_count, total_stay };
 }
 
-// ── 月報シートへ書き込み ───────────────────────────────────
-async function writeToGeppo(jstDate, data) {
+// ── ふわもこSPAデータ読み取り ─────────────────────────────
+async function readFuwamokoData(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // CM4（ふわもこ総売上）+ CO4（女子給与）
+  const r1 = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'売上'!CL4:CQ4",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const totRow = r1.data.values?.[0] || [];
+  const totalSales  = Number(totRow[1]) || 0;  // CM4
+  const staffSalary = Number(totRow[3]) || 0;  // CO4
+
+  // CA23:CK32（ふわもこSPAスタッフ行）- 出勤数・待機合計用
+  const r2 = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'売上'!CA23:CK32",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r2.data.values || [];
+
+  let total_stay = 0;
+  let total_count = 0;
+  for (const row of rows) {
+    if (!row[0] || typeof row[0] === 'string') continue;
+    const ca = Number(row[0]);
+    if (isNaN(ca) || ca === 0) continue;
+    total_count++; // 行にデータが入っている人数（実出勤人数）
+    const stay = Number(row[10]);
+    total_stay += isNaN(stay) ? 0 : stay;
+  }
+
+  // CA/CB列でシフト重複ありの朝/昼/夜出勤カウント
+  const { am: am_count, pm: pm_count, night: night_count } = calcShukkinBySlot(rows, 1, rows.length);
+
+  // BD列（ふわもこ: 行48〜64）で朝/昼/夜本数を集計
+  const rBd = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'売上'!BD2:BD64",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const { am: am_hon, pm: pm_hon, night: night_hon } = calcHonsuByBd(rBd.data.values || [], 48, 64);
+  const total_hon = am_hon + pm_hon + night_hon;
+
+  return { totalSales, staffSalary, am_hon, pm_hon, night_hon, total_hon, am_count, pm_count, night_count, total_count, total_stay };
+}
+
+// ── 月報シートへ書き込み（sheetId指定可） ────────────────────
+async function writeToGeppo(jstDate, data, sheetId, label) {
+  sheetId = sheetId || GEPPO_SHEET_ID;
+  label   = label   || 'CREA';
   const day = jstDate.getUTCDate();
   const col = dayToCol(day);
 
@@ -160,7 +261,7 @@ async function writeToGeppo(jstDate, data) {
     { range: `'売上'!${col}5`,  values: [[data.am_hon]]      },  // 朝本数
     { range: `'売上'!${col}6`,  values: [[data.pm_hon]]      },  // 昼本数
     { range: `'売上'!${col}7`,  values: [[data.night_hon]]   },  // 夜本数
-    { range: `'売上'!${col}8`,  values: [[data.total_hon]]   },  // 総本数
+    { range: `'売上'!${col}8`,  values: [[data.total_hon]]    },  // 総本数
     { range: `'売上'!${col}9`,  values: [[data.am_count]]    },  // 朝出勤
     { range: `'売上'!${col}10`, values: [[data.pm_count]]    },  // 昼出勤
     { range: `'売上'!${col}11`, values: [[data.night_count]] },  // 夜出勤
@@ -170,12 +271,410 @@ async function writeToGeppo(jstDate, data) {
   ];
 
   await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: GEPPO_SHEET_ID,
+    spreadsheetId: sheetId,
     requestBody: { valueInputOption: 'RAW', data: updates },
   });
 
-  console.log(`[月報] ${day}日(${col}列) 書き込み完了:`, data);
+  console.log(`[月報/${label}] ${day}日(${col}列) 書き込み完了:`, data);
   return { day, col, ...data };
+}
+
+// 漢字を含む名前 = CREAスタッフ判定（ひらがなのみ = ふわもこSPA）
+function isCrea(name) {
+  return /[\u4e00-\u9fff\u3400-\u4dbf]/.test(name);
+}
+
+// 「【F】山本」→「山本」、「立花 特」→「立花」のように括弧・スペース以降を除去
+function normalizeName(str) {
+  return str
+    .replace(/【[^】]*】/g, '')  // 【...】除去
+    .replace(/\[[^\]]*\]/g, '') // [...] 除去
+    .split(/[\s　]/)[0]          // スペース（全角含む）以降を除去
+    .trim();
+}
+
+// ── 日報・手持ちシートから経費（交通費）読み取り ────────────
+// 戻り値: { crea: [...], fuwamoko: [...] }
+async function readKeihi(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'手持ち'!K42:N80",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r.data.values || [];
+
+  // 行42はヘッダー（名前/給料/交通費）なのでスキップ、43行目以降がデータ
+  const crea = [], fuwamoko = [];
+  for (const row of rows.slice(1)) {
+    const name  = row[0];
+    const kotsu = Number(row[3]);
+    if (!name || typeof name !== 'string' || name.trim() === '') continue;
+    if (!(kotsu > 0)) continue;  // 交通費0円 → スキップ
+    const item = { name: name.trim(), kotsu };
+    if (isCrea(name)) {
+      crea.push(item);      // 漢字名 = CREA
+    } else {
+      fuwamoko.push(item);  // ひらがな名 = ふわもこSPA
+    }
+  }
+
+  return { crea, fuwamoko };
+}
+
+// ── 月報・経費シートへ書き込み（指定シートID） ───────────
+async function writeKeihi(jstDate, keihi, sheetId, label) {
+  if (keihi.length === 0) {
+    console.log(`[経費/${label}] 書き込み対象なし`);
+    return [];
+  }
+
+  const day = jstDate.getUTCDate();
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // 経費シートのC・D・H列を読んで既存データと空き行を確認
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'経費'!C1:H300",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const existingRows = res.data.values || [];
+
+  // 既存データ（日・名前・金額）をセットに入れて重複チェック用に使う
+  const existingSet = new Set();
+  let startRow = -1;
+  for (let i = 3; i < existingRows.length; i++) {
+    const row = existingRows[i];
+    const c = row?.[0], d = row?.[1], h = row?.[5];
+    if (c === '' || c === undefined || c === null) {
+      if (startRow === -1) startRow = i + 1; // 最初の空き行（1-indexed）
+    } else {
+      existingSet.add(`${c}|${d}|${h}`);
+    }
+  }
+  if (startRow === -1) startRow = existingRows.length + 1;
+
+  // 重複を除外
+  const newKeihi = keihi.filter(item => {
+    const key = `${day}|${item.name}|${item.kotsu}`;
+    if (existingSet.has(key)) {
+      console.log(`[経費/${label}] スキップ(重複): ${day}日 ${item.name} ${item.kotsu}円`);
+      return false;
+    }
+    return true;
+  });
+
+  if (newKeihi.length === 0) {
+    console.log(`[経費/${label}] 書き込み対象なし（全件重複）`);
+    return [];
+  }
+
+  const updates = newKeihi.map((item, idx) => {
+    const row = startRow + idx;
+    return [
+      { range: `'経費'!C${row}`, values: [[day]]        },  // 日
+      { range: `'経費'!D${row}`, values: [[item.name]]   },  // 名前
+      { range: `'経費'!H${row}`, values: [[item.kotsu]]  },  // 交通費
+    ];
+  }).flat();
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: { valueInputOption: 'RAW', data: updates },
+  });
+
+  console.log(`[経費/${label}] ${day}日 ${newKeihi.length}件 書き込み完了(${startRow}行目〜):`, newKeihi);
+  return newKeihi;
+}
+
+// ── 日報・手持ちシートから回収データ読み取り ─────────────────
+// 戻り値: { crea: [{name, amount}], fuwamoko: [{name, amount}] }
+async function readKaishuu(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'手持ち'!K42:Q80",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r.data.values || [];
+
+  const crea = [], fuwamoko = [];
+  for (const row of rows.slice(1)) {
+    const name   = row[0];
+    const o      = Number(row[4]); // O列（前回）
+    const p      = Number(row[5]); // P列（次回）
+    if (!name || typeof name !== 'string' || name.trim() === '') continue;
+    if (isNaN(o) && isNaN(p)) continue;
+    const amount = (isNaN(o) ? 0 : o) + (isNaN(p) ? 0 : p);
+    if (amount === 0) continue;
+    const item = { name: name.trim(), amount };
+    if (isCrea(name)) {
+      crea.push(item);
+    } else {
+      fuwamoko.push(item);
+    }
+  }
+  return { crea, fuwamoko };
+}
+
+// ── 月報・回収シートへ書き込み ────────────────────────────
+// 回収シートのD列で名前を検索し、日付列（E=1日...）にamountを書き込む
+async function writeKaishuu(jstDate, kaishuu, sheetId, label) {
+  if (kaishuu.length === 0) {
+    console.log(`[回収/${label}] 書き込み対象なし`);
+    return [];
+  }
+
+  const day = jstDate.getUTCDate();
+  const col = dayToKaishuuCol(day);
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // D列の名前リストを取得
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'回収'!D1:D200",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const dCol = (res.data.values || []).map(r => normalizeName((r[0] || '').toString()));
+
+  const updates = [];
+  const notFound = [];
+
+  for (const item of kaishuu) {
+    const rowIdx = dCol.findIndex((name, i) => i > 0 && name === item.name);
+    if (rowIdx === -1) {
+      notFound.push(item.name);
+      continue;
+    }
+    const row = rowIdx + 1; // 1-indexed
+    updates.push({ range: `'回収'!${col}${row}`, values: [[-item.amount]] }); // 符号反転（-→+、+→-）
+  }
+
+  if (updates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: { valueInputOption: 'RAW', data: updates },
+    });
+  }
+
+  if (notFound.length > 0) console.log(`[回収/${label}] 名前未発見:`, notFound);
+  console.log(`[回収/${label}] ${day}日(${col}列) ${updates.length}件 書き込み完了:`, kaishuu.filter(k => !notFound.includes(k.name)));
+  return kaishuu.filter(k => !notFound.includes(k.name));
+}
+
+// ── 列インデックス(0始まり) → 列文字（A,B...Z,AA,AB...） ─────
+function idxToCol(idx) {
+  if (idx < 26) return String.fromCharCode(65 + idx);
+  const first  = Math.floor((idx - 26) / 26);
+  const second = (idx - 26) % 26;
+  return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
+}
+
+// SBシート: 1日のブロック開始列インデックス = T(19)、1日あたり11列
+function sbDayStartIdx(day) {
+  return 19 + (day - 1) * 11;
+}
+
+// ── 日報・給料シートから SB データ読み取り ───────────────────
+async function readSbData(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'給料'!A1:I30",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r.data.values || [];
+
+  // 行1はヘッダー、行2以降でA列に名前がある行のみ抽出
+  const data = [];
+  for (const row of rows.slice(1)) {
+    const name = row[0];
+    if (!name || typeof name !== 'string' || name.trim() === '') continue;
+    // B〜I (index 1〜8) の8値
+    const vals = [1,2,3,4,5,6,7,8].map(i => {
+      const v = Number(row[i]);
+      return isNaN(v) ? 0 : v;
+    });
+    data.push({ name: name.trim(), vals });
+  }
+  return data;
+}
+
+// ── 月報・SBシートへ書き込み ──────────────────────────────
+async function writeSbData(jstDate, sbData, sheetId, label) {
+  if (sbData.length === 0) {
+    console.log(`[SB/${label}] 書き込み対象なし`);
+    return [];
+  }
+
+  const day = jstDate.getUTCDate();
+  const startIdx = sbDayStartIdx(day);
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // SBシートのA列（名前リスト）を取得
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'SB'!A1:A200",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const aCol = (res.data.values || []).map(r => normalizeName((r[0] || '').toString()));
+
+  const updates = [];
+  const notFound = [];
+
+  for (const item of sbData) {
+    const rowIdx = aCol.findIndex((name, i) => i > 0 && name === item.name);
+    if (rowIdx === -1) {
+      notFound.push(item.name);
+      continue;
+    }
+    const row = rowIdx + 1; // 1-indexed
+    // B〜H の7値を対応列（startIdx〜startIdx+6）に書き込む
+    item.vals.forEach((v, offset) => {
+      const col = idxToCol(startIdx + offset);
+      updates.push({ range: `'SB'!${col}${row}`, values: [[v]] });
+    });
+  }
+
+  if (updates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: { valueInputOption: 'RAW', data: updates },
+    });
+  }
+
+  if (notFound.length > 0) console.log(`[SB/${label}] 名前未発見:`, notFound);
+  const written = sbData.filter(k => !notFound.includes(k.name));
+  console.log(`[SB/${label}] ${day}日(${idxToCol(startIdx)}列〜) ${written.length}件 書き込み完了`);
+  return written;
+}
+
+// ── 日報・給料シートからふわもこSBデータ読み取り（K=名前, L〜S=データ）
+async function readFuwamokoSbData(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'給料'!K1:S30",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r.data.values || [];
+
+  // 行1はヘッダー、行2以降でK列に名前がある行のみ抽出
+  const data = [];
+  for (const row of rows.slice(1)) {
+    const name = row[0];
+    if (!name || typeof name !== 'string' || name.trim() === '') continue;
+    if (name.includes('合計')) continue; // 集計行（給与合計等）はスキップ
+    // L〜S (index 1〜8) の8値
+    const vals = [1,2,3,4,5,6,7,8].map(i => {
+      const v = Number(row[i]);
+      return isNaN(v) ? 0 : v;
+    });
+    data.push({ name: name.trim(), vals });
+  }
+  return data;
+}
+
+// ── 日報・売上シートからカード/PayPay読み取り ─────────────────
+// 戻り値: { crea: {card, paypay}, fuwamoko: {card, paypay} }
+async function readPaymentData(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'売上'!AR2:AZ64",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r.data.values || [];
+
+  const calc = (startRow, endRow) => {
+    let card = 0, paypay = 0;
+    for (let i = startRow - 2; i <= endRow - 2; i++) { // -2 because AR2=index0
+      const row = rows[i];
+      if (!row) continue;
+      const ar = (row[0] || '').toString().toLowerCase();
+      const az = Number(row[8]);
+      if (isNaN(az) || az === 0) continue;
+      if (ar.includes('paypay') || ar.includes('ペイペイ')) paypay += az * 1000;
+      else if (ar.includes('カード')) card += az * 1000;
+    }
+    return { card, paypay };
+  };
+
+  return {
+    crea:     calc(3, 46),   // CREA: 行3〜46
+    fuwamoko: calc(48, 64),  // ふわもこ: 行48〜64
+  };
+}
+
+// ── 月報・カード/PayPay書き込み ────────────────────────────
+async function writePaymentData(jstDate, payment, sheetId, label) {
+  const { card, paypay } = payment;
+  if (card === 0 && paypay === 0) {
+    console.log(`[支払/${label}] カード・PayPayなし`);
+    return;
+  }
+
+  const col = dayToCol(jstDate.getUTCDate());
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const updates = [];
+  if (card   > 0) updates.push({ range: `'売上'!${col}24`, values: [[card]]   }); // カード
+  if (paypay > 0) updates.push({ range: `'売上'!${col}25`, values: [[paypay]] }); // PayPay
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: { valueInputOption: 'RAW', data: updates },
+  });
+
+  console.log(`[支払/${label}] ${jstDate.getUTCDate()}日(${col}列) カード:${card} PayPay:${paypay}`);
+}
+
+// ── 経費シートのH列合計を売上シート23行に書き込み ──────────
+async function writeKeihiTotal(jstDate, sheetId, label) {
+  const day = jstDate.getUTCDate();
+  const col = dayToCol(day);
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // 経費シートのC列（日）とH列（金額）を取得
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'経費'!C1:H300",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = res.data.values || [];
+
+  let total = 0;
+  for (const row of rows) {
+    if (Number(row[0]) === day) {
+      const h = Number(row[5]); // H列はC列から5つ右（index5）
+      if (!isNaN(h)) total += h;
+    }
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `'売上'!${col}23`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[total]] },
+  });
+
+  console.log(`[経費合計/${label}] ${day}日(${col}23) 合計:${total}`);
+  return total;
 }
 
 // ── メイン関数: 指定日の日報→月報同期 ────────────────────
@@ -199,10 +698,27 @@ async function syncNippoToGeppo(jstDate) {
   const fileId = await findNippoFileId(jstDate);
   if (!fileId) throw new Error(`日報ファイルが見つかりません: ${label}`);
 
-  const data = await readNippoData(fileId);
-  const result = await writeToGeppo(jstDate, data);
+  const data        = await readNippoData(fileId);
+  const fuwaData    = await readFuwamokoData(fileId);
+  const keihi       = await readKeihi(fileId);
+  const kaishuu     = await readKaishuu(fileId);
+  const result      = await writeToGeppo(jstDate, data,     GEPPO_SHEET_ID,    'CREA');
+  const fuwaResult  = await writeToGeppo(jstDate, fuwaData, FUWAMOKO_GEPPO_ID, 'ふわもこ');
+  const keihiCrea     = await writeKeihi(jstDate, keihi.crea,     GEPPO_SHEET_ID,    'CREA');
+  const keihiFuwamoko = await writeKeihi(jstDate, keihi.fuwamoko, FUWAMOKO_GEPPO_ID, 'ふわもこ');
+  const kaishuuCrea     = await writeKaishuu(jstDate, kaishuu.crea,     GEPPO_SHEET_ID,    'CREA');
+  const kaishuuFuwamoko = await writeKaishuu(jstDate, kaishuu.fuwamoko, FUWAMOKO_GEPPO_ID, 'ふわもこ');
+  const sbData         = await readSbData(fileId);
+  const fuwamokoSbData = await readFuwamokoSbData(fileId);
+  const sbCrea     = await writeSbData(jstDate, sbData,         GEPPO_SHEET_ID,    'CREA');
+  const sbFuwamoko = await writeSbData(jstDate, fuwamokoSbData, FUWAMOKO_GEPPO_ID, 'ふわもこ');
+  const payment = await readPaymentData(fileId);
+  await writePaymentData(jstDate, payment.crea,     GEPPO_SHEET_ID,    'CREA');
+  await writePaymentData(jstDate, payment.fuwamoko, FUWAMOKO_GEPPO_ID, 'ふわもこ');
+  await writeKeihiTotal(jstDate, GEPPO_SHEET_ID,    'CREA');
+  await writeKeihiTotal(jstDate, FUWAMOKO_GEPPO_ID, 'ふわもこ');
 
-  return { label, ...result };
+  return { label, ...result, fuwamoko: fuwaResult, keihi: { crea: keihiCrea, fuwamoko: keihiFuwamoko }, kaishuu: { crea: kaishuuCrea, fuwamoko: kaishuuFuwamoko }, sb: { crea: sbCrea, fuwamoko: sbFuwamoko } };
 }
 
 module.exports = { syncNippoToGeppo, dayToCol, findNippoFileId };
