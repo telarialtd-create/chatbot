@@ -15,9 +15,8 @@ from datetime import date, timedelta, datetime, timezone
 JST = timezone(timedelta(hours=9))
 
 SHEET_ID   = "10siqLe6B9A7uvNWgRUdHb462RqxCxkGEGMEKTPhY-S8"
-LINE_TOKEN  = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN",
-    "ifKMFJwttgSGoWsmSEx0WTWETYx+pauurDW4cFjO/cyszJ7Pxa1ahQg2BFaQ6TFzMqzXTX5U+Xrl0T58bVSumOVOvMnj4e3AjP9NIOv+o3xYJUTqdRG+gIOR0YYhEv7KrJVVslDy+r23STaPvSwRMwdB04t89/1O/w1cDnyilFU=")
-LINE_GROUP_ID = "Cfc2a40e8199d10556f696690d5885964"
+LINE_TOKEN  = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+LINE_GROUP_ID = os.environ.get("LINE_GROUP_ID", "C98b65635d31c24893cf8c0fc61070065")
 
 ROW_START = 1
 WEEK_COLS = 7
