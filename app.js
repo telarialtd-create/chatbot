@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { getAvailability, getUpcomingSchedule, getDailyReportBookings, getIntervalMap, parseDateStr, dateToNippoName, warmupCache, getBusinessDate: sheetsGetBusinessDate } = require('./scheduleReader');
 const { runEstamaSync } = require('./estama_worker');
 const { lineConfig, handleLineEvent, middleware: lineMiddleware } = require('./line_handler');
+const { syncNippoToGeppo } = require('./nippo_to_geppo');
 
 const app = express();
 app.use(express.static('public'));
@@ -216,15 +217,16 @@ function minsToTimeStr(mins) {
   return `${h}:${m}`;
 }
 
-// 営業日の基準日を返す（27時制：午前3時未満は前日扱い）
+// 営業日の基準日を返す（JST午前6時〜翌午前5:59を同日扱い）
 function getBusinessDate() {
   const now = new Date();
-  if (now.getHours() < 3) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 1);
-    return d;
+  // VPSはUTCタイムゾーンのためJST(UTC+9)に変換してから判定
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  if (jst.getUTCHours() < 6) {
+    const prev = new Date(jst.getTime() - 24 * 60 * 60 * 1000);
+    return new Date(prev.getUTCFullYear(), prev.getUTCMonth(), prev.getUTCDate());
   }
-  return now;
+  return new Date(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate());
 }
 
 // チャット履歴（メモリ内、シンプル実装）
@@ -1012,8 +1014,35 @@ async function handleKomojoEvent(event) {
 }
 // ==========================================
 
+// ── 月報自動更新（毎日JST 4:15 に前日分を自動反映） ────────
+function scheduleGeppoSync() {
+  const now = new Date();
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+
+  // 今日の JST 4:15 を計算
+  const next = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), 4 - 9 + 24, 15, 0)); // UTC 19:15 前日 = JST 4:15
+  // より正確に: JST 4:15 = UTC 前日 19:15
+  const targetJST = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), 19, 15, 0));
+  if (targetJST <= now) targetJST.setUTCDate(targetJST.getUTCDate() + 1);
+
+  const msUntilNext = targetJST - now;
+  console.log(`[月報] 次回自動更新: ${Math.round(msUntilNext / 60000)}分後（JST 4:15）`);
+
+  setTimeout(async () => {
+    console.log('[月報] 自動更新開始（前日分）');
+    try {
+      const result = await syncNippoToGeppo(); // 引数なし = 昨日
+      console.log('[月報] 自動更新完了:', result.label, result.totalSales, '円');
+    } catch (err) {
+      console.error('[月報] 自動更新エラー:', err.message);
+    }
+    scheduleGeppoSync(); // 次の日もスケジュール
+  }, msUntilNext);
+}
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`サーバー起動: http://localhost:${PORT}`);
   warmupCache().catch(err => console.error('ウォームアップエラー:', err.message));
+  scheduleGeppoSync();
 });

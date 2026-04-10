@@ -3,9 +3,12 @@
  * ・「教えて」→ 当日の日報 CA3:CR32 スクショを個人に送信
  * ・「【日付、名前】」→ 指定日の日報の明細シートH5に名前を入力し
  *   setMeisaiFromUriage スクリプトを実行、H2:M25 スクショをグループに送信
+ * ・「月報更新」→ 昨日の日報データを月報に反映（手動トリガー）
+ * ・「月報更新 4月7日」→ 指定日の日報を月報に反映
  */
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
+const { syncNippoToGeppo } = require('./nippo_to_geppo');
 const { google } = require('googleapis');
 const { createCanvas, registerFont } = require('canvas');
 const fs = require('fs');
@@ -797,6 +800,40 @@ function handleLineEvent(event) {
         const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
         console.log(`[LINE] 明細リクエスト受信: ${meisai.dateStr} / ${meisai.name} / 交通費=${meisai.transportType ?? '指定なし'} → target=${target}`);
         processMeisaiAndPush(target, client, meisai.dateStr, meisai.name, meisai.transportType).catch(err => console.error('[明細] 未処理エラー:', err.message));
+        return;
+      }
+
+      // 「月報更新」「月報更新 4月7日」: 日報→月報同期
+      if (text.startsWith('月報更新')) {
+        const target = userId || process.env.LINE_USER_ID;
+        setImmediate(async () => {
+          try {
+            // 日付指定があれば解析（例: 「月報更新 4月7日」「月報更新 4/7」）
+            let syncDate = null;
+            const dateMatch = text.match(/(\d{1,2})[月\/](\d{1,2})日?/);
+            if (dateMatch) {
+              const jst = new Date(Date.now() + 9 * 3600 * 1000);
+              syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
+            }
+            const result = await syncNippoToGeppo(syncDate);
+            await client.pushMessage({
+              to: target,
+              messages: [{ type: 'text', text:
+                `✅ 月報更新完了\n` +
+                `📅 ${result.label}\n` +
+                `💰 総売上: ${result.totalSales.toLocaleString()}円\n` +
+                `📊 本数: ${result.total_hon}本（朝${result.am_hon}/昼${result.pm_hon}/夜${result.night_hon}）\n` +
+                `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）`
+              }],
+            });
+          } catch (err) {
+            console.error('[月報] エラー:', err.message);
+            await client.pushMessage({
+              to: target,
+              messages: [{ type: 'text', text: `❌ 月報更新エラー: ${err.message}` }],
+            }).catch(() => {});
+          }
+        });
         return;
       }
 
