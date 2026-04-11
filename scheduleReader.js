@@ -4,7 +4,7 @@ const path = require('path');
 
 const TARGET_GID = 1873674341;
 const SCHEDULE_SPREADSHEET_ID = '10siqLe6B9A7uvNWgRUdHb462RqxCxkGEGMEKTPhY-S8';
-const SCHEDULE_GID = 1449788742;
+const SCHEDULE_GID = 362802905;
 const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
 const MIN_COURSE_MIN = 80; // 最短コース（分）
 
@@ -32,26 +32,28 @@ let _authClient = null;
 function createAuthClient() {
   if (_authClient) return _authClient;
 
-  let client_id, client_secret, refresh_token, access_token;
+  let client_id, client_secret, refresh_token;
 
-  if (process.env.GOOGLE_CLIENT_ID) {
-    // 環境変数から読み込む（クラウド環境）
+  const credsPath = path.join(process.env.HOME, '.config/gdrive-server-credentials.json');
+  const keysPath  = path.join(process.env.HOME, '.config/gcp-oauth.keys.json');
+
+  if (fs.existsSync(credsPath) && fs.existsSync(keysPath)) {
+    // 認証ファイルが存在する場合はファイルを優先（access_tokenは使わない：期限切れになるため）
+    const oauthKeys = JSON.parse(fs.readFileSync(keysPath));
+    const credentials = JSON.parse(fs.readFileSync(credsPath));
+    const installed = oauthKeys.installed || oauthKeys.web;
+    client_id = installed.client_id;
+    client_secret = installed.client_secret;
+    refresh_token = credentials.refresh_token;
+  } else {
+    // ファイルがない場合のみ環境変数を使用
     client_id = process.env.GOOGLE_CLIENT_ID;
     client_secret = process.env.GOOGLE_CLIENT_SECRET;
     refresh_token = process.env.GOOGLE_REFRESH_TOKEN;
-    access_token = process.env.GOOGLE_ACCESS_TOKEN || null;
-  } else {
-    // ローカルファイルから読み込む
-    const oauthKeys = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config/gcp-oauth.keys.json')));
-    const credentials = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config/gdrive-server-credentials.json')));
-    client_id = oauthKeys.installed.client_id;
-    client_secret = oauthKeys.installed.client_secret;
-    refresh_token = credentials.refresh_token;
-    access_token = credentials.access_token;
   }
 
   const oauth2Client = new google.auth.OAuth2(client_id, client_secret, 'http://localhost');
-  oauth2Client.setCredentials({ access_token, refresh_token });
+  oauth2Client.setCredentials({ refresh_token }); // access_tokenは設定しない（期限切れ防止）
   _authClient = oauth2Client;
   return oauth2Client;
 }
@@ -391,8 +393,9 @@ async function getUpcomingSchedule() {
     const month = target.getMonth() + 1;
     const day = target.getDate();
 
-    // シート名から月を取得（例: "2026年3月"）
-    const sheetMonth = parseInt(sheetName.replace(/\D/g, '').slice(-2)) || month;
+    // シート名から月を取得（例: "2026年4月" → 4, "12月" → 12）
+    const sheetMonthMatch = sheetName.match(/(\d{1,2})月/);
+    const sheetMonth = sheetMonthMatch ? parseInt(sheetMonthMatch[1]) : month;
 
     // dayRow から該当日の列インデックスを探す
     // 月が変わる場合（例: 3月シートで4月2日を探す）は2回目の出現を使う
@@ -518,12 +521,15 @@ async function getIntervalMap() {
 
 // 日付文字列からDateを生成（例: "2026年3月26日", "明日", "明後日"）
 function getBusinessDate(base = new Date()) {
-  if (base.getHours() < 3) {
-    const d = new Date(base);
-    d.setDate(d.getDate() - 1);
-    return d;
+  // VPSはUTCタイムゾーンのためJST(UTC+9)に変換してから判定
+  // 営業日: JST午前6時〜翌午前5:59を同日扱い
+  const jst = new Date(base.getTime() + 9 * 60 * 60 * 1000);
+  if (jst.getUTCHours() < 6) {
+    // JST午前6時前 → 前営業日
+    const prev = new Date(jst.getTime() - 24 * 60 * 60 * 1000);
+    return new Date(prev.getUTCFullYear(), prev.getUTCMonth(), prev.getUTCDate());
   }
-  return new Date(base);
+  return new Date(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate());
 }
 
 function parseDateStr(str, baseDate = new Date()) {

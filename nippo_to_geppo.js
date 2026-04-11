@@ -19,9 +19,34 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
 
-const GEPPO_SHEET_ID        = process.env.GEPPO_SHEET_ID        || '1tikBFx4F0mnEx2sxyVSVRb4RROJtNv_auDrmH5orbUw'; // CREA月報
-const FUWAMOKO_GEPPO_ID     = process.env.FUWAMOKO_GEPPO_ID     || '1wYQ5YYU9zSbGZ7VDnPp89mTMX_JGIUdNNNFBVgBneQ4'; // ふわもこSPA月報
+const GEPPO_SHEET_ID        = process.env.GEPPO_SHEET_ID        || '1L5a0SeqSckZARYq3rZBVpBwDBPL4GyliEqA-TIDzW7Y'; // CREA月報（フォールバック）
+const FUWAMOKO_GEPPO_ID     = process.env.FUWAMOKO_GEPPO_ID     || '1wYQ5YYU9zSbGZ7VDnPp89mTMX_JGIUdNNNFBVgBneQ4'; // ふわもこSPA月報（フォールバック）
 const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
+
+// ── 月報シートIDを動的に取得（フォルダ内の「C売上YYYY-M月」を検索） ────
+// prefix: 'C'=CREA, 'F'=ふわもこSPA
+async function findGeppoSheetId(year, month, prefix) {
+  const auth = createAuthClient();
+  const drive = google.drive({ version: 'v3', auth });
+  const name = `${prefix}売上${year}-${month}月`;
+  const res = await drive.files.list({
+    q: `'${NIPPO_FOLDER_ID}' in parents and name='${name}' and trashed=false`,
+    fields: 'files(id, name, mimeType, shortcutDetails)',
+  });
+  const files = res.data.files || [];
+  if (files.length === 0) {
+    console.log(`[月報] ${name} が見つかりません。フォールバックIDを使用します。`);
+    return null;
+  }
+  const file = files[0];
+  // ショートカットの場合はターゲットIDを返す
+  if (file.mimeType === 'application/vnd.google-apps.shortcut' && file.shortcutDetails) {
+    console.log(`[月報] ${name} → ショートカット先: ${file.shortcutDetails.targetId}`);
+    return file.shortcutDetails.targetId;
+  }
+  console.log(`[月報] ${name} → ${file.id}`);
+  return file.id;
+}
 
 // 朝/昼/夜の出勤時刻境界（例: 12.0 = 12:00）
 const AM_END = 12;   // 12時未満 = 朝
@@ -244,6 +269,56 @@ async function readFuwamokoData(fileId) {
   const total_hon = am_hon + pm_hon + night_hon;
 
   return { totalSales, staffSalary, am_hon, pm_hon, night_hon, total_hon, am_count, pm_count, night_count, total_count, total_stay };
+}
+
+// ── 月報シートへの新規名前自動登録 ────────────────────────────
+// 日報に現れた新しい名前をSBシート(A列)・回収シート(D列)に上から順に追加
+// dataStartRow: 名前を書き始める最初の行（SB=9, 回収=2）
+async function autoRegisterNames(names, sheetId, tabName, colLetter, dataStartRow, label) {
+  if (!names || names.length === 0) return;
+
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `'${tabName}'!${colLetter}1:${colLetter}300`,
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = res.data.values || [];
+  const existing = rows.map(r => normalizeName((r[0] || '').toString()));
+
+  // まだ登録されていない名前だけ絞り込む
+  const toAdd = names.filter(name => {
+    const norm = normalizeName(name);
+    return norm && !existing.some(e => e === norm);
+  });
+
+  if (toAdd.length === 0) {
+    console.log(`[名前登録/${label}] 新規なし`);
+    return;
+  }
+
+  // dataStartRow から下に向かって最初の空白行を探す
+  let nextRow = dataStartRow;
+  for (let i = dataStartRow - 1; i < rows.length; i++) {
+    const val = normalizeName((rows[i]?.[0] || '').toString());
+    if (!val) { nextRow = i + 1; break; }  // 空白行を発見
+    nextRow = i + 2; // まだ埋まっている → 次の行へ
+  }
+
+  const updates = toAdd.map((name, i) => ({
+    range: `'${tabName}'!${colLetter}${nextRow + i}`,
+    values: [[name]],
+  }));
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: { valueInputOption: 'RAW', data: updates },
+  });
+
+  console.log(`[名前登録/${label}] ${toAdd.length}件追加(${nextRow}行〜):`, toAdd);
+  return toAdd;
 }
 
 // ── 月報シートへ書き込み（sheetId指定可） ────────────────────
@@ -586,6 +661,169 @@ async function readFuwamokoSbData(fileId) {
   return data;
 }
 
+// ── 日報・手持ちシートからN19:O25（雑費）読み取り ─────────────────
+// N列に項目名があり、O列に金額がある行を取得
+// 戻り値: [{name: "ガソリン", amount: -4000}, ...] （O×1000、符号反転済み）
+async function readZatsuhi(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'手持ち'!N19:O25",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r.data.values || [];
+
+  const result = [];
+  for (const row of rows) {
+    const name   = (row[0] || '').toString().trim();
+    const oVal   = Number(row[1]);
+    if (!name || isNaN(oVal) || oVal === 0) continue;
+    const amount = oVal * 1000; // ×1000（符号そのまま）
+    result.push({ name, amount });
+  }
+  return result;
+}
+
+// ── 月報・経費シートへ雑費書き込み ────────────────────────────
+// 交通費と同様に C=日、D=名前、H=金額 の形式で空き行に追記
+async function writeZatsuhi(jstDate, zatsuhiItems, sheetId, label) {
+  if (!zatsuhiItems || zatsuhiItems.length === 0) {
+    console.log(`[雑費/${label}] 書き込み対象なし`);
+    return [];
+  }
+
+  const day = jstDate.getUTCDate();
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // 経費シートのC・D・H列を読んで空き行と重複チェック
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'経費'!C1:H300",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const existingRows = res.data.values || [];
+
+  const existingSet = new Set();
+  let startRow = -1;
+  for (let i = 3; i < existingRows.length; i++) {
+    const row = existingRows[i];
+    const c = row?.[0], d = row?.[1], h = row?.[5];
+    if (c === '' || c === undefined || c === null) {
+      if (startRow === -1) startRow = i + 1;
+    } else {
+      existingSet.add(`${c}|${d}|${h}`);
+    }
+  }
+  if (startRow === -1) startRow = existingRows.length + 1;
+
+  // 重複を除外
+  const newItems = zatsuhiItems.filter(item => {
+    const key = `${day}|${item.name}|${item.amount}`;
+    if (existingSet.has(key)) {
+      console.log(`[雑費/${label}] スキップ(重複): ${day}日 ${item.name} ${item.amount}円`);
+      return false;
+    }
+    return true;
+  });
+
+  if (newItems.length === 0) {
+    console.log(`[雑費/${label}] 書き込み対象なし（全件重複）`);
+    return [];
+  }
+
+  const updates = newItems.map((item, idx) => {
+    const row = startRow + idx;
+    return [
+      { range: `'経費'!C${row}`, values: [[day]]        },
+      { range: `'経費'!D${row}`, values: [[item.name]]  },
+      { range: `'経費'!H${row}`, values: [[item.amount]] },
+    ];
+  }).flat();
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: { valueInputOption: 'RAW', data: updates },
+  });
+
+  console.log(`[雑費/${label}] ${day}日 ${newItems.length}件 書き込み完了(${startRow}行目〜):`, newItems);
+  return newItems;
+}
+
+// ── 日報・手持ちシートからバンスデータ読み取り ──────────────────
+// T列（バンス）に値がある行のK列名前を取得し、"{name}バンス" として返す
+// 戻り値: [{name: "山本バンス", amount: -2000}, ...]
+async function readBansu(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'手持ち'!K42:T80",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r.data.values || [];
+
+  const result = [];
+  for (const row of rows.slice(1)) { // 1行目はヘッダーなのでスキップ
+    const name  = row[0];  // K列 = 名前
+    const bansu = row[9];  // T列 = バンス (K=0, L=1, ..., T=9)
+    if (!name || typeof name !== 'string' || name.trim() === '') continue;
+    const amount = Number(bansu);
+    if (isNaN(amount) || amount === 0) continue;
+    result.push({ name: name.trim() + 'バンス', amount });
+  }
+  return result;
+}
+
+// ── 月報・回収シートへバンス書き込み ──────────────────────────
+// D列で "{name}バンス" を検索し、日付列にamountをそのまま（符号反転なし）書き込む
+async function writeBansu(jstDate, bansuItems, sheetId, label) {
+  if (!bansuItems || bansuItems.length === 0) {
+    console.log(`[バンス/${label}] 書き込み対象なし`);
+    return [];
+  }
+
+  const day = jstDate.getUTCDate();
+  const col = dayToKaishuuCol(day);
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // D列の名前リストを取得
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'回収'!D1:D200",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const dCol = (res.data.values || []).map(r => (r[0] || '').toString().trim());
+
+  const updates = [];
+  const notFound = [];
+
+  for (const item of bansuItems) {
+    const rowIdx = dCol.findIndex((name, i) => i > 0 && name === item.name);
+    if (rowIdx === -1) {
+      notFound.push(item.name);
+      continue;
+    }
+    const row = rowIdx + 1; // 1-indexed
+    updates.push({ range: `'回収'!${col}${row}`, values: [[-item.amount]] }); // 符号反転（+→-、-→+）
+  }
+
+  if (updates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: { valueInputOption: 'RAW', data: updates },
+    });
+  }
+
+  if (notFound.length > 0) console.log(`[バンス/${label}] 名前未発見:`, notFound);
+  console.log(`[バンス/${label}] ${day}日(${col}列) ${updates.length}件 書き込み完了:`, bansuItems.filter(k => !notFound.includes(k.name)));
+  return bansuItems.filter(k => !notFound.includes(k.name));
+}
+
 // ── 日報・売上シートからカード/PayPay読み取り ─────────────────
 // 戻り値: { crea: {card, paypay}, fuwamoko: {card, paypay} }
 async function readPaymentData(fileId) {
@@ -677,6 +915,88 @@ async function writeKeihiTotal(jstDate, sheetId, label) {
   return total;
 }
 
+// ── 日報・手持ちシートから人件費データ読み取り ──────────────────
+// 手持ちシートのO35:O41に値がある行のL列名前を取得
+// 戻り値: [{name: "すい", hours: 11}, ...]
+async function readJinkenhi(fileId) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId: fileId,
+    range: "'手持ち'!L35:O41",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = r.data.values || [];
+
+  const result = [];
+  for (const row of rows) {
+    const name  = (row[0] || '').toString().trim();
+    const hours = Number(row[3]);
+    if (!name || isNaN(hours) || hours === 0) continue;
+    result.push({ name, hours });
+  }
+  return result;
+}
+
+// ── 月報・人件費シートへ書き込み ──────────────────────────────
+// 1行目ヘッダーの「○日」列を検索し、D列名前と照合して書き込む
+async function writeJinkenhi(jstDate, jinkenItems, sheetId, label) {
+  if (!jinkenItems || jinkenItems.length === 0) {
+    console.log(`[人件費/${label}] 書き込み対象なし`);
+    return [];
+  }
+
+  const day = jstDate.getUTCDate();
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // ヘッダー行 + 名前D列を一括取得
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'人件費'!A1:AK50",
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const rows = res.data.values || [];
+
+  // 1行目から日付列インデックスを取得
+  const header = rows[0] || [];
+  const colIdx = header.findIndex(h => h === `${day}日`);
+  if (colIdx === -1) {
+    console.log(`[人件費/${label}] ${day}日 の列が見つかりません`);
+    return [];
+  }
+  const colStr = colIdx < 26
+    ? String.fromCharCode(65 + colIdx)
+    : 'A' + String.fromCharCode(65 + colIdx - 26);
+
+  // D列(index3)から名前→行番号マップを作成
+  const nameMap = {};
+  rows.forEach((row, i) => {
+    const name = (row[3] || '').toString().trim();
+    if (name) nameMap[name] = i + 1;
+  });
+
+  const updates = [];
+  const notFound = [];
+  for (const item of jinkenItems) {
+    const row = nameMap[item.name];
+    if (!row) { notFound.push(item.name); continue; }
+    updates.push({ range: `'人件費'!${colStr}${row}`, values: [[item.hours]] });
+  }
+
+  if (updates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: { valueInputOption: 'RAW', data: updates },
+    });
+  }
+
+  if (notFound.length > 0) console.log(`[人件費/${label}] 名前未発見:`, notFound);
+  console.log(`[人件費/${label}] ${day}日(${colStr}列) ${updates.length}件 書き込み完了`);
+  return jinkenItems.filter(k => !notFound.includes(k.name));
+}
+
 // ── メイン関数: 指定日の日報→月報同期 ────────────────────
 // jstDate: JST基準のDateオブジェクト（省略時は昨日）
 async function syncNippoToGeppo(jstDate) {
@@ -695,6 +1015,10 @@ async function syncNippoToGeppo(jstDate) {
 
   console.log(`[月報] ${label} の同期開始`);
 
+  // 当月の月報シートIDをフォルダから動的に取得（見つからなければフォールバック）
+  const creaGeppoId  = (await findGeppoSheetId(y, m, 'C')) || GEPPO_SHEET_ID;
+  const fuwaGeppoId  = (await findGeppoSheetId(y, m, 'F')) || FUWAMOKO_GEPPO_ID;
+
   const fileId = await findNippoFileId(jstDate);
   if (!fileId) throw new Error(`日報ファイルが見つかりません: ${label}`);
 
@@ -702,23 +1026,35 @@ async function syncNippoToGeppo(jstDate) {
   const fuwaData    = await readFuwamokoData(fileId);
   const keihi       = await readKeihi(fileId);
   const kaishuu     = await readKaishuu(fileId);
-  const result      = await writeToGeppo(jstDate, data,     GEPPO_SHEET_ID,    'CREA');
-  const fuwaResult  = await writeToGeppo(jstDate, fuwaData, FUWAMOKO_GEPPO_ID, 'ふわもこ');
-  const keihiCrea     = await writeKeihi(jstDate, keihi.crea,     GEPPO_SHEET_ID,    'CREA');
-  const keihiFuwamoko = await writeKeihi(jstDate, keihi.fuwamoko, FUWAMOKO_GEPPO_ID, 'ふわもこ');
-  const kaishuuCrea     = await writeKaishuu(jstDate, kaishuu.crea,     GEPPO_SHEET_ID,    'CREA');
-  const kaishuuFuwamoko = await writeKaishuu(jstDate, kaishuu.fuwamoko, FUWAMOKO_GEPPO_ID, 'ふわもこ');
+  const bansuItems  = await readBansu(fileId);
+  const zatsuhiItems = await readZatsuhi(fileId);
+  // 新規名前を月報SB・回収シートに自動登録（書き込み前に実行）
   const sbData         = await readSbData(fileId);
   const fuwamokoSbData = await readFuwamokoSbData(fileId);
-  const sbCrea     = await writeSbData(jstDate, sbData,         GEPPO_SHEET_ID,    'CREA');
-  const sbFuwamoko = await writeSbData(jstDate, fuwamokoSbData, FUWAMOKO_GEPPO_ID, 'ふわもこ');
-  const payment = await readPaymentData(fileId);
-  await writePaymentData(jstDate, payment.crea,     GEPPO_SHEET_ID,    'CREA');
-  await writePaymentData(jstDate, payment.fuwamoko, FUWAMOKO_GEPPO_ID, 'ふわもこ');
-  await writeKeihiTotal(jstDate, GEPPO_SHEET_ID,    'CREA');
-  await writeKeihiTotal(jstDate, FUWAMOKO_GEPPO_ID, 'ふわもこ');
+  await autoRegisterNames(sbData.map(d => d.name),           creaGeppoId, 'SB',   'A', 9, 'CREA-SB');
+  await autoRegisterNames(fuwamokoSbData.map(d => d.name),   fuwaGeppoId, 'SB',   'A', 9, 'ふわもこ-SB');
+  await autoRegisterNames(kaishuu.crea.map(d => d.name),     creaGeppoId, '回収', 'D', 2, 'CREA-回収');
+  await autoRegisterNames(kaishuu.fuwamoko.map(d => d.name), fuwaGeppoId, '回収', 'D', 2, 'ふわもこ-回収');
 
-  return { label, ...result, fuwamoko: fuwaResult, keihi: { crea: keihiCrea, fuwamoko: keihiFuwamoko }, kaishuu: { crea: kaishuuCrea, fuwamoko: kaishuuFuwamoko }, sb: { crea: sbCrea, fuwamoko: sbFuwamoko } };
+  const result      = await writeToGeppo(jstDate, data,     creaGeppoId, 'CREA');
+  const fuwaResult  = await writeToGeppo(jstDate, fuwaData, fuwaGeppoId, 'ふわもこ');
+  const keihiCrea     = await writeKeihi(jstDate, keihi.crea,     creaGeppoId, 'CREA');
+  const keihiFuwamoko = await writeKeihi(jstDate, keihi.fuwamoko, fuwaGeppoId, 'ふわもこ');
+  const kaishuuCrea     = await writeKaishuu(jstDate, kaishuu.crea,     creaGeppoId, 'CREA');
+  const kaishuuFuwamoko = await writeKaishuu(jstDate, kaishuu.fuwamoko, fuwaGeppoId, 'ふわもこ');
+  const bansuResult   = await writeBansu(jstDate, bansuItems, creaGeppoId, 'CREA');
+  const zatsuhiResult = await writeZatsuhi(jstDate, zatsuhiItems, creaGeppoId, 'CREA');
+  const sbCrea     = await writeSbData(jstDate, sbData,         creaGeppoId, 'CREA');
+  const sbFuwamoko = await writeSbData(jstDate, fuwamokoSbData, fuwaGeppoId, 'ふわもこ');
+  const payment = await readPaymentData(fileId);
+  await writePaymentData(jstDate, payment.crea,     creaGeppoId, 'CREA');
+  await writePaymentData(jstDate, payment.fuwamoko, fuwaGeppoId, 'ふわもこ');
+  await writeKeihiTotal(jstDate, creaGeppoId, 'CREA');
+  await writeKeihiTotal(jstDate, fuwaGeppoId, 'ふわもこ');
+  const jinkenItems  = await readJinkenhi(fileId);
+  const jinkenResult = await writeJinkenhi(jstDate, jinkenItems, creaGeppoId, 'CREA');
+
+  return { label, ...result, fuwamoko: fuwaResult, keihi: { crea: keihiCrea, fuwamoko: keihiFuwamoko }, kaishuu: { crea: kaishuuCrea, fuwamoko: kaishuuFuwamoko }, bansu: bansuResult, zatsuhi: zatsuhiResult, sb: { crea: sbCrea, fuwamoko: sbFuwamoko }, jinkenhi: jinkenResult };
 }
 
 module.exports = { syncNippoToGeppo, dayToCol, findNippoFileId };

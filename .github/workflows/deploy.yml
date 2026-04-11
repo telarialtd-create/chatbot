@@ -1,0 +1,53 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'line_handler.js'
+      - 'nippo_to_geppo.js'
+      - 'scheduleReader.js'
+      - 'build_dashboard.js'
+      - 'app.js'
+      - 'chatbot/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 159.69.40.60 >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        run: |
+          # 変更されたJSファイルをサーバーにコピー
+          for f in line_handler.js nippo_to_geppo.js scheduleReader.js build_dashboard.js; do
+            if [ -f "$f" ]; then
+              scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+                "$f" root@159.69.40.60:/app/chatbot/"$f"
+              echo "✅ $f → /app/chatbot/$f"
+            fi
+          done
+
+          # PM2再起動
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@159.69.40.60 \
+            "pm2 restart chatbot --update-env && echo '✅ PM2再起動完了'"
+
+      - name: Health check
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+            https://159.69.40.60.nip.io/api/availability || echo "000")
+          echo "Health check status: $STATUS"
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; then
+            echo "✅ サーバー正常稼働"
+          else
+            echo "⚠️ サーバー応答: $STATUS"
+          fi
