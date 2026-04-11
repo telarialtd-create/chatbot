@@ -15,16 +15,33 @@ jobs:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
 
+      - name: 今日のJST日付を取得
+        run: echo "TODAY_JST=$(TZ=Asia/Tokyo date +%Y-%m-%d)" >> $GITHUB_ENV
+
+      - name: 送信済みフラグを確認（重複送信防止）
+        id: sent-check
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/.sent_flag
+          key: schedule-line-sent-${{ env.TODAY_JST }}
+
+      - name: 送信スキップ（本日送信済み）
+        if: steps.sent-check.outputs.cache-hit == 'true'
+        run: echo "本日（$TODAY_JST）はすでに送信済みのためスキップします"
+
       - name: Python セットアップ
+        if: steps.sent-check.outputs.cache-hit != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: 依存パッケージをインストール
+        if: steps.sent-check.outputs.cache-hit != 'true'
         run: |
           pip install --quiet pymupdf Pillow numpy
 
       - name: スケジュールをLINE送信
+        if: steps.sent-check.outputs.cache-hit != 'true'
         env:
           GOOGLE_CLIENT_ID:          ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET:      ${{ secrets.GOOGLE_CLIENT_SECRET }}
@@ -33,3 +50,14 @@ jobs:
           LINE_GROUP_ID:             ${{ secrets.LINE_GROUP_ID }}
         run: |
           python scripts/send_schedule_line.py
+
+      - name: 送信済みフラグを保存
+        if: steps.sent-check.outputs.cache-hit != 'true'
+        run: echo "sent on $(TZ=Asia/Tokyo date)" > /tmp/.sent_flag
+
+      - name: キャッシュに送信フラグを登録
+        if: steps.sent-check.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/.sent_flag
+          key: schedule-line-sent-${{ env.TODAY_JST }}
