@@ -5,7 +5,9 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const { getAvailability, getUpcomingSchedule, getDailyReportBookings, getIntervalMap, parseDateStr, dateToNippoName, warmupCache, getBusinessDate: sheetsGetBusinessDate } = require('./scheduleReader');
 const { runEstamaSync } = require('./estama_worker');
-const { lineConfig, handleLineEvent, middleware: lineMiddleware } = require('./line_handler');
+const { lineConfig, handleLineEvent, middleware: lineMiddleware, preloadPhoneIndex } = require('./line_handler');
+// アプリ起動時に利用履歴の電話番号インデックスをバックグラウンドでプリロード
+preloadPhoneIndex();
 const { syncNippoToGeppo } = require('./nippo_to_geppo');
 
 const app = express();

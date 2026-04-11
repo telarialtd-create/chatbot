@@ -5,6 +5,7 @@
  *   setMeisaiFromUriage スクリプトを実行、H2:M25 スクショをグループに送信
  * ・「月報更新」→ 昨日の日報データを月報に反映（手動トリガー）
  * ・「月報更新 4月7日」→ 指定日の日報を月報に反映
+ * ・電話番号（0から始まる10〜11桁）→ 利用履歴シートを検索して最新10件を返信
  */
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
@@ -43,24 +44,28 @@ function createLineClient() {
 
 // ── Google 認証 ───────────────────────────────────────────
 function createAuthClient() {
-  let client_id, client_secret, refresh_token, access_token;
+  let client_id, client_secret, refresh_token;
 
-  if (process.env.GOOGLE_CLIENT_ID) {
+  const credsPath = path.join(process.env.HOME, '.config/gdrive-server-credentials.json');
+  const keysPath  = path.join(process.env.HOME, '.config/gcp-oauth.keys.json');
+
+  if (fs.existsSync(credsPath) && fs.existsSync(keysPath)) {
+    // 認証ファイルが存在する場合はファイルを優先（access_tokenは使わない：期限切れになるため）
+    const oauthKeys   = JSON.parse(fs.readFileSync(keysPath));
+    const credentials = JSON.parse(fs.readFileSync(credsPath));
+    const installed   = oauthKeys.installed || oauthKeys.web;
+    client_id     = installed.client_id;
+    client_secret = installed.client_secret;
+    refresh_token = credentials.refresh_token;
+  } else {
+    // ファイルがない場合のみ環境変数を使用
     client_id     = process.env.GOOGLE_CLIENT_ID;
     client_secret = process.env.GOOGLE_CLIENT_SECRET;
     refresh_token = process.env.GOOGLE_REFRESH_TOKEN;
-    access_token  = process.env.GOOGLE_ACCESS_TOKEN || null;
-  } else {
-    const oauthKeys   = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config/gcp-oauth.keys.json')));
-    const credentials = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config/gdrive-server-credentials.json')));
-    client_id     = oauthKeys.installed.client_id;
-    client_secret = oauthKeys.installed.client_secret;
-    refresh_token = credentials.refresh_token;
-    access_token  = credentials.access_token;
   }
 
   const client = new google.auth.OAuth2(client_id, client_secret, 'http://localhost');
-  client.setCredentials({ access_token, refresh_token });
+  client.setCredentials({ refresh_token }); // access_tokenは設定しない（期限切れ防止）
   return client;
 }
 
@@ -680,6 +685,89 @@ async function processAndPush(target, client) {
   }
 }
 
+// ── 利用履歴シート ────────────────────────────────────────
+const RIREKI_SHEET_ID   = '1TpmlJxctpWzvkX8yx1e3uswDsZ3x7bLxT-J2HxmeRu4';
+const RIREKI_SHEET_NAME = '利用履歴';
+
+// 利用履歴キャッシュ（A:J全体を保持、30分）
+const rirekiCache = { allRows: null, phoneIndex: null, expiresAt: 0 };
+
+// 電話番号を正規化（ハイフン・スペース・全角数字除去）
+function normalizePhone(tel) {
+  if (!tel) return '';
+  const s = tel.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  return s.replace(/[^0-9]/g, '');
+}
+
+// A:J列全体を一括ロードしてキャッシュ（初回のみAPI、以降はメモリ）
+async function buildRirekiCache() {
+  if (rirekiCache.allRows && Date.now() < rirekiCache.expiresAt) return;
+  console.log('[利用履歴] A:J列一括ロード開始...');
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: RIREKI_SHEET_ID,
+    range: `${RIREKI_SHEET_NAME}!A:J`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  const rows = res.data.values || [];
+  // 電話番号インデックス構築（J列=index9）
+  const phoneIndex = {};
+  for (let i = 0; i < rows.length; i++) {
+    const tel = normalizePhone(rows[i][9] || '');
+    if (tel.length < 10) continue;
+    if (!phoneIndex[tel]) phoneIndex[tel] = [];
+    phoneIndex[tel].push(i);
+  }
+  rirekiCache.allRows = rows;
+  rirekiCache.phoneIndex = phoneIndex;
+  rirekiCache.expiresAt = Date.now() + 30 * 60 * 1000;
+  console.log(`[利用履歴] キャッシュ完了: ${rows.length}行, ${Object.keys(phoneIndex).length}件の電話番号`);
+}
+
+// 電話番号で利用履歴を検索（最新10件、メモリ検索）
+async function searchRirekiByPhone(phone) {
+  const normalized = normalizePhone(phone);
+  if (normalized.length < 10) return null;
+  await buildRirekiCache();
+  const idxList = rirekiCache.phoneIndex[normalized];
+  if (!idxList || idxList.length === 0) return null;
+  // 最新10件（インデックスが大きい＝後の行 = 最新）
+  const targets = idxList.slice(-10).reverse();
+  const dataRows = targets.map(i => (rirekiCache.allRows[i] || []).slice(0, 9));
+  return { total: idxList.length, rows: dataRows };
+}
+
+// 利用履歴の検索結果をテキストに整形
+function formatRirekiResult(phone, result) {
+  const { total, rows } = result;
+  const header = `📋 利用履歴: ${phone}\n合計 ${total} 件（最新${rows.length}件）\n${'─'.repeat(20)}`;
+  const lines = rows.map((r, i) => {
+    const date   = r[0] || '';
+    const store  = r[1] || '';
+    const name   = r[2] || '';
+    const type   = r[3] || '';
+    const e      = r[4] || '';
+    const f      = r[5] || '';
+    const place  = toFullWidth(r[6] || '');
+    const h      = r[7] || '';
+    const course = toFullWidth(r[8] || '');
+    const parts = [date, store, name, type, e, f, place, h, course].filter(v => v !== '');
+    return `${i + 1}. ${parts.join(' | ')}`;
+  });
+  return [header, ...lines].join('\n');
+}
+
+// 電話番号パターン（0から始まる10〜11桁、ハイフンあり/なし対応）
+function isPhoneNumber(text) {
+  return /^0\d{9,10}$/.test(text.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－ ]+$/.test(text);
+}
+
+// バックグラウンドでプリロード（起動時に呼び出す）
+function preloadPhoneIndex() {
+  setImmediate(() => buildRirekiCache().catch(e => console.error('[利用履歴] プリロードエラー:', e.message)));
+}
+
 // ── 店舗LINE登録シート ────────────────────────────────────
 const STORES_SHEET_ID  = '19LgvtnN12QGQzqwQgOVpmFckg111C2RzbyjxI2_hkvA';
 const LINE_REG_SHEET   = '📱 LINE登録';
@@ -778,7 +866,7 @@ function handleLineEvent(event) {
       try {
         const rows = await getLineRegistrations();
         const row  = rows.find(r => r[1] === userId);
-        if (row && row[3] === '登録中' && !text.includes('教えて')) {
+        if (row && row[3] === '登録中' && !text.includes('教えて') && !text.startsWith('月報更新')) {
           // 店舗名として登録
           const storeName = text;
           await saveLineRegistration(userId, storeName, '完了');
@@ -844,11 +932,64 @@ function handleLineEvent(event) {
         processAndPush(target, client).catch(err => console.error('[LINE] 未処理エラー:', err.message));
         return;
       }
+
+      // 電話番号: 利用履歴検索
+      if (isPhoneNumber(text)) {
+        const target = userId || process.env.LINE_USER_ID;
+        console.log(`[LINE] 電話番号検索: ${text} → ${target}`);
+        setImmediate(async () => {
+          try {
+            const result = await searchRirekiByPhone(text);
+            const msg = result
+              ? formatRirekiResult(text, result)
+              : `📋 利用履歴: ${text}\n該当なし`;
+            await client.pushMessage({ to: target, messages: [{ type: 'text', text: msg }] });
+          } catch (err) {
+            console.error('[利用履歴] 検索エラー:', err.message);
+            await client.pushMessage({ to: target, messages: [{ type: 'text', text: `❌ 検索エラー: ${err.message}` }] }).catch(() => {});
+          }
+        });
+        return;
+      }
     });
     return;
   }
 
   // グループからのコマンド
+  // 「月報更新」「月報更新 4月7日」: 日報→月報同期
+  if (text.startsWith('月報更新')) {
+    const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+    setImmediate(async () => {
+      try {
+        let syncDate = null;
+        const dateMatch = text.match(/(\d{1,2})[月\/](\d{1,2})日?/);
+        if (dateMatch) {
+          const jst = new Date(Date.now() + 9 * 3600 * 1000);
+          syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
+        }
+        const result = await syncNippoToGeppo(syncDate);
+        await client.pushMessage({
+          to: target,
+          messages: [{ type: 'text', text:
+            `✅ 月報更新完了\n` +
+            `📅 ${result.label}\n` +
+            `💰 総売上: ${result.totalSales.toLocaleString()}円\n` +
+            `📊 本数: ${result.total_hon}本（朝${result.am_hon}/昼${result.pm_hon}/夜${result.night_hon}）\n` +
+            `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）`
+          }],
+        });
+      } catch (err) {
+        console.error('[月報] グループ エラー:', err.message);
+        const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+        await client.pushMessage({
+          to: target,
+          messages: [{ type: 'text', text: `❌ 月報更新エラー: ${err.message}` }],
+        }).catch(() => {});
+      }
+    });
+    return;
+  }
+
   // 【日付、名前】形式: 明細スクショ
   const meisai = parseMeisaiRequest(text);
   if (meisai) {
@@ -865,6 +1006,25 @@ function handleLineEvent(event) {
     setImmediate(() => processAndPush(target, client).catch(err => console.error('[LINE] 未処理エラー:', err.message)));
     return;
   }
+
+  // 電話番号: 利用履歴検索（グループ）
+  if (isPhoneNumber(text)) {
+    const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+    console.log(`[LINE] 電話番号検索(グループ): ${text} → ${target}`);
+    setImmediate(async () => {
+      try {
+        const result = await searchRirekiByPhone(text);
+        const msg = result
+          ? formatRirekiResult(text, result)
+          : `📋 利用履歴: ${text}\n該当なし`;
+        await client.pushMessage({ to: target, messages: [{ type: 'text', text: msg }] });
+      } catch (err) {
+        console.error('[利用履歴] 検索エラー:', err.message);
+        await client.pushMessage({ to: target, messages: [{ type: 'text', text: `❌ 検索エラー: ${err.message}` }] }).catch(() => {});
+      }
+    });
+    return;
+  }
 }
 
-module.exports = { lineConfig, handleLineEvent, middleware, pushToStore };
+module.exports = { lineConfig, handleLineEvent, middleware, pushToStore, preloadPhoneIndex, searchRirekiByPhone, formatRirekiResult };
