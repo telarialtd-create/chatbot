@@ -35,6 +35,7 @@ const SHOP_ID          = process.env.STORE_SHOP_ID || '';
 const RESERVE_URL      = process.env.STORE_RESERVE_URL || '';
 const SHINSHA_TITLE    = process.env.STORE_SHINSHA_TITLE || '★CREAの出勤情報★';
 const BLOG_TITLE       = process.env.STORE_BLOG_TITLE   || '★CREA広島の求人情報★';
+const BLOG_CONTENT     = process.env.STORE_BLOG_CONTENT || '';
 
 // 画像フォルダID（シートのAA列から動的に読み込み、env varにフォールバック）
 let _imageFolderId = null;
@@ -847,12 +848,14 @@ async function runJobBlogPost(page) {
       if (el) { el.value = title; el.dispatchEvent(new Event('input', { bubbles: true })); }
     }, BLOG_TITLE);
 
-    // 本文入力（コピーしたコンテンツ）
-    if (blogContent) {
+    // 本文入力（BLOG_CONTENT優先、なければ既存記事コピー）
+    const bodyToWrite = BLOG_CONTENT || blogContent;
+    if (bodyToWrite) {
       await page.evaluate((content) => {
         const el = document.getElementById('PostContent');
         if (el) { el.value = content; el.dispatchEvent(new Event('input', { bubbles: true })); }
-      }, blogContent);
+      }, bodyToWrite);
+      log(`ブログ本文セット: ${bodyToWrite.substring(0, 20)}...`);
     }
 
     // 画像アップロード
