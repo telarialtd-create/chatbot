@@ -710,6 +710,7 @@ function toSlashDate(nenGappiStr) {
 }
 
 // 日報全件シートから利用履歴シートへコピー
+const KOKYAKU_VERSION = 'v3-2026-04-24';
 async function processKokyakuUpdate(dateStr) {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
@@ -717,7 +718,12 @@ async function processKokyakuUpdate(dateStr) {
   // 1. ソーススプレッドシート（日付から動的に検索）
   const normalizedDate = normalizeDateStr(dateStr);
   const slashDate = toSlashDate(normalizedDate);
-  const spreadsheetId = await findSpreadsheetByDateStr(dateStr);
+  let spreadsheetId;
+  try {
+    spreadsheetId = await findSpreadsheetByDateStr(dateStr);
+  } catch (e) {
+    throw new Error(`[${KOKYAKU_VERSION}][日報検索失敗] folder=${NIPPO_FOLDER_ID} date=${normalizedDate} orig=${e.message}`);
+  }
   console.log(`[顧客更新] 日報ファイル: ${spreadsheetId}`);
 
   // 2. 日報全件シートからB3:J列を読み取り
@@ -732,7 +738,7 @@ async function processKokyakuUpdate(dateStr) {
     // どのシート/IDで失敗したか特定できるようにする
     const meta = await sheets.spreadsheets.get({ spreadsheetId }).catch(() => null);
     const sheetNames = meta?.data?.sheets?.map(s => s.properties.title) || [];
-    throw new Error(`[ソース読取失敗] file=${spreadsheetId} sheet='${NIPPO_ZENKEN_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
+    throw new Error(`[${KOKYAKU_VERSION}][ソース読取失敗] file=${spreadsheetId} sheet='${NIPPO_ZENKEN_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
   }
   const srcRows = (srcRes.data.values || []).filter(row =>
     row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')
@@ -753,7 +759,7 @@ async function processKokyakuUpdate(dateStr) {
   } catch (e) {
     const meta = await sheets.spreadsheets.get({ spreadsheetId: KOKYAKU_TARGET_SHEET_ID }).catch(() => null);
     const sheetNames = meta?.data?.sheets?.map(s => s.properties.title) || [];
-    throw new Error(`[ターゲット読取失敗] file=${KOKYAKU_TARGET_SHEET_ID} sheet='${KOKYAKU_TARGET_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
+    throw new Error(`[${KOKYAKU_VERSION}][ターゲット読取失敗] file=${KOKYAKU_TARGET_SHEET_ID} sheet='${KOKYAKU_TARGET_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
   }
   const targetACol = targetRes.data.values || [];
   let firstEmptyRow = targetACol.length + 1;
