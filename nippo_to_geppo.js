@@ -21,7 +21,7 @@ const path = require('path');
 
 const GEPPO_SHEET_ID        = process.env.GEPPO_SHEET_ID        || '1L5a0SeqSckZARYq3rZBVpBwDBPL4GyliEqA-TIDzW7Y'; // CREA月報（フォールバック）
 const FUWAMOKO_GEPPO_ID     = process.env.FUWAMOKO_GEPPO_ID     || '1wYQ5YYU9zSbGZ7VDnPp89mTMX_JGIUdNNNFBVgBneQ4'; // ふわもこSPA月報（フォールバック）
-const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
+const NIPPO_FOLDER_ID = '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If';
 
 // ── 月報シートIDを動的に取得（フォルダ内の「C売上YYYY-M月」を検索） ────
 // prefix: 'C'=CREA, 'F'=ふわもこSPA
@@ -52,35 +52,32 @@ async function findGeppoSheetId(year, month, prefix) {
 const AM_END = 12;   // 12時未満 = 朝
 const PM_END = 19;   // 12〜18時台 = 昼、19時以降 = 夜
 
-// ── Google認証 ────────────────────────────────────────────
-// 書き込みスコープ付きトークンが必要なため、credentialsファイルを優先する
+// ── Google認証（サービスアカウント優先・トークン期限なし） ──────
 let _authClient = null;
 function createAuthClient() {
   if (_authClient) return _authClient;
-  let client_id, client_secret, refresh_token;
 
-  const credsPath = path.join(process.env.HOME, '.config/gdrive-server-credentials.json');
-  const keysPath  = path.join(process.env.HOME, '.config/gcp-oauth.keys.json');
-
-  if (fs.existsSync(credsPath) && fs.existsSync(keysPath)) {
-    // ローカル/サーバー: credentialsファイルから取得（Sheets書き込みスコープ付き）
-    const oauthKeys   = JSON.parse(fs.readFileSync(keysPath));
-    const credentials = JSON.parse(fs.readFileSync(credsPath));
-    const installed   = oauthKeys.installed || oauthKeys.web;
-    client_id     = installed.client_id;
-    client_secret = installed.client_secret;
-    refresh_token = credentials.refresh_token;
+  const saPath = path.join(process.env.HOME, '.config/chatbot-service-account.json');
+  if (fs.existsSync(saPath)) {
+    // サービスアカウント（トークン期限なし）
+    _authClient = new google.auth.GoogleAuth({
+      keyFile: saPath,
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive',
+      ],
+    });
   } else {
-    // credentialsファイルがない場合のみ環境変数を使用
-    client_id     = process.env.GOOGLE_CLIENT_ID;
-    client_secret = process.env.GOOGLE_CLIENT_SECRET;
-    refresh_token = process.env.GOOGLE_REFRESH_TOKEN;
+    // フォールバック: 環境変数のOAuth（VPS用）
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      'http://localhost'
+    );
+    oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+    _authClient = oauth2Client;
   }
-
-  const oauth2Client = new google.auth.OAuth2(client_id, client_secret, 'http://localhost');
-  oauth2Client.setCredentials({ refresh_token });
-  _authClient = oauth2Client;
-  return oauth2Client;
+  return _authClient;
 }
 
 // ── 日付 → 月報売上シートの列文字（G=1日, H=2日...） ────────

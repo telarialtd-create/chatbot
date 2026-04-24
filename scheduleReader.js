@@ -5,7 +5,7 @@ const path = require('path');
 const TARGET_GID = 1873674341;
 const SCHEDULE_SPREADSHEET_ID = '10siqLe6B9A7uvNWgRUdHb462RqxCxkGEGMEKTPhY-S8';
 const SCHEDULE_GID = 362802905;
-const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
+const NIPPO_FOLDER_ID = '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If';
 const MIN_COURSE_MIN = 80; // 最短コース（分）
 
 function colLetterToIndex(col) {
@@ -32,30 +32,27 @@ let _authClient = null;
 function createAuthClient() {
   if (_authClient) return _authClient;
 
-  let client_id, client_secret, refresh_token;
-
-  const credsPath = path.join(process.env.HOME, '.config/gdrive-server-credentials.json');
-  const keysPath  = path.join(process.env.HOME, '.config/gcp-oauth.keys.json');
-
-  if (fs.existsSync(credsPath) && fs.existsSync(keysPath)) {
-    // 認証ファイルが存在する場合はファイルを優先（access_tokenは使わない：期限切れになるため）
-    const oauthKeys = JSON.parse(fs.readFileSync(keysPath));
-    const credentials = JSON.parse(fs.readFileSync(credsPath));
-    const installed = oauthKeys.installed || oauthKeys.web;
-    client_id = installed.client_id;
-    client_secret = installed.client_secret;
-    refresh_token = credentials.refresh_token;
+  const saPath = path.join(process.env.HOME, '.config/chatbot-service-account.json');
+  if (fs.existsSync(saPath)) {
+    // サービスアカウント（トークン期限なし）
+    _authClient = new google.auth.GoogleAuth({
+      keyFile: saPath,
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive',
+      ],
+    });
   } else {
-    // ファイルがない場合のみ環境変数を使用
-    client_id = process.env.GOOGLE_CLIENT_ID;
-    client_secret = process.env.GOOGLE_CLIENT_SECRET;
-    refresh_token = process.env.GOOGLE_REFRESH_TOKEN;
+    // フォールバック: 環境変数のOAuth（VPS用）
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      'http://localhost'
+    );
+    oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+    _authClient = oauth2Client;
   }
-
-  const oauth2Client = new google.auth.OAuth2(client_id, client_secret, 'http://localhost');
-  oauth2Client.setCredentials({ refresh_token }); // access_tokenは設定しない（期限切れ防止）
-  _authClient = oauth2Client;
-  return oauth2Client;
+  return _authClient;
 }
 
 // キャッシュ

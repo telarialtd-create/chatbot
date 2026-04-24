@@ -5,11 +5,12 @@
  *   setMeisaiFromUriage スクリプトを実行、H2:M25 スクショをグループに送信
  * ・「月報更新」→ 昨日の日報データを月報に反映（手動トリガー）
  * ・「月報更新 4月7日」→ 指定日の日報を月報に反映
- * ・電話番号（0から始まる10〜11桁）→ 利用履歴シートを検索して最新10件を返信
+ * ・電話番号（0から始まる10〜11桁）→ 利用履歴シートを検索して最新30件を返信
  */
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
-const { syncNippoToGeppo } = require('./nippo_to_geppo');
+const { syncNippoToGeppo } = require('./nippo_to_geppo_v2');
+const { isNippoInput, processNippoInput } = require('./line_nippo_input');
 const { google } = require('googleapis');
 const { createCanvas, registerFont } = require('canvas');
 const fs = require('fs');
@@ -19,7 +20,7 @@ const path = require('path');
 const FONT_PATH = path.join(__dirname, 'fonts', 'NotoSansJP.ttf');
 registerFont(FONT_PATH, { family: 'NotoJP' });
 
-const NIPPO_FOLDER_ID = '1isPYyiUqyWXnS1mtpE1_YWJ9QZBTemdJ';
+const NIPPO_FOLDER_ID = '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If';
 const TARGET_GID = 1873674341;
 const RANGE = 'CA3:CR32';
 const TEMP_DIR = path.join(__dirname, 'public', 'temp');
@@ -685,9 +686,114 @@ async function processAndPush(target, client) {
   }
 }
 
+// ── 顧客更新（日報全件 → 利用履歴コピー）────────────────────
+const KOKYAKU_SOURCE_SHEET_ID   = '1rPHZ75QnjhDxwqsITFBKgVDvuPVo_dz4lT7L22POw3k';
+const KOKYAKU_TARGET_SHEET_ID   = '1A_LaiWm2QhvXk4jKINSRvKKX3-xKYLzygNnlY3ZtI9A';
+const KOKYAKU_TARGET_SHEET_NAME = '利用履歴';
+const NIPPO_ZENKEN_SHEET_NAME  = '日報_全件';
+
+// 「4月23日 顧客更新」「4月23日　顧客更新」形式をパース
+function parseKokyakuUpdateCommand(text) {
+  const m = text.match(/^(\d{1,2}月\d{1,2}日)[\s　]+顧客更新$/);
+  if (m) return { dateStr: m[1] };
+  // 【4月23日　顧客更新】形式も対応
+  const m2 = text.match(/^【(\d{1,2}月\d{1,2}日)[\s　]+顧客更新】$/);
+  if (m2) return { dateStr: m2[1] };
+  return null;
+}
+
+// 「2026年4月23日」→「2026/4/23」に変換（利用履歴の既存フォーマットに合わせる）
+function toSlashDate(nenGappiStr) {
+  const m = nenGappiStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (!m) return nenGappiStr;
+  return `${m[1]}/${parseInt(m[2])}/${parseInt(m[3])}`;
+}
+
+// 日報全件シートから利用履歴シートへコピー
+async function processKokyakuUpdate(dateStr) {
+  const auth = createAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // 1. ソーススプレッドシート（テスト用固定）
+  const normalizedDate = normalizeDateStr(dateStr);
+  const slashDate = toSlashDate(normalizedDate);
+  const spreadsheetId = KOKYAKU_SOURCE_SHEET_ID;
+  console.log(`[顧客更新] 日報ファイル: ${spreadsheetId}`);
+
+  // 2. 日報全件シートからB3:J列を読み取り
+  const srcRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${NIPPO_ZENKEN_SHEET_NAME}'!B3:J`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  const srcRows = (srcRes.data.values || []).filter(row =>
+    row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')
+  );
+  if (srcRows.length === 0) {
+    return { count: 0, dateLabel: slashDate };
+  }
+  console.log(`[顧客更新] コピー元: ${srcRows.length}行`);
+
+  // 3. 利用履歴シートの最初の空白行を特定（A列で判定）
+  const targetRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: KOKYAKU_TARGET_SHEET_ID,
+    range: `'${KOKYAKU_TARGET_SHEET_NAME}'!A:A`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  const targetACol = targetRes.data.values || [];
+  let firstEmptyRow = targetACol.length + 1;
+  // A列の末尾から空白を遡って最初の空白行を特定
+  for (let i = targetACol.length - 1; i >= 0; i--) {
+    if (targetACol[i] && targetACol[i][0] && String(targetACol[i][0]).trim() !== '') {
+      firstEmptyRow = i + 2; // 0-indexed → 1-indexed + 次の行
+      break;
+    }
+  }
+  console.log(`[顧客更新] 貼り付け開始行: ${firstEmptyRow}`);
+
+  // 4. A列に日付、B:J列にデータを書き込み
+  const dateValues = srcRows.map(() => [slashDate]);
+  const batchData = [
+    {
+      range: `'${KOKYAKU_TARGET_SHEET_NAME}'!A${firstEmptyRow}`,
+      values: dateValues,
+    },
+    {
+      range: `'${KOKYAKU_TARGET_SHEET_NAME}'!B${firstEmptyRow}`,
+      values: srcRows,
+    },
+  ];
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: KOKYAKU_TARGET_SHEET_ID,
+    requestBody: { valueInputOption: 'USER_ENTERED', data: batchData },
+  });
+  console.log(`[顧客更新] 書き込み完了: ${srcRows.length}行`);
+
+  // 5. 利用履歴キャッシュをクリア（電話番号検索が最新データを使えるように）
+  rirekiCache.expiresAt = 0;
+
+  return { count: srcRows.length, dateLabel: slashDate };
+}
+
 // ── 利用履歴シート ────────────────────────────────────────
-const RIREKI_SHEET_ID   = '1TpmlJxctpWzvkX8yx1e3uswDsZ3x7bLxT-J2HxmeRu4';
+const RIREKI_SHEET_ID   = '1pzWvIMy74vCkEPOR-u132m5LJST2JO9ZNn8UtHkQkl4';
 const RIREKI_SHEET_NAME = '利用履歴';
+
+// 利用履歴専用のSA認証（エスタマOAuthと枠を分けて429を防止）
+function createSAAuthClient() {
+  const saKeyPath = path.join(process.env.HOME, '.config/chatbot-service-account.json');
+  if (fs.existsSync(saKeyPath)) {
+    const key = JSON.parse(fs.readFileSync(saKeyPath));
+    const auth = new google.auth.GoogleAuth({
+      credentials: key,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+    return auth;
+  }
+  // SAキーが無い場合はOAuthにフォールバック
+  return createAuthClient();
+}
 
 // 利用履歴キャッシュ（A:J全体を保持、30分）
 const rirekiCache = { allRows: null, phoneIndex: null, expiresAt: 0 };
@@ -699,68 +805,127 @@ function normalizePhone(tel) {
   return s.replace(/[^0-9]/g, '');
 }
 
-// A:J列全体を一括ロードしてキャッシュ（初回のみAPI、以降はメモリ）
+// A:J列全体を一括ロードしてキャッシュ（2時間保持・リトライ付き）
+const RIREKI_CACHE_TTL = 2 * 60 * 60 * 1000; // 2時間
+let rirekiCacheLoading = false; // 同時リロード防止フラグ
+
 async function buildRirekiCache() {
   if (rirekiCache.allRows && Date.now() < rirekiCache.expiresAt) return;
-  console.log('[利用履歴] A:J列一括ロード開始...');
-  const auth = createAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: RIREKI_SHEET_ID,
-    range: `${RIREKI_SHEET_NAME}!A:J`,
-    valueRenderOption: 'FORMATTED_VALUE',
-  });
-  const rows = res.data.values || [];
-  // 電話番号インデックス構築（J列=index9）
-  const phoneIndex = {};
-  for (let i = 0; i < rows.length; i++) {
-    const tel = normalizePhone(rows[i][9] || '');
-    if (tel.length < 10) continue;
-    if (!phoneIndex[tel]) phoneIndex[tel] = [];
-    phoneIndex[tel].push(i);
+  // 別リクエストが既にリロード中なら既存キャッシュで応答
+  if (rirekiCacheLoading) {
+    if (rirekiCache.allRows) return;
+    // 初回ロード中は少し待つ
+    await new Promise(r => setTimeout(r, 5000));
+    if (rirekiCache.allRows) return;
   }
-  rirekiCache.allRows = rows;
-  rirekiCache.phoneIndex = phoneIndex;
-  rirekiCache.expiresAt = Date.now() + 30 * 60 * 1000;
-  console.log(`[利用履歴] キャッシュ完了: ${rows.length}行, ${Object.keys(phoneIndex).length}件の電話番号`);
+  rirekiCacheLoading = true;
+  try {
+    await _loadRirekiWithRetry();
+  } finally {
+    rirekiCacheLoading = false;
+  }
 }
 
-// 電話番号で利用履歴を検索（最新10件、メモリ検索）
-async function searchRirekiByPhone(phone) {
+async function _loadRirekiWithRetry(maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[利用履歴] A:J列一括ロード開始...（${attempt}/${maxRetries}・SA認証）`);
+      const auth = createSAAuthClient();
+      const sheets = google.sheets({ version: 'v4', auth });
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: RIREKI_SHEET_ID,
+        range: `${RIREKI_SHEET_NAME}!A:J`,
+        valueRenderOption: 'FORMATTED_VALUE',
+      });
+      const rows = res.data.values || [];
+      const phoneIndex = {};
+      for (let i = 0; i < rows.length; i++) {
+        const tel = normalizePhone(rows[i][9] || '');
+        if (tel.length < 10) continue;
+        if (!phoneIndex[tel]) phoneIndex[tel] = [];
+        phoneIndex[tel].push(i);
+      }
+      rirekiCache.allRows = rows;
+      rirekiCache.phoneIndex = phoneIndex;
+      rirekiCache.expiresAt = Date.now() + RIREKI_CACHE_TTL;
+      console.log(`[利用履歴] キャッシュ完了: ${rows.length}行, ${Object.keys(phoneIndex).length}件の電話番号`);
+      return;
+    } catch (err) {
+      const is429 = err.message && err.message.includes('429');
+      if (is429 && attempt < maxRetries) {
+        const wait = attempt * 10 * 1000; // 10秒→20秒→30秒
+        console.log(`[利用履歴] 429エラー → ${wait / 1000}秒待機してリトライ`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      // リトライ失敗 or 429以外のエラー
+      if (rirekiCache.allRows) {
+        console.log(`[利用履歴] キャッシュ更新失敗（${err.message}）→ 既存データで継続`);
+        rirekiCache.expiresAt = Date.now() + 10 * 60 * 1000; // 10分後に再試行
+        return;
+      }
+      throw err;
+    }
+  }
+}
+
+// 電話番号で利用履歴を検索（allRecords=trueで全件、falseで最新30件）
+async function searchRirekiByPhone(phone, allRecords = false) {
   const normalized = normalizePhone(phone);
   if (normalized.length < 10) return null;
   await buildRirekiCache();
   const idxList = rirekiCache.phoneIndex[normalized];
   if (!idxList || idxList.length === 0) return null;
-  // 最新10件（インデックスが大きい＝後の行 = 最新）
-  const targets = idxList.slice(-10).reverse();
+  const targets = [...idxList].reverse();
   const dataRows = targets.map(i => (rirekiCache.allRows[i] || []).slice(0, 9));
   return { total: idxList.length, rows: dataRows };
 }
 
-// 利用履歴の検索結果をテキストに整形
-function formatRirekiResult(phone, result) {
+// 場所から部屋番号（末尾の半角/全角スペース＋3〜4桁数字）を除去
+function removeRoomNumber(place) {
+  return place.replace(/[\s　]+[\d０-９]{3,4}$/, '').trim();
+}
+
+// 利用履歴の検索結果をテキストに整形（1件2行・全列表示）
+function formatRirekiResult(phone, result, allRecords = false) {
   const { total, rows } = result;
-  const header = `📋 利用履歴: ${phone}\n合計 ${total} 件（最新${rows.length}件）\n${'─'.repeat(20)}`;
+  const label = `全${rows.length}件`;
+  const header = `📋 利用履歴: ${phone}\n合計 ${total} 件（${label}）`;
   const lines = rows.map((r, i) => {
     const date   = r[0] || '';
     const store  = r[1] || '';
     const name   = r[2] || '';
     const type   = r[3] || '';
-    const e      = r[4] || '';
-    const f      = r[5] || '';
-    const place  = toFullWidth(r[6] || '');
-    const h      = r[7] || '';
+    const e      = toFullWidth(r[4] || '');
+    const f      = toFullWidth(r[5] || '');
+    const h      = toFullWidth(r[7] || '');
     const course = toFullWidth(r[8] || '');
-    const parts = [date, store, name, type, e, f, place, h, course].filter(v => v !== '');
-    return `${i + 1}. ${parts.join(' | ')}`;
+    const line1  = [date, store].filter(v => v).join(' ');
+    const line2  = [name, type, e, f, h, course].filter(v => v).join(' ');
+    return `${i + 1}. ${line1}\n   ${line2}`;
   });
   return [header, ...lines].join('\n');
 }
 
 // 電話番号パターン（0から始まる10〜11桁、ハイフンあり/なし対応）
+// 「全件」付きも許容: "09012345678 全件"
+function parsePhoneCommand(text) {
+  const allMatch = text.match(/^([0-9０-９\-ー－]+)[\s　]*全件$/) ||
+                   text.match(/^全件[\s　]*([0-9０-９\-ー－]+)$/);
+  if (allMatch) {
+    const phone = allMatch[1];
+    if (/^0\d{9,10}$/.test(phone.replace(/[^0-9]/g, ''))) return { phone, allRecords: true };
+  }
+  const plain = text.trim();
+  if (/^0\d{9,10}$/.test(plain.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－]+$/.test(plain)) {
+    return { phone: plain, allRecords: false };
+  }
+  return null;
+}
+
+// 後方互換: 電話番号のみかチェック
 function isPhoneNumber(text) {
-  return /^0\d{9,10}$/.test(text.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－ ]+$/.test(text);
+  return parsePhoneCommand(text) !== null;
 }
 
 // バックグラウンドでプリロード（起動時に呼び出す）
@@ -866,7 +1031,7 @@ function handleLineEvent(event) {
       try {
         const rows = await getLineRegistrations();
         const row  = rows.find(r => r[1] === userId);
-        if (row && row[3] === '登録中' && !text.includes('教えて') && !text.startsWith('月報更新')) {
+        if (row && row[3] === '登録中' && !text.includes('教えて') && !text.includes('月報更新')) {
           // 店舗名として登録
           const storeName = text;
           await saveLineRegistration(userId, storeName, '完了');
@@ -882,6 +1047,46 @@ function handleLineEvent(event) {
       }
 
       // 既存コマンド処理
+
+      // 「4月23日 顧客更新」形式: 日報全件→利用履歴コピー
+      const kokyaku = parseKokyakuUpdateCommand(text);
+      if (kokyaku) {
+        const target = userId || process.env.LINE_USER_ID;
+        console.log(`[LINE] 顧客更新リクエスト受信: ${kokyaku.dateStr}`);
+        setImmediate(async () => {
+          try {
+            const result = await processKokyakuUpdate(kokyaku.dateStr);
+            console.log(`[顧客更新] 完了: ${result.dateLabel} ${result.count}件`);
+          } catch (err) {
+            console.error('[顧客更新] エラー:', err.message);
+            await client.pushMessage({
+              to: target,
+              messages: [{ type: 'text', text: `顧客更新エラー: ${err.message}` }],
+            }).catch(() => {});
+          }
+        });
+        return;
+      }
+
+      // #T001 形式: 日報ダッシュボード入力
+      if (isNippoInput(text)) {
+        const replyToken = event.replyToken;
+        console.log(`[LINE] 日報入力リクエスト受信`);
+        setImmediate(async () => {
+          try {
+            const result = await processNippoInput(text);
+            console.log(`[日報入力] 完了: ${result.storeName} / ${result.spreadsheetName} / ${result.cellCount}セル`);
+          } catch (err) {
+            console.error('[日報入力] エラー:', err.message);
+            await client.replyMessage({
+              replyToken,
+              messages: [{ type: 'text', text: `❌ 入力エラー: ${err.message}` }],
+            }).catch(() => {});
+          }
+        });
+        return;
+      }
+
       // 【日付、名前】形式: 明細スクショ
       const meisai = parseMeisaiRequest(text);
       if (meisai) {
@@ -891,12 +1096,12 @@ function handleLineEvent(event) {
         return;
       }
 
-      // 「月報更新」「月報更新 4月7日」: 日報→月報同期
-      if (text.startsWith('月報更新')) {
+      // 「月報更新」「月報更新 4月7日」「4月7日 月報更新」: 日報→月報同期
+      if (text.includes('月報更新')) {
         const target = userId || process.env.LINE_USER_ID;
         setImmediate(async () => {
           try {
-            // 日付指定があれば解析（例: 「月報更新 4月7日」「月報更新 4/7」）
+            // 日付指定があれば解析（順序不問: 「月報更新 4月7日」「4月7日 月報更新」「月報更新 4/7」）
             let syncDate = null;
             const dateMatch = text.match(/(\d{1,2})[月\/](\d{1,2})日?/);
             if (dateMatch) {
@@ -904,14 +1109,27 @@ function handleLineEvent(event) {
               syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
             }
             const result = await syncNippoToGeppo(syncDate);
+            const fw = result.fuwamoko;
+            const combinedSales = result.totalSales + fw.totalSales;
+            const combinedHon   = result.total_hon  + fw.total_hon;
+            const combinedCount = result.total_count + fw.total_count;
             await client.pushMessage({
               to: target,
               messages: [{ type: 'text', text:
                 `✅ 月報更新完了\n` +
-                `📅 ${result.label}\n` +
+                `📅 ${result.label}\n\n` +
+                `━━ CREA ━━\n` +
                 `💰 総売上: ${result.totalSales.toLocaleString()}円\n` +
                 `📊 本数: ${result.total_hon}本（朝${result.am_hon}/昼${result.pm_hon}/夜${result.night_hon}）\n` +
-                `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）`
+                `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）\n\n` +
+                `━━ ふわもこSPA ━━\n` +
+                `💰 総売上: ${fw.totalSales.toLocaleString()}円\n` +
+                `📊 本数: ${fw.total_hon}本（朝${fw.am_hon}/昼${fw.pm_hon}/夜${fw.night_hon}）\n` +
+                `👥 出勤: ${fw.total_count}人（朝${fw.am_count}/昼${fw.pm_count}/夜${fw.night_count}）\n\n` +
+                `━━ 2店舗合算 ━━\n` +
+                `💰 総売上: ${combinedSales.toLocaleString()}円\n` +
+                `📊 本数: ${combinedHon}本\n` +
+                `👥 出勤: ${combinedCount}人`
               }],
             });
           } catch (err) {
@@ -933,20 +1151,23 @@ function handleLineEvent(event) {
         return;
       }
 
-      // 電話番号: 利用履歴検索
-      if (isPhoneNumber(text)) {
-        const target = userId || process.env.LINE_USER_ID;
-        console.log(`[LINE] 電話番号検索: ${text} → ${target}`);
+      // 電話番号: 利用履歴検索（replyMessageで無料送信）
+      const phoneCmd = parsePhoneCommand(text);
+      if (phoneCmd) {
+        const replyToken = event.replyToken;
+        console.log(`[LINE] 電話番号検索: ${phoneCmd.phone} 全件=${phoneCmd.allRecords}`);
         setImmediate(async () => {
           try {
-            const result = await searchRirekiByPhone(text);
+            const result = await searchRirekiByPhone(phoneCmd.phone, phoneCmd.allRecords);
+            console.log(`[利用履歴] 検索結果: ${result ? result.total + '件' : '該当なし'}`);
             const msg = result
-              ? formatRirekiResult(text, result)
-              : `📋 利用履歴: ${text}\n該当なし`;
-            await client.pushMessage({ to: target, messages: [{ type: 'text', text: msg }] });
+              ? formatRirekiResult(phoneCmd.phone, result, phoneCmd.allRecords)
+              : `📋 利用履歴: ${phoneCmd.phone}\n該当なし`;
+            console.log(`[利用履歴] LINE reply送信（${msg.length}文字）`);
+            await client.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] });
+            console.log(`[利用履歴] LINE送信完了`);
           } catch (err) {
-            console.error('[利用履歴] 検索エラー:', err.message);
-            await client.pushMessage({ to: target, messages: [{ type: 'text', text: `❌ 検索エラー: ${err.message}` }] }).catch(() => {});
+            console.error('[利用履歴] エラー詳細:', err.code || err.statusCode || '', err.message);
           }
         });
         return;
@@ -956,8 +1177,48 @@ function handleLineEvent(event) {
   }
 
   // グループからのコマンド
-  // 「月報更新」「月報更新 4月7日」: 日報→月報同期
-  if (text.startsWith('月報更新')) {
+
+  // 「4月23日 顧客更新」形式: 日報全件→利用履歴コピー（グループ）
+  const kokyakuG = parseKokyakuUpdateCommand(text);
+  if (kokyakuG) {
+    const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+    console.log(`[LINE] 顧客更新リクエスト受信（グループ）: ${kokyakuG.dateStr}`);
+    setImmediate(async () => {
+      try {
+        const result = await processKokyakuUpdate(kokyakuG.dateStr);
+        console.log(`[顧客更新] グループ完了: ${result.dateLabel} ${result.count}件`);
+      } catch (err) {
+        console.error('[顧客更新] グループ エラー:', err.message);
+        await client.pushMessage({
+          to: target,
+          messages: [{ type: 'text', text: `顧客更新エラー: ${err.message}` }],
+        }).catch(() => {});
+      }
+    });
+    return;
+  }
+
+  // #T001 形式: 日報ダッシュボード入力（グループ）
+  if (isNippoInput(text)) {
+    const replyToken = event.replyToken;
+    console.log(`[LINE] 日報入力リクエスト受信（グループ）`);
+    setImmediate(async () => {
+      try {
+        const result = await processNippoInput(text);
+        console.log(`[日報入力] グループ完了: ${result.storeName} / ${result.spreadsheetName} / ${result.cellCount}セル`);
+      } catch (err) {
+        console.error('[日報入力] グループ エラー:', err.message);
+        await client.replyMessage({
+          replyToken,
+          messages: [{ type: 'text', text: `❌ 入力エラー: ${err.message}` }],
+        }).catch(() => {});
+      }
+    });
+    return;
+  }
+
+  // 「月報更新」「月報更新 4月7日」「4月7日 月報更新」: 日報→月報同期
+  if (text.includes('月報更新')) {
     const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
     setImmediate(async () => {
       try {
@@ -968,14 +1229,27 @@ function handleLineEvent(event) {
           syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
         }
         const result = await syncNippoToGeppo(syncDate);
+        const fw = result.fuwamoko;
+        const combinedSales = result.totalSales + fw.totalSales;
+        const combinedHon   = result.total_hon  + fw.total_hon;
+        const combinedCount = result.total_count + fw.total_count;
         await client.pushMessage({
           to: target,
           messages: [{ type: 'text', text:
             `✅ 月報更新完了\n` +
-            `📅 ${result.label}\n` +
+            `📅 ${result.label}\n\n` +
+            `━━ CREA ━━\n` +
             `💰 総売上: ${result.totalSales.toLocaleString()}円\n` +
             `📊 本数: ${result.total_hon}本（朝${result.am_hon}/昼${result.pm_hon}/夜${result.night_hon}）\n` +
-            `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）`
+            `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）\n\n` +
+            `━━ ふわもこSPA ━━\n` +
+            `💰 総売上: ${fw.totalSales.toLocaleString()}円\n` +
+            `📊 本数: ${fw.total_hon}本（朝${fw.am_hon}/昼${fw.pm_hon}/夜${fw.night_hon}）\n` +
+            `👥 出勤: ${fw.total_count}人（朝${fw.am_count}/昼${fw.pm_count}/夜${fw.night_count}）\n\n` +
+            `━━ 2店舗合算 ━━\n` +
+            `💰 総売上: ${combinedSales.toLocaleString()}円\n` +
+            `📊 本数: ${combinedHon}本\n` +
+            `👥 出勤: ${combinedCount}人`
           }],
         });
       } catch (err) {
@@ -1007,20 +1281,23 @@ function handleLineEvent(event) {
     return;
   }
 
-  // 電話番号: 利用履歴検索（グループ）
-  if (isPhoneNumber(text)) {
-    const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
-    console.log(`[LINE] 電話番号検索(グループ): ${text} → ${target}`);
+  // 電話番号: 利用履歴検索（グループ・replyMessageで無料送信）
+  const phoneCmdG = parsePhoneCommand(text);
+  if (phoneCmdG) {
+    const replyTokenG = event.replyToken;
+    console.log(`[LINE] 電話番号検索(グループ): ${phoneCmdG.phone} 全件=${phoneCmdG.allRecords}`);
     setImmediate(async () => {
       try {
-        const result = await searchRirekiByPhone(text);
+        const result = await searchRirekiByPhone(phoneCmdG.phone, phoneCmdG.allRecords);
+        console.log(`[利用履歴] 検索結果: ${result ? result.total + '件' : '該当なし'}`);
         const msg = result
-          ? formatRirekiResult(text, result)
-          : `📋 利用履歴: ${text}\n該当なし`;
-        await client.pushMessage({ to: target, messages: [{ type: 'text', text: msg }] });
+          ? formatRirekiResult(phoneCmdG.phone, result, phoneCmdG.allRecords)
+          : `📋 利用履歴: ${phoneCmdG.phone}\n該当なし`;
+        console.log(`[利用履歴] LINE reply送信（${msg.length}文字）`);
+        await client.replyMessage({ replyToken: replyTokenG, messages: [{ type: 'text', text: msg }] });
+        console.log(`[利用履歴] LINE送信完了`);
       } catch (err) {
-        console.error('[利用履歴] 検索エラー:', err.message);
-        await client.pushMessage({ to: target, messages: [{ type: 'text', text: `❌ 検索エラー: ${err.message}` }] }).catch(() => {});
+        console.error('[利用履歴] エラー詳細:', err.code || err.statusCode || '', err.message);
       }
     });
     return;
