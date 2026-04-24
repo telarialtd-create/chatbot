@@ -8,7 +8,7 @@ const { runEstamaSync } = require('./estama_worker');
 const { lineConfig, handleLineEvent, middleware: lineMiddleware, preloadPhoneIndex } = require('./line_handler');
 // アプリ起動時に利用履歴の電話番号インデックスをバックグラウンドでプリロード
 preloadPhoneIndex();
-const { syncNippoToGeppo } = require('./nippo_to_geppo');
+const { syncNippoToGeppo } = require('./nippo_to_geppo_v2');
 
 const app = express();
 app.use(express.static('public'));
@@ -429,6 +429,17 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// 稼働バージョン確認用（どのデプロイ先が応答しているか切り分け）
+app.get('/api/version', (req, res) => {
+  res.json({
+    kokyakuVersion: 'v3-2026-04-24',
+    nippoFolderId: require('./line_handler').NIPPO_FOLDER_ID_DEBUG || 'unexposed',
+    commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'unknown',
+    startedAt: global.__STARTED_AT || (global.__STARTED_AT = new Date().toISOString()),
+    host: require('os').hostname(),
+  });
+});
+
 // 空き状況を直接取得するエンドポイント（デバッグ用）
 app.get('/api/availability', async (req, res) => {
   try {
@@ -569,11 +580,14 @@ async function maybeCreateNextMonthSheet() {
   try {
     const { google } = require('googleapis');
     const auth = (() => {
-      const c = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
-        'http://localhost'
-      );
+      const saPath = require('path').join(process.env.HOME, '.config/chatbot-service-account.json');
+      if (require('fs').existsSync(saPath)) {
+        return new google.auth.GoogleAuth({
+          keyFile: saPath,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+      }
+      const c = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, 'http://localhost');
       c.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
       return c;
     })();
@@ -875,6 +889,41 @@ app.post('/seo-check', async (req, res) => {
 // ==========================================
 
 // ==========================================
+// 売上ダッシュボード自動再生成 webhook
+// ==========================================
+const { runDashboard } = require('./create_sb_dashboard');
+
+// 再生成中フラグ（二重実行防止）
+const dashboardRunning = {};
+
+app.post('/api/rebuild-dashboard', async (req, res) => {
+  const token = req.headers['x-dashboard-token'];
+  if (token !== process.env.DASHBOARD_TOKEN) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const { spreadsheetId } = req.body;
+  if (!spreadsheetId) {
+    return res.status(400).json({ error: 'spreadsheetId is required' });
+  }
+  // 二重実行防止（同じシートの再生成が走っていたらスキップ）
+  if (dashboardRunning[spreadsheetId]) {
+    console.log(`[Dashboard] スキップ（実行中）: ${spreadsheetId}`);
+    return res.json({ status: 'already_running' });
+  }
+  dashboardRunning[spreadsheetId] = true;
+  res.json({ status: 'started' });
+  try {
+    console.log(`[Dashboard] 再生成開始: ${spreadsheetId}`);
+    await runDashboard(spreadsheetId);
+    console.log(`[Dashboard] 再生成完了: ${spreadsheetId}`);
+  } catch (err) {
+    console.error(`[Dashboard] エラー: ${err.message}`);
+  } finally {
+    dashboardRunning[spreadsheetId] = false;
+  }
+});
+
+// ==========================================
 // エステツール 販売API
 // ==========================================
 
@@ -961,10 +1010,11 @@ app.post('/webhook/komoju', express.raw({ type: 'application/json' }), async (re
 async function handleKomojoEvent(event) {
   const { google } = require('googleapis');
   const fs = require('fs');
-  const creds = JSON.parse(fs.readFileSync('/Users/hiraokawashin/.config/gdrive-server-credentials.json'));
-  const keys = JSON.parse(fs.readFileSync('/Users/hiraokawashin/.config/gcp-oauth.keys.json'));
-  const auth = new google.auth.OAuth2(keys.installed.client_id, keys.installed.client_secret);
-  auth.setCredentials(creds);
+  const path = require('path');
+  const saPath = path.join(process.env.HOME, '.config/chatbot-service-account.json');
+  const auth = fs.existsSync(saPath)
+    ? new google.auth.GoogleAuth({ keyFile: saPath, scopes: ['https://www.googleapis.com/auth/spreadsheets'] })
+    : (() => { const c = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, 'http://localhost'); c.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN }); return c; })();
   const sheets = google.sheets({ version: 'v4', auth });
 
   // 顧客情報の取得
@@ -1037,14 +1087,129 @@ function scheduleGeppoSync() {
       console.log('[月報] 自動更新完了:', result.label, result.totalSales, '円');
     } catch (err) {
       console.error('[月報] 自動更新エラー:', err.message);
+      if (err.message.includes('invalid_grant')) {
+        await notifyAuthError('月報自動更新').catch(() => {});
+      }
     }
     scheduleGeppoSync(); // 次の日もスケジュール
   }, msUntilNext);
 }
 
+// ── Google認証エラー時のLINE通知 ─────────────────────────
+let _authErrorNotifiedAt = 0;
+async function notifyAuthError(source) {
+  const now = Date.now();
+  // 1時間以内に通知済みなら重複送信しない
+  if (now - _authErrorNotifiedAt < 60 * 60 * 1000) return;
+  _authErrorNotifiedAt = now;
+  try {
+    const { messagingApi } = require('@line/bot-sdk');
+    const client = new messagingApi.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
+    await client.pushMessage({
+      to: process.env.LINE_USER_ID,
+      messages: [{
+        type: 'text',
+        text: `⚠️ Google認証エラー（invalid_grant）\n\n発生箇所: ${source}\n\nMacで以下を実行してください:\nnode /Users/hiraokawashin/chatbot/oauth_server.js\n→ブラウザで認証→「認証しました」とClaudeに伝える`
+      }]
+    });
+    console.log('[認証エラー通知] LINE送信完了');
+  } catch (e) {
+    console.error('[認証エラー通知] LINE送信失敗:', e.message);
+  }
+}
+
+// ==========================================
+// 売上ダッシュボード A列ポーリング監視（5分ごと）
+// ==========================================
+const DASHBOARD_SHEETS = [
+  { id: '1L5a0SeqSckZARYq3rZBVpBwDBPL4GyliEqA-TIDzW7Y', name: 'CREA' },
+  { id: '1wYQ5YYU9zSbGZ7VDnPp89mTMX_JGIUdNNNFBVgBneQ4', name: 'ふわもこ' },
+];
+const prevStaffMap = {}; // { sheetId: "名前1,名前2,..." }
+
+async function checkDashboardChanges() {
+  const { google: g } = require('googleapis');
+  const fs = require('fs');
+  const path = require('path');
+
+  let auth;
+  const saKeyPath = '/root/.config/chatbot-service-account.json';
+  const localSaKeyPath = path.join(process.env.HOME, '.config/chatbot-service-account.json');
+  const keyPath = fs.existsSync(saKeyPath) ? saKeyPath : (fs.existsSync(localSaKeyPath) ? localSaKeyPath : null);
+
+  if (keyPath) {
+    auth = new g.auth.GoogleAuth({ keyFile: keyPath, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
+  } else {
+    const oauthKeys = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config/gcp-oauth.keys.json')));
+    const creds = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config/gdrive-server-credentials.json')));
+    const inst = oauthKeys.installed || oauthKeys.web;
+    const oauth2Client = new g.auth.OAuth2(inst.client_id, inst.client_secret, inst.redirect_uris[0]);
+    oauth2Client.setCredentials(creds);
+    auth = oauth2Client;
+  }
+  const sheets = g.sheets({ version: 'v4', auth });
+
+  for (const sheet of DASHBOARD_SHEETS) {
+    try {
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheet.id, range: "'SB'!A9:A39", valueRenderOption: 'UNFORMATTED_VALUE',
+      });
+      const names = (res.data.values || []).flat().map(v => String(v || '').trim()).filter(Boolean).sort().join(',');
+
+      if (prevStaffMap[sheet.id] === undefined) {
+        // 初回: 記録のみ（再生成しない）
+        prevStaffMap[sheet.id] = names;
+        console.log(`[Dashboard監視] ${sheet.name} 初回記録: ${names.split(',').length}名`);
+      } else if (prevStaffMap[sheet.id] !== names) {
+        const prev = prevStaffMap[sheet.id].split(',').filter(Boolean);
+        const curr = names.split(',').filter(Boolean);
+        const added = curr.filter(n => !prev.includes(n));
+        const removed = prev.filter(n => !curr.includes(n));
+        console.log(`[Dashboard監視] ${sheet.name} A列変更検知! 追加: [${added.join(',')}] 削除: [${removed.join(',')}]`);
+        prevStaffMap[sheet.id] = names;
+
+        // ダッシュボード再生成
+        if (!dashboardRunning[sheet.id]) {
+          dashboardRunning[sheet.id] = true;
+          try {
+            console.log(`[Dashboard監視] ${sheet.name} 再生成開始...`);
+            await runDashboard(sheet.id);
+            console.log(`[Dashboard監視] ${sheet.name} 再生成完了 ✅`);
+          } catch (err) {
+            console.error(`[Dashboard監視] ${sheet.name} 再生成エラー:`, err.message);
+          } finally {
+            dashboardRunning[sheet.id] = false;
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[Dashboard監視] ${sheet.name} チェックエラー:`, err.message);
+    }
+  }
+}
+
+function scheduleDashboardWatch() {
+  // 5分ごとにチェック
+  setInterval(() => {
+    checkDashboardChanges().catch(err => console.error('[Dashboard監視] 全体エラー:', err.message));
+  }, 5 * 60 * 1000);
+  // 起動30秒後に初回チェック（スタッフリスト記録）
+  setTimeout(() => {
+    checkDashboardChanges().catch(err => console.error('[Dashboard監視] 初回エラー:', err.message));
+  }, 30 * 1000);
+  console.log('[Dashboard監視] 5分ごとのA列監視を開始');
+}
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`サーバー起動: http://localhost:${PORT}`);
-  warmupCache().catch(err => console.error('ウォームアップエラー:', err.message));
-  scheduleGeppoSync();
+  warmupCache().catch(async err => {
+    console.error('ウォームアップエラー:', err.message);
+    if (err.message.includes('invalid_grant')) {
+      await notifyAuthError('ウォームアップ（起動時）').catch(() => {});
+    }
+  });
+  // 月報自動更新は無効化（LINE「月報更新 4月24日」等で手動発火のみ）
+  // scheduleGeppoSync();
+  scheduleDashboardWatch();
 });

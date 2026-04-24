@@ -1325,4 +1325,4 @@ function handleLineEvent(event) {
   }
 }
 
-module.exports = { lineConfig, handleLineEvent, middleware, pushToStore, preloadPhoneIndex, searchRirekiByPhone, formatRirekiResult };
+module.exports = { lineConfig, handleLineEvent, middleware, pushToStore, preloadPhoneIndex, searchRirekiByPhone, formatRirekiResult, NIPPO_FOLDER_ID_DEBUG: NIPPO_FOLDER_ID };
