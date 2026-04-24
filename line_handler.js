@@ -721,11 +721,19 @@ async function processKokyakuUpdate(dateStr) {
   console.log(`[顧客更新] 日報ファイル: ${spreadsheetId}`);
 
   // 2. 日報全件シートからB3:J列を読み取り
-  const srcRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${NIPPO_ZENKEN_SHEET_NAME}'!B3:J`,
-    valueRenderOption: 'FORMATTED_VALUE',
-  });
+  let srcRes;
+  try {
+    srcRes = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${NIPPO_ZENKEN_SHEET_NAME}'!B3:J`,
+      valueRenderOption: 'FORMATTED_VALUE',
+    });
+  } catch (e) {
+    // どのシート/IDで失敗したか特定できるようにする
+    const meta = await sheets.spreadsheets.get({ spreadsheetId }).catch(() => null);
+    const sheetNames = meta?.data?.sheets?.map(s => s.properties.title) || [];
+    throw new Error(`[ソース読取失敗] file=${spreadsheetId} sheet='${NIPPO_ZENKEN_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
+  }
   const srcRows = (srcRes.data.values || []).filter(row =>
     row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')
   );
@@ -735,11 +743,18 @@ async function processKokyakuUpdate(dateStr) {
   console.log(`[顧客更新] コピー元: ${srcRows.length}行`);
 
   // 3. 利用履歴シートの最初の空白行を特定（A列で判定）
-  const targetRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: KOKYAKU_TARGET_SHEET_ID,
-    range: `'${KOKYAKU_TARGET_SHEET_NAME}'!A:A`,
-    valueRenderOption: 'FORMATTED_VALUE',
-  });
+  let targetRes;
+  try {
+    targetRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: KOKYAKU_TARGET_SHEET_ID,
+      range: `'${KOKYAKU_TARGET_SHEET_NAME}'!A:A`,
+      valueRenderOption: 'FORMATTED_VALUE',
+    });
+  } catch (e) {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: KOKYAKU_TARGET_SHEET_ID }).catch(() => null);
+    const sheetNames = meta?.data?.sheets?.map(s => s.properties.title) || [];
+    throw new Error(`[ターゲット読取失敗] file=${KOKYAKU_TARGET_SHEET_ID} sheet='${KOKYAKU_TARGET_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
+  }
   const targetACol = targetRes.data.values || [];
   let firstEmptyRow = targetACol.length + 1;
   // A列の末尾から空白を遡って最初の空白行を特定
