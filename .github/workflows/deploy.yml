@@ -37,23 +37,8 @@ jobs:
           done
 
           # PM2診断＋完全再起動（cwd/file pathを表示して異常検知）
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@159.69.40.60 << 'REMOTE'
-            set -e
-            echo '=== pm2 list ==='
-            pm2 list
-            echo '=== pm2 describe chatbot ==='
-            pm2 describe chatbot | grep -E 'script path|exec cwd|status|name|restarts|version' | head -20 || true
-            echo '=== /app/chatbot head ==='
-            ls -la /app/chatbot/ | head -10
-            echo '=== app.js mtime (should be recent) ==='
-            stat -c '%y %n' /app/chatbot/app.js /app/chatbot/line_handler.js 2>/dev/null || stat /app/chatbot/app.js /app/chatbot/line_handler.js
-            echo '=== pm2 delete & start (force reload) ==='
-            pm2 delete chatbot 2>/dev/null || true
-            cd /app/chatbot && pm2 start app.js --name chatbot --update-env
-            pm2 save
-            echo '=== post-restart pm2 list ==='
-            pm2 list
-REMOTE
+          REMOTE_CMD='set -e; echo "=== pm2 list ==="; pm2 list; echo "=== pm2 describe chatbot ==="; pm2 describe chatbot || true; echo "=== /app/chatbot head ==="; ls -la /app/chatbot/ | head -15; echo "=== app.js mtime ==="; stat /app/chatbot/app.js /app/chatbot/line_handler.js 2>/dev/null || true; echo "=== force reload: delete+start ==="; pm2 delete chatbot 2>/dev/null || true; cd /app/chatbot && pm2 start app.js --name chatbot --update-env; pm2 save; echo "=== post-restart pm2 list ==="; pm2 list'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@159.69.40.60 "$REMOTE_CMD"
 
       - name: Health check
         run: |
