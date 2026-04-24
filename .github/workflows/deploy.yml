@@ -32,8 +32,8 @@ jobs:
 
       - name: Deploy to server
         run: |
-          # 変更されたJSファイルをサーバーにコピー
-          for f in line_handler.js nippo_to_geppo.js scheduleReader.js build_dashboard.js; do
+          # 変更されたJSファイルをサーバーにコピー（app.js・依存モジュールも含む）
+          for f in app.js line_handler.js nippo_to_geppo.js nippo_to_geppo_v2.js line_nippo_input.js create_sb_dashboard.js scheduleReader.js build_dashboard.js; do
             if [ -f "$f" ]; then
               scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
                 "$f" root@159.69.40.60:/app/chatbot/"$f"
