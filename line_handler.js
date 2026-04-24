@@ -714,10 +714,10 @@ async function processKokyakuUpdate(dateStr) {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // 1. ソーススプレッドシート（テスト用固定）
+  // 1. ソーススプレッドシート（日付から動的に検索）
   const normalizedDate = normalizeDateStr(dateStr);
   const slashDate = toSlashDate(normalizedDate);
-  const spreadsheetId = KOKYAKU_SOURCE_SHEET_ID;
+  const spreadsheetId = await findSpreadsheetByDateStr(dateStr);
   console.log(`[顧客更新] 日報ファイル: ${spreadsheetId}`);
 
   // 2. 日報全件シートからB3:J列を読み取り
