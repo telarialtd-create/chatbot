@@ -6,10 +6,15 @@ on:
     paths:
       - 'line_handler.js'
       - 'nippo_to_geppo.js'
+      - 'nippo_to_geppo_v2.js'
+      - 'line_nippo_input.js'
+      - 'create_sb_dashboard.js'
       - 'scheduleReader.js'
       - 'build_dashboard.js'
       - 'app.js'
       - 'chatbot/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch: {}
 
 jobs:
   deploy:
