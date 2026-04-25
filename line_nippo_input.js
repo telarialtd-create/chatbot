@@ -25,7 +25,7 @@ const path = require('path');
 const STORES_SHEET_ID  = '19LgvtnN12QGQzqwQgOVpmFckg111C2RzbyjxI2_hkvA';
 const FOLDER_SHEET     = '📁 店舗フォルダ';
 const DASHBOARD_SHEET  = 'ダッシュボード';
-const REGISTER_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyteISCbSAXNHjQYlQ_T1eRz-E_XSA1JevhcQmlQnv2ITQUT-h6ZmweTvQX70f0mHhmzg/exec';
+const REGISTER_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby6kPgHPcn8aaUm96LLmgZUT4IwfTAg2B3Ow17uawzrWNTWiQLx2cmUXg8_BTPyVRgB/exec';
 
 // セルマッピング（項目名 → セル）
 const CELL_MAP = {
