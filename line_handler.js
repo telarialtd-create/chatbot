@@ -890,25 +890,28 @@ async function _loadRirekiWithRetry(maxRetries = 3) {
   }
 }
 
-// 電話番号で利用履歴を検索（allRecords=trueで全件、falseで最新30件）
-// nameKeyword 指定時は C列(源氏名) に部分一致するものだけに絞り込み
+// 電話番号で利用履歴を検索（J列に部分一致＝シート側CONTAINSと同じ挙動）
+// nameKeyword 指定時は C列(源氏名) にも部分一致するものだけに絞り込み（AND）
 async function searchRirekiByPhone(phone, allRecords = false, nameKeyword = '') {
   const normalized = normalizePhone(phone);
-  if (normalized.length < 10) return null;
+  if (normalized.length < 9) return null; // 最低9桁
   await buildRirekiCache();
-  const idxList = rirekiCache.phoneIndex[normalized];
-  if (!idxList || idxList.length === 0) return null;
-  let targets = [...idxList].reverse();
-  if (nameKeyword) {
-    const kw = String(nameKeyword).trim();
-    targets = targets.filter(i => {
-      const name = String((rirekiCache.allRows[i] || [])[2] || '');
-      return name.includes(kw);
-    });
-    if (targets.length === 0) return { total: 0, rows: [], filtered: true };
+  const rows = rirekiCache.allRows || [];
+  const kw = nameKeyword ? String(nameKeyword).trim() : '';
+  const targets = [];
+  // 末尾(=新しい行)から走査して降順に揃える
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const tel = normalizePhone((rows[i] || [])[9] || '');
+    if (!tel || !tel.includes(normalized)) continue;
+    if (kw) {
+      const name = String((rows[i] || [])[2] || '');
+      if (!name.includes(kw)) continue;
+    }
+    targets.push(i);
   }
-  const dataRows = targets.map(i => (rirekiCache.allRows[i] || []).slice(0, 7));
-  return { total: targets.length, rows: dataRows, filtered: !!nameKeyword };
+  if (targets.length === 0) return { total: 0, rows: [], filtered: !!kw };
+  const dataRows = targets.map(i => (rows[i] || []).slice(0, 7));
+  return { total: targets.length, rows: dataRows, filtered: !!kw };
 }
 
 // 場所から部屋番号（末尾の半角/全角スペース＋3〜4桁数字）を除去
@@ -950,14 +953,16 @@ function parsePhoneCommand(text) {
   // 「全件 番号」形式
   if (tokens[0] === '全件' && tokens.length === 2) {
     const phone = tokens[1];
-    if (/^0\d{9,10}$/.test(phone.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－]+$/.test(phone)) {
+    const d = normalizePhone(phone);
+    if (/^[0-9０-９\-ー－]+$/.test(phone) && d.length >= 9 && d.length <= 11 && d.startsWith('0')) {
       return { phone, allRecords: true, nameKeyword: '' };
     }
   }
 
-  // 1個目が電話番号
+  // 1個目が電話番号（半角/全角/ハイフン許容、9〜11桁）
   const head = tokens[0];
-  if (/^0\d{9,10}$/.test(head.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－]+$/.test(head)) {
+  const headDigits = normalizePhone(head);
+  if (/^[0-9０-９\-ー－]+$/.test(head) && headDigits.length >= 9 && headDigits.length <= 11 && headDigits.startsWith('0')) {
     if (tokens.length === 1) {
       return { phone: head, allRecords: true, nameKeyword: '' };
     }
