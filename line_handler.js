@@ -798,8 +798,8 @@ async function processKokyakuUpdate(dateStr) {
 }
 
 // ── 利用履歴シート ────────────────────────────────────────
-const RIREKI_SHEET_ID   = '1pzWvIMy74vCkEPOR-u132m5LJST2JO9ZNn8UtHkQkl4';
-const RIREKI_SHEET_NAME = '利用履歴';
+const RIREKI_SHEET_ID   = KOKYAKU_TARGET_SHEET_ID;
+const RIREKI_SHEET_NAME = KOKYAKU_TARGET_SHEET_NAME;
 
 // 利用履歴専用のSA認証（エスタマOAuthと枠を分けて429を防止）
 function createSAAuthClient() {
@@ -891,15 +891,24 @@ async function _loadRirekiWithRetry(maxRetries = 3) {
 }
 
 // 電話番号で利用履歴を検索（allRecords=trueで全件、falseで最新30件）
-async function searchRirekiByPhone(phone, allRecords = false) {
+// nameKeyword 指定時は C列(源氏名) に部分一致するものだけに絞り込み
+async function searchRirekiByPhone(phone, allRecords = false, nameKeyword = '') {
   const normalized = normalizePhone(phone);
   if (normalized.length < 10) return null;
   await buildRirekiCache();
   const idxList = rirekiCache.phoneIndex[normalized];
   if (!idxList || idxList.length === 0) return null;
-  const targets = [...idxList].reverse();
-  const dataRows = targets.map(i => (rirekiCache.allRows[i] || []).slice(0, 9));
-  return { total: idxList.length, rows: dataRows };
+  let targets = [...idxList].reverse();
+  if (nameKeyword) {
+    const kw = String(nameKeyword).trim();
+    targets = targets.filter(i => {
+      const name = String((rirekiCache.allRows[i] || [])[2] || '');
+      return name.includes(kw);
+    });
+    if (targets.length === 0) return { total: 0, rows: [], filtered: true };
+  }
+  const dataRows = targets.map(i => (rirekiCache.allRows[i] || []).slice(0, 7));
+  return { total: targets.length, rows: dataRows, filtered: !!nameKeyword };
 }
 
 // 場所から部屋番号（末尾の半角/全角スペース＋3〜4桁数字）を除去
@@ -907,39 +916,55 @@ function removeRoomNumber(place) {
   return place.replace(/[\s　]+[\d０-９]{3,4}$/, '').trim();
 }
 
-// 利用履歴の検索結果をテキストに整形（1件2行・全列表示）
-function formatRirekiResult(phone, result, allRecords = false) {
+// 利用履歴の検索結果をテキストに整形（1件2行・A〜G列表示）
+function formatRirekiResult(phone, result, allRecords = false, nameKeyword = '') {
   const { total, rows } = result;
   const label = `全${rows.length}件`;
-  const header = `📋 利用履歴: ${phone}\n合計 ${total} 件（${label}）`;
+  const headerKey = nameKeyword ? `${phone} / ${nameKeyword}` : phone;
+  const header = `📋 利用履歴: ${headerKey}\n合計 ${total} 件（${label}）`;
   const lines = rows.map((r, i) => {
-    const date   = r[0] || '';
-    const store  = r[1] || '';
-    const name   = r[2] || '';
-    const type   = r[3] || '';
-    const e      = toFullWidth(r[4] || '');
-    const f      = toFullWidth(r[5] || '');
-    const h      = toFullWidth(r[7] || '');
-    const course = toFullWidth(r[8] || '');
-    const line1  = [date, store].filter(v => v).join(' ');
-    const line2  = [name, type, e, f, h, course].filter(v => v).join(' ');
+    const date  = r[0] || '';
+    const store = r[1] || '';
+    const name  = r[2] || '';
+    const type  = r[3] || '';
+    const cours = toFullWidth(r[4] || '');
+    const op    = toFullWidth(r[5] || '');
+    const memo  = r[6] || '';
+    const line1 = [date, store].filter(v => v).join(' ');
+    const line2 = [name, type, cours, op, memo].filter(v => v).join(' ');
     return `${i + 1}. ${line1}\n   ${line2}`;
   });
   return [header, ...lines].join('\n');
 }
 
 // 電話番号パターン（0から始まる10〜11桁、ハイフンあり/なし対応）
-// 「全件」付きも許容: "09012345678 全件"
+// 対応パターン:
+//   ・「09012345678」                  → 番号のみ
+//   ・「09012345678 谷村」              → 番号 + 名前（C列で部分一致AND）
+//   ・「09012345678 全件」「全件 0901…」→ 全件モード（既存互換）
 function parsePhoneCommand(text) {
-  const allMatch = text.match(/^([0-9０-９\-ー－]+)[\s　]*全件$/) ||
-                   text.match(/^全件[\s　]*([0-9０-９\-ー－]+)$/);
-  if (allMatch) {
-    const phone = allMatch[1];
-    if (/^0\d{9,10}$/.test(phone.replace(/[^0-9]/g, ''))) return { phone, allRecords: true };
+  const normalized = text.replace(/[　]/g, ' ').trim();
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+
+  // 「全件 番号」形式
+  if (tokens[0] === '全件' && tokens.length === 2) {
+    const phone = tokens[1];
+    if (/^0\d{9,10}$/.test(phone.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－]+$/.test(phone)) {
+      return { phone, allRecords: true, nameKeyword: '' };
+    }
   }
-  const plain = text.trim();
-  if (/^0\d{9,10}$/.test(plain.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－]+$/.test(plain)) {
-    return { phone: plain, allRecords: false };
+
+  // 1個目が電話番号
+  const head = tokens[0];
+  if (/^0\d{9,10}$/.test(head.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－]+$/.test(head)) {
+    if (tokens.length === 1) {
+      return { phone: head, allRecords: false, nameKeyword: '' };
+    }
+    if (tokens.length === 2) {
+      if (tokens[1] === '全件') return { phone: head, allRecords: true, nameKeyword: '' };
+      return { phone: head, allRecords: false, nameKeyword: tokens[1] };
+    }
   }
   return null;
 }
@@ -1153,6 +1178,21 @@ function handleLineEvent(event) {
                 `👥 出勤: ${combinedCount}人`
               }],
             });
+            if (result.warnings && result.warnings.length > 0) {
+              const grouped = {};
+              for (const w of result.warnings) {
+                (grouped[w.section] ||= []).push(w.name);
+              }
+              const lines = Object.entries(grouped)
+                .map(([sec, names]) => `・${sec}: ${names.join(', ')}`)
+                .join('\n');
+              await client.pushMessage({
+                to: target,
+                messages: [{ type: 'text', text:
+                  `⚠️ 空白行不足で書き込めなかった名前があります\n${lines}\n\n該当シートで空白行を追加するか、不要な行を整理してください。`
+                }],
+              }).catch(() => {});
+            }
           } catch (err) {
             console.error('[月報] エラー:', err.message);
             await client.pushMessage({
@@ -1176,14 +1216,15 @@ function handleLineEvent(event) {
       const phoneCmd = parsePhoneCommand(text);
       if (phoneCmd) {
         const replyToken = event.replyToken;
-        console.log(`[LINE] 電話番号検索: ${phoneCmd.phone} 全件=${phoneCmd.allRecords}`);
+        console.log(`[LINE] 電話番号検索: ${phoneCmd.phone} 全件=${phoneCmd.allRecords} 名前=${phoneCmd.nameKeyword || '(なし)'}`);
         setImmediate(async () => {
           try {
-            const result = await searchRirekiByPhone(phoneCmd.phone, phoneCmd.allRecords);
+            const result = await searchRirekiByPhone(phoneCmd.phone, phoneCmd.allRecords, phoneCmd.nameKeyword);
             console.log(`[利用履歴] 検索結果: ${result ? result.total + '件' : '該当なし'}`);
-            const msg = result
-              ? formatRirekiResult(phoneCmd.phone, result, phoneCmd.allRecords)
-              : `📋 利用履歴: ${phoneCmd.phone}\n該当なし`;
+            const headerKey = phoneCmd.nameKeyword ? `${phoneCmd.phone} / ${phoneCmd.nameKeyword}` : phoneCmd.phone;
+            const msg = (result && result.total > 0)
+              ? formatRirekiResult(phoneCmd.phone, result, phoneCmd.allRecords, phoneCmd.nameKeyword)
+              : `📋 利用履歴: ${headerKey}\n該当なし`;
             console.log(`[利用履歴] LINE reply送信（${msg.length}文字）`);
             await client.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] });
             console.log(`[利用履歴] LINE送信完了`);
@@ -1273,6 +1314,21 @@ function handleLineEvent(event) {
             `👥 出勤: ${combinedCount}人`
           }],
         });
+        if (result.warnings && result.warnings.length > 0) {
+          const grouped = {};
+          for (const w of result.warnings) {
+            (grouped[w.section] ||= []).push(w.name);
+          }
+          const lines = Object.entries(grouped)
+            .map(([sec, names]) => `・${sec}: ${names.join(', ')}`)
+            .join('\n');
+          await client.pushMessage({
+            to: target,
+            messages: [{ type: 'text', text:
+              `⚠️ 空白行不足で書き込めなかった名前があります\n${lines}\n\n該当シートで空白行を追加するか、不要な行を整理してください。`
+            }],
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error('[月報] グループ エラー:', err.message);
         const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
@@ -1306,14 +1362,15 @@ function handleLineEvent(event) {
   const phoneCmdG = parsePhoneCommand(text);
   if (phoneCmdG) {
     const replyTokenG = event.replyToken;
-    console.log(`[LINE] 電話番号検索(グループ): ${phoneCmdG.phone} 全件=${phoneCmdG.allRecords}`);
+    console.log(`[LINE] 電話番号検索(グループ): ${phoneCmdG.phone} 全件=${phoneCmdG.allRecords} 名前=${phoneCmdG.nameKeyword || '(なし)'}`);
     setImmediate(async () => {
       try {
-        const result = await searchRirekiByPhone(phoneCmdG.phone, phoneCmdG.allRecords);
+        const result = await searchRirekiByPhone(phoneCmdG.phone, phoneCmdG.allRecords, phoneCmdG.nameKeyword);
         console.log(`[利用履歴] 検索結果: ${result ? result.total + '件' : '該当なし'}`);
-        const msg = result
-          ? formatRirekiResult(phoneCmdG.phone, result, phoneCmdG.allRecords)
-          : `📋 利用履歴: ${phoneCmdG.phone}\n該当なし`;
+        const headerKeyG = phoneCmdG.nameKeyword ? `${phoneCmdG.phone} / ${phoneCmdG.nameKeyword}` : phoneCmdG.phone;
+        const msg = (result && result.total > 0)
+          ? formatRirekiResult(phoneCmdG.phone, result, phoneCmdG.allRecords, phoneCmdG.nameKeyword)
+          : `📋 利用履歴: ${headerKeyG}\n該当なし`;
         console.log(`[利用履歴] LINE reply送信（${msg.length}文字）`);
         await client.replyMessage({ replyToken: replyTokenG, messages: [{ type: 'text', text: msg }] });
         console.log(`[利用履歴] LINE送信完了`);
