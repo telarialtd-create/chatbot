@@ -959,11 +959,11 @@ function parsePhoneCommand(text) {
   const head = tokens[0];
   if (/^0\d{9,10}$/.test(head.replace(/[^0-9]/g, '')) && /^[0-9０-９\-ー－]+$/.test(head)) {
     if (tokens.length === 1) {
-      return { phone: head, allRecords: false, nameKeyword: '' };
+      return { phone: head, allRecords: true, nameKeyword: '' };
     }
     if (tokens.length === 2) {
       if (tokens[1] === '全件') return { phone: head, allRecords: true, nameKeyword: '' };
-      return { phone: head, allRecords: false, nameKeyword: tokens[1] };
+      return { phone: head, allRecords: true, nameKeyword: tokens[1] };
     }
   }
   return null;
