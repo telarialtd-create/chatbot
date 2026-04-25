@@ -686,11 +686,11 @@ async function processAndPush(target, client) {
   }
 }
 
-// ── 顧客更新（日報全件 → 利用履歴コピー）────────────────────
+// ── 顧客更新（日報_記録 → 利用履歴コピー）────────────────────
 const KOKYAKU_SOURCE_SHEET_ID   = '1rPHZ75QnjhDxwqsITFBKgVDvuPVo_dz4lT7L22POw3k';
 const KOKYAKU_TARGET_SHEET_ID   = '1A_LaiWm2QhvXk4jKINSRvKKX3-xKYLzygNnlY3ZtI9A';
 const KOKYAKU_TARGET_SHEET_NAME = '利用履歴';
-const NIPPO_ZENKEN_SHEET_NAME  = '日報_全件';
+const NIPPO_SOURCE_SHEET_NAME  = '日報_記録';
 
 // 「4月23日 顧客更新」「4月23日　顧客更新」形式をパース
 function parseKokyakuUpdateCommand(text) {
@@ -709,8 +709,8 @@ function toSlashDate(nenGappiStr) {
   return `${m[1]}/${parseInt(m[2])}/${parseInt(m[3])}`;
 }
 
-// 日報全件シートから利用履歴シートへコピー
-const KOKYAKU_VERSION = 'v3-2026-04-24';
+// 日報_記録シートから利用履歴シートへコピー
+const KOKYAKU_VERSION = 'v4-2026-04-24-sheetname';
 async function processKokyakuUpdate(dateStr) {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
@@ -726,19 +726,19 @@ async function processKokyakuUpdate(dateStr) {
   }
   console.log(`[顧客更新] 日報ファイル: ${spreadsheetId}`);
 
-  // 2. 日報全件シートからB3:J列を読み取り
+  // 2. 日報_記録シートからB3:J列を読み取り
   let srcRes;
   try {
     srcRes = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${NIPPO_ZENKEN_SHEET_NAME}'!B3:J`,
+      range: `'${NIPPO_SOURCE_SHEET_NAME}'!B3:J`,
       valueRenderOption: 'FORMATTED_VALUE',
     });
   } catch (e) {
     // どのシート/IDで失敗したか特定できるようにする
     const meta = await sheets.spreadsheets.get({ spreadsheetId }).catch(() => null);
     const sheetNames = meta?.data?.sheets?.map(s => s.properties.title) || [];
-    throw new Error(`[${KOKYAKU_VERSION}][ソース読取失敗] file=${spreadsheetId} sheet='${NIPPO_ZENKEN_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
+    throw new Error(`[${KOKYAKU_VERSION}][ソース読取失敗] file=${spreadsheetId} sheet='${NIPPO_SOURCE_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
   }
   const srcRows = (srcRes.data.values || []).filter(row =>
     row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')
@@ -1069,7 +1069,7 @@ function handleLineEvent(event) {
 
       // 既存コマンド処理
 
-      // 「4月23日 顧客更新」形式: 日報全件→利用履歴コピー
+      // 「4月23日 顧客更新」形式: 日報_記録→利用履歴コピー
       const kokyaku = parseKokyakuUpdateCommand(text);
       if (kokyaku) {
         const target = userId || process.env.LINE_USER_ID;
@@ -1199,7 +1199,7 @@ function handleLineEvent(event) {
 
   // グループからのコマンド
 
-  // 「4月23日 顧客更新」形式: 日報全件→利用履歴コピー（グループ）
+  // 「4月23日 顧客更新」形式: 日報_記録→利用履歴コピー（グループ）
   const kokyakuG = parseKokyakuUpdateCommand(text);
   if (kokyakuG) {
     const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
