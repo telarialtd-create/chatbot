@@ -730,10 +730,7 @@ async function processMeisaisyoAndPush(target, client, parsed) {
         ],
       },
     });
-    console.log(`[明細書] 名前書込&E41/E46クリア完了 ssid=${spreadsheetId} name=${parsed.name} → 5秒待機`);
-
-    // 名前変更による自動計算（売上反映・マスター参照等）の完了を待つ
-    await new Promise(r => setTimeout(r, 5000));
+    console.log(`[明細書] 名前書込&E41/E46クリア完了 ssid=${spreadsheetId} name=${parsed.name}`);
 
     // Phase 2: 残りのフィールドを書込
     const data = [];
