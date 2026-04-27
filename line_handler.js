@@ -552,7 +552,8 @@ function rangeStartOffsets(range) {
   return { rowOffset: parseInt(m[2], 10) - 1, colOffset: col - 1 };
 }
 
-async function screenshotMeisai(spreadsheetId, sheetName = MEISAI_SHEET_NAME, range = MEISAI_RANGE, prefix = 'meisai') {
+async function screenshotMeisai(spreadsheetId, sheetName = MEISAI_SHEET_NAME, range = MEISAI_RANGE, prefix = 'meisai', opts = {}) {
+  const { compactEmpty = false } = opts;
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
   const res = await sheets.spreadsheets.get({
@@ -596,13 +597,35 @@ async function screenshotMeisai(spreadsheetId, sheetName = MEISAI_SHEET_NAME, ra
     }
   }
 
+  // 空白行スキップ判定: 値が一切無く、結合セルにも含まれない行
+  const skipRow = new Set();
+  if (compactEmpty) {
+    for (let ri = 0; ri < rows.length; ri++) {
+      const cells = rows[ri].values || [];
+      const hasContent = cells.some(c => {
+        if (!c) return false;
+        if (c.formattedValue !== undefined && c.formattedValue !== '') return true;
+        if (c.userEnteredValue?.boolValue !== undefined) return true;
+        return false;
+      });
+      if (hasContent) continue;
+      // 結合の途中行は残す（左上以外のセルが当該行にある場合）
+      let inMergeBody = false;
+      for (let ci = 0; ci < numCols; ci++) {
+        if (mergedSet.has(`${ri},${ci}`)) { inMergeBody = true; break; }
+        if (mergeMap[`${ri},${ci}`]) { inMergeBody = true; break; }
+      }
+      if (!inMergeBody) skipRow.add(ri);
+    }
+  }
+
   const colWidths  = Array.from({ length: numCols }, (_, i) =>
     colMeta[i]?.pixelSize ? Math.max(colMeta[i].pixelSize * 0.85, 28) : 56);
   const rowHeights = rows.map((_, i) =>
     rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize * 0.85, 17) : 20);
 
   const totalW = Math.round(colWidths.reduce((s, w) => s + w, 0));
-  const totalH = Math.round(rowHeights.reduce((s, h) => s + h, 0));
+  const totalH = Math.round(rows.reduce((s, _, i) => s + (skipRow.has(i) ? 0 : rowHeights[i]), 0));
   const canvas = createCanvas(totalW, totalH);
   const ctx    = canvas.getContext('2d');
   ctx.fillStyle = '#ffffff';
@@ -610,6 +633,7 @@ async function screenshotMeisai(spreadsheetId, sheetName = MEISAI_SHEET_NAME, ra
 
   let y = 0;
   for (let ri = 0; ri < rows.length; ri++) {
+    if (skipRow.has(ri)) continue;
     const cells = rows[ri].values || [];
     let x = 0;
     for (let ci = 0; ci < numCols; ci++) {
@@ -715,7 +739,7 @@ async function processMeisaisyoAndPush(target, client, parsed) {
 
     await new Promise(r => setTimeout(r, 2000));
 
-    const filename = await screenshotMeisai(spreadsheetId, MEISAISYO_SHEET_NAME, MEISAISYO_RANGE, 'meisaisyo');
+    const filename = await screenshotMeisai(spreadsheetId, MEISAISYO_SHEET_NAME, MEISAISYO_RANGE, 'meisaisyo', { compactEmpty: true });
     const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
     const imageUrl = `${baseUrl}/temp/${filename}`;
     console.log(`[明細書] Push送信: ${imageUrl} → ${target}`);
