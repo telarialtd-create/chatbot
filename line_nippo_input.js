@@ -255,52 +255,56 @@ async function writeToDashboard(spreadsheetId, fields) {
   return res.data.totalUpdatedCells;
 }
 
-// ── キャンセル処理: 日報_全件シートのU列チェックボックスをON ─
-const ZENKEN_SHEET = '日報_全件';
-
+// ── キャンセル処理: ダッシュボードA20:R100から該当行のC/D/Eをクリア + G列を備考で上書き ─
+// ダッシュボードの列構成（A20起点）:
+// A=# B=店名 C=名前 D=指名 E=コース F=オプション G=備考 H=部屋 I=媒体 J=電話番号 K=予約者
 async function cancelEntry(spreadsheetId, fields) {
   const auth   = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const name   = fields['名前'] || '';
-  const phone  = fields['番号'] || '';
+  const name      = (fields['名前'] || '').trim();
+  const phone     = (fields['番号'] || '').replace(/[^0-9]/g, '');
+  const bikoInput = fields['備考欄'] || '';
 
-  // 日報_全件シートの全データ取得（B:U列）
+  if (!name || !phone) {
+    throw new Error(`キャンセルには名前と番号の両方が必要です（名前: "${name}", 番号: "${phone}"）`);
+  }
+
+  // ダッシュボード A20:R100 を取得
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${ZENKEN_SHEET}'!B3:U500`,
+    range: `'${DASHBOARD_SHEET}'!A20:R100`,
     valueRenderOption: 'FORMATTED_VALUE',
   });
   const rows = res.data.values || [];
 
-  // 名前(B=0列目) + 電話番号(I=8列目) で行を特定
-  let targetRow = -1;
+  // 名前(C=2) + 電話番号(J=9) のAND一致で検索（下から走査）
+  let targetIdx = -1;
   for (let i = rows.length - 1; i >= 0; i--) {
-    const rowName  = (rows[i][1] || '').trim();  // C列=名前（B3起点で1列目）
-    const rowPhone = (rows[i][8] || '').replace(/[^0-9]/g, ''); // J列=電話番号
-    if (rowName === name && rowPhone === phone.replace(/[^0-9]/g, '')) {
-      targetRow = i + 3; // シートの行番号（3行目起点）
+    const rowName  = (rows[i][2] || '').trim();
+    const rowPhone = (rows[i][9] || '').replace(/[^0-9]/g, '');
+    if (rowName === name && rowPhone === phone) {
+      targetIdx = i;
       break;
     }
   }
 
-  if (targetRow === -1) {
+  if (targetIdx === -1) {
     throw new Error(`キャンセル対象が見つかりません（名前: ${name}、番号: ${phone}）`);
   }
 
-  // U列チェックボックスをTRUE + G列に備考欄を書き込み
-  const biko = fields['備考欄'] || '';
+  const targetRow = targetIdx + 20;
+
+  // C/D/E をクリア + G を備考で上書き
   const batchData = [
-    { range: `'${ZENKEN_SHEET}'!U${targetRow}`, values: [[true]] },
+    { range: `'${DASHBOARD_SHEET}'!C${targetRow}:E${targetRow}`, values: [['', '', '']] },
+    { range: `'${DASHBOARD_SHEET}'!G${targetRow}`, values: [[bikoInput]] },
   ];
-  if (biko) {
-    batchData.push({ range: `'${ZENKEN_SHEET}'!G${targetRow}`, values: [[biko]] });
-  }
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
     requestBody: { valueInputOption: 'USER_ENTERED', data: batchData },
   });
-  console.log(`[キャンセル] 日報_全件 U${targetRow} → TRUE, G${targetRow} → "${biko}"（${name} / ${phone}）`);
+  console.log(`[キャンセル] ダッシュボード 行${targetRow} C/D/Eクリア・G="${bikoInput}"（${name} / ${phone}）`);
 
   return targetRow;
 }
