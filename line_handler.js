@@ -717,14 +717,20 @@ async function processMeisaisyoAndPush(target, client, parsed) {
     const auth = createAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Phase 1: 名前(C3) のみ先に書込
-    await sheets.spreadsheets.values.update({
+    // Phase 1: 名前(C3) を書込し、シート側 onEdit トリガーで消えるはずの E41/E46 を
+    //          API書込では発火しないため明示的にクリアする
+    await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId,
-      range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_NAME_CELL}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[parsed.name]] },
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: [
+          { range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_NAME_CELL}`,   values: [[parsed.name]] },
+          { range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_BANCE_CELL}`,  values: [['']] },
+          { range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_OTSURI_CELL}`, values: [['']] },
+        ],
+      },
     });
-    console.log(`[明細書] 名前書込完了 ssid=${spreadsheetId} name=${parsed.name} → 5秒待機`);
+    console.log(`[明細書] 名前書込&E41/E46クリア完了 ssid=${spreadsheetId} name=${parsed.name} → 5秒待機`);
 
     // 名前変更による自動計算（売上反映・マスター参照等）の完了を待つ
     await new Promise(r => setTimeout(r, 5000));
