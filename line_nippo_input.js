@@ -329,8 +329,12 @@ async function modifyEntry(spreadsheetId, fields) {
   const auth   = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const name  = fields['名前'] || '';
-  const phone = fields['番号'] || '';
+  const name  = (fields['名前'] || '').trim();
+  const phone = (fields['番号'] || '').replace(/[^0-9]/g, '');
+
+  if (!name || !phone) {
+    throw new Error(`変更には名前と番号の両方が必要です（名前: "${name}", 番号: "${phone}"）`);
+  }
 
   // ダッシュボード A20:R100 を取得
   const res = await sheets.spreadsheets.values.get({
@@ -340,11 +344,12 @@ async function modifyEntry(spreadsheetId, fields) {
   });
   const rows = res.data.values || [];
 
-  // 電話番号(J=9列目) で行を特定（名前が変わる場合があるため番号のみで検索）
+  // 名前(C=2) + 電話番号(J=9) のAND一致で検索（下から走査）
   let targetIdx = -1;
   for (let i = rows.length - 1; i >= 0; i--) {
+    const rowName  = (rows[i][2] || '').trim();
     const rowPhone = (rows[i][9] || '').replace(/[^0-9]/g, '');
-    if (rowPhone === phone.replace(/[^0-9]/g, '')) {
+    if (rowName === name && rowPhone === phone) {
       targetIdx = i;
       break;
     }
@@ -356,27 +361,21 @@ async function modifyEntry(spreadsheetId, fields) {
 
   const targetRow = targetIdx + 20; // シートの行番号（20行目起点）
 
-  // 変更対象の項目をバッチ更新
+  // MODIFY_COL_MAP の全項目を空欄含めて上書き（送信メッセージ通りに完全置換）
   const batchData = [];
   for (const [key, colIdx] of Object.entries(MODIFY_COL_MAP)) {
-    if (fields[key] !== undefined) {
-      const col = String.fromCharCode(65 + colIdx); // 0=A, 1=B, ...
-      batchData.push({
-        range: `'${DASHBOARD_SHEET}'!${col}${targetRow}`,
-        values: [[fields[key]]],
-      });
-    }
-  }
-
-  if (batchData.length === 0) {
-    throw new Error('変更するデータがありません');
+    const col = String.fromCharCode(65 + colIdx); // 0=A, 1=B, ...
+    batchData.push({
+      range: `'${DASHBOARD_SHEET}'!${col}${targetRow}`,
+      values: [[fields[key] ?? '']],
+    });
   }
 
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
     requestBody: { valueInputOption: 'USER_ENTERED', data: batchData },
   });
-  console.log(`[変更] ダッシュボード 行${targetRow} を${batchData.length}項目上書き（${name} / ${phone}）`);
+  console.log(`[変更] ダッシュボード 行${targetRow} を${batchData.length}項目で完全上書き（${name} / ${phone}）`);
 
   return targetRow;
 }
