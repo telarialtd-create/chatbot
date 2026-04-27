@@ -331,24 +331,25 @@ function normalizeSlashDate(raw) {
 }
 
 // 明細書（新フォーマット）リクエストの解析
-// `#T001` プレフィックスを持つ複数行メッセージから日付/名前/交通費/バンス/お釣りを抽出する。
+// `【明細】` を含む複数行メッセージから日付/名前/交通費/バンス/お釣りを抽出する。
 // 例:
-//   #T001
+//   【明細】
 //   日付:4/27
 //   名前:柚月
 //   交通費:片道
 //   バンス:3000
 //   お釣り:1000
-const MEISAISYO_TRIGGER = /^[#＃]\s*T0*1\b/m;
+const MEISAISYO_TRIGGER = /[【\[]\s*明\s*細\s*[】\]]/;
 function parseMeisaisyoRequest(text) {
   if (!text) return null;
   if (!MEISAISYO_TRIGGER.test(text)) return null;
 
   let dateStr = null, name = null, transport = null, bance = null, otsuri = null;
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  // トリガー文字列を除去（行頭/行末に単独で書かれていても、文中に書かれていても削る）
+  const cleaned = text.replace(MEISAISYO_TRIGGER, '');
+  const lines = cleaned.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
   for (const line of lines) {
-    if (MEISAISYO_TRIGGER.test(line)) continue;
     let m;
     if ((m = line.match(/^(?:日付|日時)[\s　:：]*(.*)$/))) { if (!dateStr && m[1]) dateStr = normalizeSlashDate(m[1].trim()); continue; }
     if ((m = line.match(/^名前[\s　:：]*(.*)$/)))         { if (!name && m[1]) name = m[1].trim(); continue; }
@@ -1254,7 +1255,7 @@ function handleLineEvent(event) {
         return;
       }
 
-      // [C-033] #T001 形式: 明細書（新フォーマット）への直接書込
+      // [C-033] 【明細】形式: 明細書（新フォーマット）への直接書込
       const meisaisyo = parseMeisaisyoRequest(text);
       if (meisaisyo) {
         const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
@@ -1471,7 +1472,7 @@ function handleLineEvent(event) {
     return;
   }
 
-  // [C-033] #T001 形式: 明細書（新フォーマット）への直接書込
+  // [C-033] 【明細】形式: 明細書（新フォーマット）への直接書込
   const meisaisyoG = parseMeisaisyoRequest(text);
   if (meisaisyoG) {
     const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
