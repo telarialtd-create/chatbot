@@ -737,7 +737,8 @@ async function processMeisaisyoAndPush(target, client, parsed) {
     });
     console.log(`[明細書] 書込完了 ssid=${spreadsheetId} name=${parsed.name} transport=${parsed.transport} bance=${parsed.bance} otsuri=${parsed.otsuri}`);
 
-    await new Promise(r => setTimeout(r, 2000));
+    // 自動計算（ARRAYFORMULA等）の反映を待つ
+    await new Promise(r => setTimeout(r, 5000));
 
     const filename = await screenshotMeisai(spreadsheetId, MEISAISYO_SHEET_NAME, MEISAISYO_RANGE, 'meisaisyo', { compactEmpty: true });
     const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
