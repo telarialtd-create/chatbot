@@ -717,9 +717,20 @@ async function processMeisaisyoAndPush(target, client, parsed) {
     const auth = createAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    const data = [
-      { range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_NAME_CELL}`, values: [[parsed.name]] },
-    ];
+    // Phase 1: 名前(C3) のみ先に書込
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_NAME_CELL}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[parsed.name]] },
+    });
+    console.log(`[明細書] 名前書込完了 ssid=${spreadsheetId} name=${parsed.name} → 5秒待機`);
+
+    // 名前変更による自動計算（売上反映・マスター参照等）の完了を待つ
+    await new Promise(r => setTimeout(r, 5000));
+
+    // Phase 2: 残りのフィールドを書込
+    const data = [];
     if (parsed.transport !== null && parsed.transport !== undefined) {
       data.push({ range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_TRANSPORT_CELL}`, values: [[parsed.transport]] });
     }
@@ -735,10 +746,7 @@ async function processMeisaisyoAndPush(target, client, parsed) {
       spreadsheetId,
       requestBody: { valueInputOption: 'USER_ENTERED', data },
     });
-    console.log(`[明細書] 書込完了 ssid=${spreadsheetId} name=${parsed.name} transport=${parsed.transport} bance=${parsed.bance} otsuri=${parsed.otsuri}`);
-
-    // 自動計算（ARRAYFORMULA等）の反映を待つ
-    await new Promise(r => setTimeout(r, 5000));
+    console.log(`[明細書] 残フィールド書込完了 transport=${parsed.transport} bance=${parsed.bance} otsuri=${parsed.otsuri}`);
 
     const filename = await screenshotMeisai(spreadsheetId, MEISAISYO_SHEET_NAME, MEISAISYO_RANGE, 'meisaisyo', { compactEmpty: true });
     const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
