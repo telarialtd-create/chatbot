@@ -31,6 +31,17 @@ const MEISAI_RANGE = 'H2:M25';
 const MEISAI_NAME_CELL = 'H5';
 const MEISAI_SCRIPT_FUNCTION = 'setMeisaiFromUriage';
 
+// ── 明細書（新フォーマット）の定数 ───────────────────────
+// C3=名前 / D40=交通費 / E41=バンス / E46=お釣り / E48=転記チェック
+// 描画範囲 A1:G47 を PNG で返信
+const MEISAISYO_SHEET_NAME = '明細書';
+const MEISAISYO_RANGE = 'A1:G47';
+const MEISAISYO_NAME_CELL = 'C3';
+const MEISAISYO_TRANSPORT_CELL = 'D40';
+const MEISAISYO_BANCE_CELL = 'E41';
+const MEISAISYO_OTSURI_CELL = 'E46';
+const MEISAISYO_CHECK_CELL = 'E48';
+
 // ── LINE クライアント ─────────────────────────────────────
 const lineConfig = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
@@ -298,6 +309,58 @@ function parseMeisaiRequest(text) {
   return null;
 }
 
+// 「3,000」「3000円」「￥3000」などを整数に正規化（パース不可は null）
+function parseAmount(raw) {
+  if (raw === null || raw === undefined) return null;
+  const cleaned = String(raw).replace(/[,，\s　円¥￥]/g, '');
+  if (!cleaned) return null;
+  const n = parseInt(cleaned, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+// 「4/27」「2026/4/27」「4-27」を「4月27日」へ正規化（既に「月日」形式なら素通し）
+function normalizeSlashDate(raw) {
+  if (!raw) return raw;
+  const s = String(raw).trim();
+  if (/月.*日/.test(s)) return s;
+  let m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m) return `${m[1]}年${parseInt(m[2],10)}月${parseInt(m[3],10)}日`;
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m) return `${parseInt(m[1],10)}月${parseInt(m[2],10)}日`;
+  return s;
+}
+
+// 明細書（新フォーマット）リクエストの解析
+// `#T001` プレフィックスを持つ複数行メッセージから日付/名前/交通費/バンス/お釣りを抽出する。
+// 例:
+//   #T001
+//   日付:4/27
+//   名前:柚月
+//   交通費:片道
+//   バンス:3000
+//   お釣り:1000
+const MEISAISYO_TRIGGER = /^[#＃]\s*T0*1\b/m;
+function parseMeisaisyoRequest(text) {
+  if (!text) return null;
+  if (!MEISAISYO_TRIGGER.test(text)) return null;
+
+  let dateStr = null, name = null, transport = null, bance = null, otsuri = null;
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  for (const line of lines) {
+    if (MEISAISYO_TRIGGER.test(line)) continue;
+    let m;
+    if ((m = line.match(/^(?:日付|日時)[\s　:：]*(.*)$/))) { if (!dateStr && m[1]) dateStr = normalizeSlashDate(m[1].trim()); continue; }
+    if ((m = line.match(/^名前[\s　:：]*(.*)$/)))         { if (!name && m[1]) name = m[1].trim(); continue; }
+    if ((m = line.match(/^交通費[\s　:：]*(.*)$/)))       { if (m[1]) transport = normalizeTransportType(m[1]); continue; }
+    if ((m = line.match(/^バンス[\s　:：]*(.*)$/)))       { if (m[1]) bance = parseAmount(m[1]); continue; }
+    if ((m = line.match(/^お釣り[\s　:：]*(.*)$/)))       { if (m[1]) otsuri = parseAmount(m[1]); continue; }
+  }
+
+  if (!dateStr || !name) return null;
+  return { dateStr, name, transport, bance, otsuri };
+}
+
 // 交通費種別を正規化（片道/往復/P/なし → そのまま返す、それ以外はnull）
 function normalizeTransportType(raw) {
   if (!raw) return null;
@@ -479,12 +542,21 @@ async function runAppsScript(spreadsheetId) {
 }
 
 // 明細シート H2:M25 をスクショ（結合セル対応）
-async function screenshotMeisai(spreadsheetId) {
+// A1記法の左上セルから 0-indexed の (row, col) オフセットを計算
+function rangeStartOffsets(range) {
+  const m = String(range).match(/^([A-Z]+)(\d+)/);
+  if (!m) return { rowOffset: 0, colOffset: 0 };
+  let col = 0;
+  for (const ch of m[1]) col = col * 26 + (ch.charCodeAt(0) - 64);
+  return { rowOffset: parseInt(m[2], 10) - 1, colOffset: col - 1 };
+}
+
+async function screenshotMeisai(spreadsheetId, sheetName = MEISAI_SHEET_NAME, range = MEISAI_RANGE, prefix = 'meisai') {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
   const res = await sheets.spreadsheets.get({
     spreadsheetId,
-    ranges: [`'${MEISAI_SHEET_NAME}'!${MEISAI_RANGE}`],
+    ranges: [`'${sheetName}'!${range}`],
     includeGridData: true,
   });
 
@@ -497,10 +569,8 @@ async function screenshotMeisai(spreadsheetId) {
   const rowMeta = gridData?.rowMetadata || [];
   const numCols = rows.reduce((m, r) => Math.max(m, (r.values || []).length), 0);
 
-  // H2:M25 のシートグローバル座標オフセット（0-indexed）
-  // H = 列8(1-based) = 列7(0-based) / 行2(1-based) = 行1(0-based)
-  const ROW_OFFSET = 1;
-  const COL_OFFSET = 7;
+  // 範囲左上のシートグローバル座標オフセット（0-indexed）
+  const { rowOffset: ROW_OFFSET, colOffset: COL_OFFSET } = rangeStartOffsets(range);
 
   // 結合セルマップを構築
   // mergeMap["ri,ci"] = { rowSpan, colSpan }  ← 結合の左上セル
@@ -603,7 +673,7 @@ async function screenshotMeisai(spreadsheetId) {
   }
 
   if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
-  const filename   = `meisai_${Date.now()}.png`;
+  const filename   = `${prefix}_${Date.now()}.png`;
   const outputPath = path.join(TEMP_DIR, filename);
   await new Promise((resolve, reject) => {
     const out = fs.createWriteStream(outputPath);
@@ -613,6 +683,52 @@ async function screenshotMeisai(spreadsheetId) {
   });
   setTimeout(() => fs.unlink(outputPath, () => {}), 60 * 60 * 1000);
   return filename;
+}
+
+// 明細書（新フォーマット）処理本体
+async function processMeisaisyoAndPush(target, client, parsed) {
+  try {
+    const spreadsheetId = await findSpreadsheetByDateStr(parsed.dateStr);
+    const auth = createAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    const data = [
+      { range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_NAME_CELL}`, values: [[parsed.name]] },
+    ];
+    if (parsed.transport !== null && parsed.transport !== undefined) {
+      data.push({ range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_TRANSPORT_CELL}`, values: [[parsed.transport]] });
+    }
+    if (parsed.bance !== null && parsed.bance !== undefined) {
+      data.push({ range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_BANCE_CELL}`, values: [[parsed.bance]] });
+    }
+    if (parsed.otsuri !== null && parsed.otsuri !== undefined) {
+      data.push({ range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_OTSURI_CELL}`, values: [[parsed.otsuri]] });
+    }
+    data.push({ range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_CHECK_CELL}`, values: [[true]] });
+
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: 'USER_ENTERED', data },
+    });
+    console.log(`[明細書] 書込完了 ssid=${spreadsheetId} name=${parsed.name} transport=${parsed.transport} bance=${parsed.bance} otsuri=${parsed.otsuri}`);
+
+    await new Promise(r => setTimeout(r, 2000));
+
+    const filename = await screenshotMeisai(spreadsheetId, MEISAISYO_SHEET_NAME, MEISAISYO_RANGE, 'meisaisyo');
+    const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
+    const imageUrl = `${baseUrl}/temp/${filename}`;
+    console.log(`[明細書] Push送信: ${imageUrl} → ${target}`);
+    await client.pushMessage({
+      to: target,
+      messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }],
+    });
+  } catch (err) {
+    console.error('[明細書] エラー:', err.message);
+    await client.pushMessage({
+      to: target,
+      messages: [{ type: 'text', text: `明細書エラー: ${err.message}` }],
+    }).catch(() => {});
+  }
 }
 
 // 明細処理本体（バックグラウンド）
@@ -1138,6 +1254,15 @@ function handleLineEvent(event) {
         return;
       }
 
+      // [C-033] #T001 形式: 明細書（新フォーマット）への直接書込
+      const meisaisyo = parseMeisaisyoRequest(text);
+      if (meisaisyo) {
+        const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+        console.log(`[LINE] [C-033] 明細書リクエスト受信: ${meisaisyo.dateStr} / ${meisaisyo.name} / 交通費=${meisaisyo.transport ?? '指定なし'} / バンス=${meisaisyo.bance ?? 'なし'} / お釣り=${meisaisyo.otsuri ?? 'なし'} → target=${target}`);
+        setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyo).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
+        return;
+      }
+
       // 【日付、名前】形式: 明細スクショ
       const meisai = parseMeisaiRequest(text);
       if (meisai) {
@@ -1343,6 +1468,15 @@ function handleLineEvent(event) {
         }).catch(() => {});
       }
     });
+    return;
+  }
+
+  // [C-033] #T001 形式: 明細書（新フォーマット）への直接書込
+  const meisaisyoG = parseMeisaisyoRequest(text);
+  if (meisaisyoG) {
+    const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+    console.log(`[LINE] [C-033] 明細書リクエスト受信(G): ${meisaisyoG.dateStr} / ${meisaisyoG.name} / 交通費=${meisaisyoG.transport ?? '指定なし'} / バンス=${meisaisyoG.bance ?? 'なし'} / お釣り=${meisaisyoG.otsuri ?? 'なし'} → target=${target}`);
+    setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyoG).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
     return;
   }
 
