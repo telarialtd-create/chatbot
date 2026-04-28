@@ -1407,6 +1407,38 @@ function handleLineEvent(event) {
 
   // グループからのコマンド
 
+  // ▼ [C-036] 出勤表グループ → 新SSへ直接反映 (shift_reflect.js) — 2026-04-28 すい復旧パッチ (リポジトリ永続化)
+  const SHIFT_GROUP_ID = 'C4befe4675d94c864734eae6b897f1484';
+  if (event.source?.type === 'group' && event.source?.groupId === SHIFT_GROUP_ID) {
+    const parts = text.trim().split(/[\s　]+/);
+    if (parts.length >= 3 || text === '確認' || text === '出勤確認') {
+      setImmediate(async () => {
+        try {
+          const shiftReflect = require('./shift_reflect');
+          const result = await shiftReflect.reflectShiftMessage(text);
+          if (result.type === 'ignore') {
+            console.log('[Shift] 非シフトメッセージ→スルー');
+          } else if (result.type === 'success') {
+            console.log(`[Shift] 結果: success ${result.writtenCount} 件 (${result.staffName} / ${result.store})`);
+          } else {
+            console.log(`[Shift] 結果: ${JSON.stringify(result)}`);
+          }
+          const reply = shiftReflect.formatReply(result);
+          if (reply) {
+            await client.pushMessage({
+              to: event.source.groupId,
+              messages: [{ type: 'text', text: reply }],
+            }).catch(() => {});
+          }
+        } catch (err) {
+          console.error('[Shift] エラー:', err.message);
+        }
+      });
+      return;
+    }
+  }
+
+
   // 「4月23日 顧客更新」形式: 日報全件→利用履歴コピー（グループ）
   const kokyakuG = parseKokyakuUpdateCommand(text);
   if (kokyakuG) {
