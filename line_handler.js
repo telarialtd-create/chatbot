@@ -1407,7 +1407,16 @@ function handleLineEvent(event) {
 
   // グループからのコマンド
 
-  // ▼ [C-036] 出勤表グループ → 新SSへ直接反映 (shift_reflect.js) — 2026-04-28 すい復旧パッチ (リポジトリ永続化)
+  // ════════════════════════════════════════════════════════════════════
+  // ▼ [C-036] 出勤表グループ → 新SS自動反映ブロック  ⚠️ 編集禁止 ⚠️
+  // ════════════════════════════════════════════════════════════════════
+  // このブロックは shift_reflect.js 経由で LINEシフト→月次SSへ自動反映。
+  // 削除・改変すると C-036 機能（出勤表LINEのシフト自動反映）が壊れます。
+  // 何か変更が必要な場合は shift_reflect.js 側で対応してください。
+  // 削除された場合、サーバー上のガーディアン (cron 1分毎) が自動復旧します。
+  // 詳細: 共有記憶シート C-036 行 を参照
+  //   https://docs.google.com/spreadsheets/d/1-ITHWZsvH9Z6iNTNtEUp4LTM5pWN2VwT6A41SeTBy_c
+  // ════════════════════════════════════════════════════════════════════
   const SHIFT_GROUP_ID = 'C4befe4675d94c864734eae6b897f1484';
   if (event.source?.type === 'group' && event.source?.groupId === SHIFT_GROUP_ID) {
     const parts = text.trim().split(/[\s　]+/);
