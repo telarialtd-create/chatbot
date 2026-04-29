@@ -1246,6 +1246,38 @@ async function handleLineEvent(event) {
   }
   console.log(`[認証] 許可 userId=${userId} 店舗=${allowedStores.map(s => s.storeId+'/'+s.storeName).join(',')}`);
 
+  // 「T-001 09012345678 [名前/全件]」形式: 店舗別 顧客検索（1対1/グループ両対応・許可userIdチェック付き）
+  const storePhoneCmd = parseStorePhoneCommand(text);
+  if (storePhoneCmd) {
+    const replyToken = event.replyToken;
+    const sourceType = event.source?.type || 'user';
+    console.log(`[LINE] 店舗別顧客検索: ${storePhoneCmd.storeId} / ${storePhoneCmd.phone} 名前=${storePhoneCmd.nameKeyword || '(なし)'} source=${sourceType}`);
+    setImmediate(async () => {
+      try {
+        // 1. 店舗ID + 発言者userId で許可チェック → フォルダID取得（グループでも発言者単位で判定）
+        const folderInfo = await getFolderByStoreId(storePhoneCmd.storeId, userId);
+        // 2. フォルダ内から「■1.顧客管理」を検索
+        const kokyakuSsid = await findKokyakuKanriSpreadsheetId(folderInfo.storeId, folderInfo.folderId);
+        // 3. 利用履歴を検索（既存ロジックを spreadsheetId 指定で再利用）
+        const result = await searchRirekiByPhone(storePhoneCmd.phone, storePhoneCmd.allRecords, storePhoneCmd.nameKeyword, kokyakuSsid);
+        console.log(`[利用履歴] ${folderInfo.storeId}/${folderInfo.storeName} 検索結果: ${result ? result.total + '件' : '該当なし'}`);
+        const headerKey = storePhoneCmd.nameKeyword ? `${storePhoneCmd.phone} / ${storePhoneCmd.nameKeyword}` : storePhoneCmd.phone;
+        const storePrefix = `📍 ${folderInfo.storeId} ${folderInfo.storeName}\n`;
+        const msg = (result && result.total > 0)
+          ? storePrefix + formatRirekiResult(storePhoneCmd.phone, result, storePhoneCmd.allRecords, storePhoneCmd.nameKeyword)
+          : `${storePrefix}📋 利用履歴: ${headerKey}\n該当なし`;
+        await client.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] });
+      } catch (err) {
+        console.error('[店舗別顧客検索] エラー:', err.message);
+        await client.replyMessage({
+          replyToken,
+          messages: [{ type: 'text', text: `❌ ${err.message}` }],
+        }).catch(() => {});
+      }
+    });
+    return;
+  }
+
   // 1対1トークのコマンド処理
   if (event.source?.type === 'user' && userId) {
     setImmediate(async () => {
@@ -1373,37 +1405,6 @@ async function handleLineEvent(event) {
         const target = getPushTarget(event);
         console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
         processAndPush(target, client).catch(err => console.error('[LINE] 未処理エラー:', err.message));
-        return;
-      }
-
-      // 「T-001 09012345678 [名前/全件]」形式: 店舗別 顧客検索（許可userIdチェック付き）
-      const storePhoneCmd = parseStorePhoneCommand(text);
-      if (storePhoneCmd) {
-        const replyToken = event.replyToken;
-        console.log(`[LINE] 店舗別顧客検索: ${storePhoneCmd.storeId} / ${storePhoneCmd.phone} 名前=${storePhoneCmd.nameKeyword || '(なし)'}`);
-        setImmediate(async () => {
-          try {
-            // 1. 店舗ID + userId で許可チェック → フォルダID取得
-            const folderInfo = await getFolderByStoreId(storePhoneCmd.storeId, userId);
-            // 2. フォルダ内から「■1.顧客管理」を検索
-            const kokyakuSsid = await findKokyakuKanriSpreadsheetId(folderInfo.storeId, folderInfo.folderId);
-            // 3. 利用履歴を検索（既存ロジックを spreadsheetId 指定で再利用）
-            const result = await searchRirekiByPhone(storePhoneCmd.phone, storePhoneCmd.allRecords, storePhoneCmd.nameKeyword, kokyakuSsid);
-            console.log(`[利用履歴] ${folderInfo.storeId}/${folderInfo.storeName} 検索結果: ${result ? result.total + '件' : '該当なし'}`);
-            const headerKey = storePhoneCmd.nameKeyword ? `${storePhoneCmd.phone} / ${storePhoneCmd.nameKeyword}` : storePhoneCmd.phone;
-            const storePrefix = `📍 ${folderInfo.storeId} ${folderInfo.storeName}\n`;
-            const msg = (result && result.total > 0)
-              ? storePrefix + formatRirekiResult(storePhoneCmd.phone, result, storePhoneCmd.allRecords, storePhoneCmd.nameKeyword)
-              : `${storePrefix}📋 利用履歴: ${headerKey}\n該当なし`;
-            await client.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] });
-          } catch (err) {
-            console.error('[店舗別顧客検索] エラー:', err.message);
-            await client.replyMessage({
-              replyToken,
-              messages: [{ type: 'text', text: `❌ ${err.message}` }],
-            }).catch(() => {});
-          }
-        });
         return;
       }
 
