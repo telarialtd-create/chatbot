@@ -172,15 +172,16 @@ async function getFolderByStoreAndName(storeId, inputStoreName, userId) {
     throw new Error(`${storeId} に「${inputStoreName}」は登録されていません（登録店舗: ${available}）`);
   }
 
-  // 許可userIdチェック（D列が登録されている場合のみ厳格チェック）
+  // 許可userIdチェック（D列空欄=全拒否。1件でも登録済の許可者のみ通す）
   const allowed = parseAllowedUserIds(matched[3]);
-  if (allowed.length > 0) {
-    if (!userId) {
-      throw new Error(`${storeId}/${inputStoreName} は許可LINE登録制です。送信者のLINE userIdを取得できませんでした`);
-    }
-    if (!allowed.includes(userId)) {
-      throw new Error(`${storeId}/${inputStoreName} への入力は許可されていません（あなたのLINE userIdは登録されていません）`);
-    }
+  if (allowed.length === 0) {
+    throw new Error(`${storeId}/${inputStoreName} は許可LINE未登録のため入力できません。オーナーに「📁 店舗フォルダ」シートD列への userId 登録を依頼してください（#whoami で自分のuserIdを確認できます）`);
+  }
+  if (!userId) {
+    throw new Error(`${storeId}/${inputStoreName} は許可LINE登録制です。送信者のLINE userIdを取得できませんでした（botを友達追加してください）`);
+  }
+  if (!allowed.includes(userId)) {
+    throw new Error(`${storeId}/${inputStoreName} への入力は許可されていません（あなたのLINE userIdは登録されていません）`);
   }
 
   const folderId = extractFolderId(matched[2]);
