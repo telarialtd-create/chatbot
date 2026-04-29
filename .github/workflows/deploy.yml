@@ -1,4 +1,4 @@
-name: Deploy to Hetzner
+name: Deploy to Hetzner (LINE server 46.225.82.240)
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H 159.69.40.60 >> ~/.ssh/known_hosts
+          ssh-keyscan -H 46.225.82.240 >> ~/.ssh/known_hosts
 
       - name: Deploy to server
         run: |
@@ -36,20 +36,20 @@ jobs:
           for f in app.js line_handler.js nippo_to_geppo.js nippo_to_geppo_v2.js line_nippo_input.js create_sb_dashboard.js scheduleReader.js build_dashboard.js; do
             if [ -f "$f" ]; then
               scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
-                "$f" root@159.69.40.60:/app/chatbot/"$f"
+                "$f" root@46.225.82.240:/app/chatbot/"$f"
               echo "✅ $f → /app/chatbot/$f"
             fi
           done
 
           # PM2診断＋完全再起動（cwd/file pathを表示して異常検知）
           REMOTE_CMD='set -e; echo "=== pm2 list ==="; pm2 list; echo "=== pm2 describe chatbot ==="; pm2 describe chatbot || true; echo "=== /app/chatbot head ==="; ls -la /app/chatbot/ | head -15; echo "=== app.js mtime ==="; stat /app/chatbot/app.js /app/chatbot/line_handler.js 2>/dev/null || true; echo "=== force reload: delete+start ==="; pm2 delete chatbot 2>/dev/null || true; cd /app/chatbot && pm2 start app.js --name chatbot --update-env; pm2 save; echo "=== post-restart pm2 list ==="; pm2 list'
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@159.69.40.60 "$REMOTE_CMD"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@46.225.82.240 "$REMOTE_CMD"
 
       - name: Health check
         run: |
           sleep 10
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
-            https://159.69.40.60.nip.io/api/availability || echo "000")
+            https://46.225.82.240.nip.io/api/availability || echo "000")
           echo "Health check status: $STATUS"
           if [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; then
             echo "✅ サーバー正常稼働"
