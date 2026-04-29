@@ -1146,6 +1146,20 @@ function handleLineEvent(event) {
   const text = event.message.text.trim();
   const userId = event.source?.userId;
 
+  // #whoami: 自分のLINE userIdを返信（1対1/グループ共通・許可リスト登録用）
+  if (/^#whoami$/i.test(text)) {
+    const replyToken = event.replyToken;
+    const target = event.source?.groupId || userId;
+    console.log(`[LINE] #whoami リクエスト userId=${userId || '(なし)'} target=${target}`);
+    setImmediate(async () => {
+      const msg = userId
+        ? `🆔 あなたのLINE userId:\n${userId}\n\nオーナーにこのIDを伝えて「📁 店舗フォルダ」シートのD列に登録してもらってください。登録後は店舗名と日付だけで日報入力できます。`
+        : `❌ userIdを取得できませんでした。botを友達追加してから再度お試しください。`;
+      await client.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] }).catch(() => {});
+    });
+    return;
+  }
+
   // 1対1トークのコマンド処理
   if (event.source?.type === 'user' && userId) {
     setImmediate(async () => {
@@ -1169,13 +1183,13 @@ function handleLineEvent(event) {
         return;
       }
 
-      // #T001 形式: 日報ダッシュボード入力
+      // #T001 形式・ID省略形式: 日報ダッシュボード入力（userId許可チェック付き）
       if (isNippoInput(text)) {
         const replyToken = event.replyToken;
-        console.log(`[LINE] 日報入力リクエスト受信`);
+        console.log(`[LINE] 日報入力リクエスト受信 userId=${userId || '(なし)'}`);
         setImmediate(async () => {
           try {
-            const result = await processNippoInput(text);
+            const result = await processNippoInput(text, userId);
             console.log(`[日報入力] 完了: ${result.storeName} / ${result.spreadsheetName} / ${result.cellCount}セル`);
           } catch (err) {
             console.error('[日報入力] エラー:', err.message);
@@ -1365,13 +1379,13 @@ function handleLineEvent(event) {
     return;
   }
 
-  // #T001 形式: 日報ダッシュボード入力（グループ）
+  // #T001 形式・ID省略形式: 日報ダッシュボード入力（グループ・userId許可チェック付き）
   if (isNippoInput(text)) {
     const replyToken = event.replyToken;
-    console.log(`[LINE] 日報入力リクエスト受信（グループ）`);
+    console.log(`[LINE] 日報入力リクエスト受信（グループ） userId=${userId || '(なし)'}`);
     setImmediate(async () => {
       try {
-        const result = await processNippoInput(text);
+        const result = await processNippoInput(text, userId);
         console.log(`[日報入力] グループ完了: ${result.storeName} / ${result.spreadsheetName} / ${result.cellCount}セル`);
       } catch (err) {
         console.error('[日報入力] グループ エラー:', err.message);

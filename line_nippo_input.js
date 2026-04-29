@@ -60,27 +60,36 @@ function createAuthClient() {
   return client;
 }
 
-// ── メッセージ解析 ─────────────��─────────────────────────────
-// #T001 で始まるメッセージを日報入力として検知
+// ── メッセージ解析 ──────────────────────────────────────────
+// #T001 で始まる、または「店名:〜 + 日付:〜」を含むメッセージを日報入力として検知
 function isNippoInput(text) {
-  return /^#T\d{3}/i.test(text.trim());
+  const t = text.trim();
+  if (/^#T\d{3}/i.test(t)) return true;
+  // ID省略形: 店名(店舗名) と 日付 が両方揃っていれば日報入力とみなす
+  const hasStore = /(^|\n)\s*(店名|店舗名)[:：\s　]/.test(t);
+  const hasDate  = /(^|\n)\s*日付[:：\s　]/.test(t);
+  return hasStore && hasDate;
 }
 
 // メッセージを解析して店舗IDと各項目を抽出
+// 戻り値: { storeId, fields }  storeId は省略時 null
 function parseNippoInput(text) {
   const lines = text.trim().split('\n');
 
-  // 1行目: #T001
+  // 1行目: #T001（省略可・ある場合のみ storeId を抽出）
+  let storeId = null;
+  let bodyStart = 0;
   const idMatch = lines[0].match(/^#(T[\-]?\d{3,})/i);
-  if (!idMatch) return null;
-  // T001 → T-001 に正規化
-  let storeId = idMatch[1].toUpperCase();
-  if (!storeId.includes('-')) {
-    storeId = storeId.replace(/^T(\d+)/, 'T-$1');
+  if (idMatch) {
+    storeId = idMatch[1].toUpperCase();
+    if (!storeId.includes('-')) {
+      storeId = storeId.replace(/^T(\d+)/, 'T-$1');
+    }
+    bodyStart = 1;
   }
 
   const fields = {};
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = bodyStart; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
@@ -113,19 +122,43 @@ function extractFolderId(input) {
   return null;
 }
 
-// ── 店舗ID + 店名 → 日報フォルダID 取得 ─────────────────────
-// 「📁 店舗フォルダ」シートから (契約ID, 店舗名) でフォルダURLを検索
-async function getFolderByStoreAndName(storeId, inputStoreName) {
+// ── D列の許可userIdリストをパース（カンマ/全角カンマ/改行/スペース区切り）──
+function parseAllowedUserIds(cellValue) {
+  if (!cellValue) return [];
+  return String(cellValue)
+    .split(/[,、\s\n]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+// ── 店舗フォルダシート全行を取得（A〜D列）──
+async function getStoreFolderRows() {
   const auth   = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
-
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: STORES_SHEET_ID,
-    range: `'${FOLDER_SHEET}'!A3:C200`,
+    range: `'${FOLDER_SHEET}'!A3:D200`,
     valueRenderOption: 'FORMATTED_VALUE',
   });
+  return res.data.values || [];
+}
 
-  const rows = res.data.values || [];
+// ── userId から許可されている店舗一覧を取得 ──
+// 戻り値: [{ storeId, storeName, folderUrl, allowed: [userId,...] }, ...]
+async function getStoresByUserId(userId) {
+  if (!userId) return [];
+  const rows = await getStoreFolderRows();
+  return rows
+    .filter(r => parseAllowedUserIds(r[3]).includes(userId))
+    .map(r => ({ storeId: r[0], storeName: r[1], folderUrl: r[2], allowed: parseAllowedUserIds(r[3]) }));
+}
+
+// ── 店舗ID + 店名 → 日報フォルダID 取得（許可userIdチェック付き）─────
+// 「📁 店舗フォルダ」シートから (契約ID, 店舗名) でフォルダURLを検索
+// userIdが指定された場合、D列の許可リストに含まれているか検証する
+// D列が空白の行は「移行期間（全許可）」として扱う
+async function getFolderByStoreAndName(storeId, inputStoreName, userId) {
+  const rows = await getStoreFolderRows();
   // 同じ契約IDの店舗一覧を収集
   const storeRows = rows.filter(r => r[0] === storeId);
   if (storeRows.length === 0) {
@@ -139,12 +172,23 @@ async function getFolderByStoreAndName(storeId, inputStoreName) {
     throw new Error(`${storeId} に「${inputStoreName}」は登録されていません（登録店舗: ${available}）`);
   }
 
+  // 許可userIdチェック（D列が登録されている場合のみ厳格チェック）
+  const allowed = parseAllowedUserIds(matched[3]);
+  if (allowed.length > 0) {
+    if (!userId) {
+      throw new Error(`${storeId}/${inputStoreName} は許可LINE登録制です。送信者のLINE userIdを取得できませんでした`);
+    }
+    if (!allowed.includes(userId)) {
+      throw new Error(`${storeId}/${inputStoreName} への入力は許可されていません（あなたのLINE userIdは登録されていません）`);
+    }
+  }
+
   const folderId = extractFolderId(matched[2]);
   if (!folderId) {
     throw new Error(`${storeId}/${inputStoreName} の日報フォルダURLが未設定です`);
   }
 
-  return { folderId, storeName: matched[1] };
+  return { folderId, storeName: matched[1], storeId: matched[0] };
 }
 
 // ── 日付文字列を正規化 ─────────────────���────────────────────
@@ -393,7 +437,8 @@ function removeCommandLine(text, command) {
 }
 
 // ── メイン処理（LINE イベントから呼ばれる）───────────────────
-async function processNippoInput(text) {
+// userId: LINEイベントの発言者userId（許可チェック用）
+async function processNippoInput(text, userId) {
   const commandType = getCommandType(text);
   // コマンド行を除去してからパース
   let cleanText = text;
@@ -403,13 +448,28 @@ async function processNippoInput(text) {
   const parsed = parseNippoInput(cleanText);
   if (!parsed) throw new Error('メッセージの解析に失敗しました');
 
-  const { storeId, fields } = parsed;
-  console.log(`[日報入力] 店舗ID: ${storeId}, 項目数: ${Object.keys(fields).length}, コマンド: ${commandType}`);
+  let { storeId, fields } = parsed;
+  console.log(`[日報入力] 店舗ID: ${storeId || '(省略)'}, 項目数: ${Object.keys(fields).length}, コマンド: ${commandType}`);
 
   // 1. 店舗ID + 店名 → フォルダID（整合性チェック込み）
-  const inputStoreName = fields['店名'];
+  const inputStoreName = fields['店名'] || fields['店舗名'];
   if (!inputStoreName) throw new Error('店名が入力されていません');
-  const { folderId, storeName } = await getFolderByStoreAndName(storeId, inputStoreName);
+
+  // ID省略時: userIdから許可店舗を逆引きしてstoreIdを決定
+  if (!storeId) {
+    if (!userId) throw new Error('契約ID(#T-XXX)を省略する場合はLINE userIdが必要です（グループの場合はbotを友達追加してください）');
+    const stores = await getStoresByUserId(userId);
+    if (stores.length === 0) {
+      throw new Error('あなたのLINE userIdは許可リストに登録されていません。オーナーに登録を依頼してください（#whoami で自分のuserIdを確認できます）');
+    }
+    const matched = stores.find(s => s.storeName === inputStoreName);
+    if (!matched) {
+      throw new Error(`「${inputStoreName}」はあなたが許可されている店舗にありません（許可: ${stores.map(s => `${s.storeId}/${s.storeName}`).join('、')}）`);
+    }
+    storeId = matched.storeId;
+  }
+
+  const { folderId, storeName } = await getFolderByStoreAndName(storeId, inputStoreName, userId);
   console.log(`[日報入力] 店舗: ${storeName}, フォルダ: ${folderId}`);
 
   // 2. 日付でスプレッドシート特定
