@@ -10,7 +10,7 @@
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
 const { syncNippoToGeppo } = require('./nippo_to_geppo_v2');
-const { isNippoInput, processNippoInput } = require('./line_nippo_input');
+const { isNippoInput, processNippoInput, getStoresByUserId } = require('./line_nippo_input');
 const { google } = require('googleapis');
 const { createCanvas, registerFont } = require('canvas');
 const fs = require('fs');
@@ -1138,7 +1138,7 @@ function preloadPhoneIndex() {
 }
 
 // ── LINE イベントハンドラ（200を即返してバックグラウンド処理） ──
-function handleLineEvent(event) {
+async function handleLineEvent(event) {
   const client = createLineClient();
 
   if (event.type !== 'message' || event.message.type !== 'text') return;
@@ -1159,6 +1159,25 @@ function handleLineEvent(event) {
     });
     return;
   }
+
+  // [C-024 L1] 全コマンド認証: 許可LINE userIdのみ受付（#whoami は上で先に処理済み）
+  let allowedStores = [];
+  if (userId) {
+    try {
+      allowedStores = await getStoresByUserId(userId);
+    } catch (err) {
+      console.error('[認証] エラー:', err.message);
+    }
+  }
+  if (allowedStores.length === 0) {
+    console.log(`[認証] 拒否 userId=${userId || '(なし)'} text="${text.slice(0,40)}"`);
+    await client.replyMessage({
+      replyToken: event.replyToken,
+      messages: [{ type: 'text', text: '❌ このLINEは登録されていないため利用できません。\n\n#whoami と送信して自分のLINE userIdを確認し、オーナーに「📁 店舗フォルダ」シートD列への登録を依頼してください。' }],
+    }).catch(() => {});
+    return;
+  }
+  console.log(`[認証] 許可 userId=${userId} 店舗=${allowedStores.map(s => s.storeId+'/'+s.storeName).join(',')}`);
 
   // 1対1トークのコマンド処理
   if (event.source?.type === 'user' && userId) {

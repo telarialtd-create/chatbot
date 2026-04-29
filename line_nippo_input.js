@@ -508,4 +508,5 @@ module.exports = {
   isNippoInput,
   parseNippoInput,
   processNippoInput,
+  getStoresByUserId,
 };
