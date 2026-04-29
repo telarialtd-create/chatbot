@@ -143,6 +143,33 @@ async function getStoreFolderRows() {
   return res.data.values || [];
 }
 
+// ── 店舗ID単独でフォルダID取得（許可userIdチェック付き）─────
+// 「📁 店舗フォルダ」シートから 契約ID(A列) で1行特定し、D列の許可リスト判定後にC列のフォルダIDを返す
+// 戻り値: { folderId, storeId, storeName, allowed }
+async function getFolderByStoreId(storeId, userId) {
+  if (!storeId) throw new Error('店舗ID（T-XXX）が空です');
+  const rows = await getStoreFolderRows();
+  const matched = rows.find(r => String(r[0] || '').trim().toUpperCase() === String(storeId).trim().toUpperCase());
+  if (!matched) {
+    throw new Error(`店舗ID ${storeId} が「📁 店舗フォルダ」シートに見つかりません`);
+  }
+  const allowed = parseAllowedUserIds(matched[3]);
+  if (allowed.length === 0) {
+    throw new Error(`${storeId} は許可LINE未登録のため利用できません。オーナーに「📁 店舗フォルダ」シートD列への userId 登録を依頼してください（#whoami で自分のuserIdを確認できます）`);
+  }
+  if (!userId) {
+    throw new Error(`${storeId} は許可LINE登録制です。送信者のLINE userIdを取得できませんでした（botを友達追加してください）`);
+  }
+  if (!allowed.includes(userId)) {
+    throw new Error(`${storeId} の操作は許可されていません（あなたのLINE userIdは登録されていません）`);
+  }
+  const folderId = extractFolderId(matched[2]);
+  if (!folderId) {
+    throw new Error(`${storeId} の日報フォルダURLが未設定です`);
+  }
+  return { folderId, storeId: matched[0], storeName: matched[1], allowed };
+}
+
 // ── userId から許可されている店舗一覧を取得 ──
 // 戻り値: [{ storeId, storeName, folderUrl, allowed: [userId,...] }, ...]
 async function getStoresByUserId(userId) {
@@ -509,4 +536,5 @@ module.exports = {
   parseNippoInput,
   processNippoInput,
   getStoresByUserId,
+  getFolderByStoreId,
 };

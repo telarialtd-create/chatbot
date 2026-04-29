@@ -10,7 +10,7 @@
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
 const { syncNippoToGeppo } = require('./nippo_to_geppo_v2');
-const { isNippoInput, processNippoInput, getStoresByUserId } = require('./line_nippo_input');
+const { isNippoInput, processNippoInput, getStoresByUserId, getFolderByStoreId } = require('./line_nippo_input');
 const { google } = require('googleapis');
 const { createCanvas, registerFont } = require('canvas');
 const fs = require('fs');
@@ -945,7 +945,8 @@ async function processKokyakuUpdate(dateStr) {
   console.log(`[顧客更新] 書き込み完了: ${srcRows.length}行`);
 
   // 5. 利用履歴キャッシュをクリア（電話番号検索が最新データを使えるように）
-  rirekiCache.expiresAt = 0;
+  const defaultEntry = rirekiCacheMap.get(KOKYAKU_TARGET_SHEET_ID);
+  if (defaultEntry) defaultEntry.expiresAt = 0;
 
   return { count: srcRows.length, dateLabel: slashDate };
 }
@@ -961,7 +962,10 @@ function createSAAuthClient() {
     const key = JSON.parse(fs.readFileSync(saKeyPath));
     const auth = new google.auth.GoogleAuth({
       credentials: key,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets.readonly',
+        'https://www.googleapis.com/auth/drive.readonly',
+      ],
     });
     return auth;
   }
@@ -969,8 +973,19 @@ function createSAAuthClient() {
   return createAuthClient();
 }
 
-// 利用履歴キャッシュ（A:J全体を保持、30分）
-const rirekiCache = { allRows: null, phoneIndex: null, expiresAt: 0 };
+// 利用履歴キャッシュ（spreadsheetId別、A:J全体を保持、2時間）
+// key: spreadsheetId, value: { allRows, phoneIndex, expiresAt }
+const rirekiCacheMap = new Map();
+const rirekiCacheLoadingMap = new Map();
+
+function getRirekiCacheEntry(ssid) {
+  let entry = rirekiCacheMap.get(ssid);
+  if (!entry) {
+    entry = { allRows: null, phoneIndex: null, expiresAt: 0 };
+    rirekiCacheMap.set(ssid, entry);
+  }
+  return entry;
+}
 
 // 電話番号を正規化（ハイフン・スペース・全角数字除去）
 function normalizePhone(tel) {
@@ -981,33 +996,34 @@ function normalizePhone(tel) {
 
 // A:J列全体を一括ロードしてキャッシュ（2時間保持・リトライ付き）
 const RIREKI_CACHE_TTL = 2 * 60 * 60 * 1000; // 2時間
-let rirekiCacheLoading = false; // 同時リロード防止フラグ
 
-async function buildRirekiCache() {
-  if (rirekiCache.allRows && Date.now() < rirekiCache.expiresAt) return;
+async function buildRirekiCache(ssid = RIREKI_SHEET_ID) {
+  const entry = getRirekiCacheEntry(ssid);
+  if (entry.allRows && Date.now() < entry.expiresAt) return;
   // 別リクエストが既にリロード中なら既存キャッシュで応答
-  if (rirekiCacheLoading) {
-    if (rirekiCache.allRows) return;
+  if (rirekiCacheLoadingMap.get(ssid)) {
+    if (entry.allRows) return;
     // 初回ロード中は少し待つ
     await new Promise(r => setTimeout(r, 5000));
-    if (rirekiCache.allRows) return;
+    if (entry.allRows) return;
   }
-  rirekiCacheLoading = true;
+  rirekiCacheLoadingMap.set(ssid, true);
   try {
-    await _loadRirekiWithRetry();
+    await _loadRirekiWithRetry(ssid);
   } finally {
-    rirekiCacheLoading = false;
+    rirekiCacheLoadingMap.set(ssid, false);
   }
 }
 
-async function _loadRirekiWithRetry(maxRetries = 3) {
+async function _loadRirekiWithRetry(ssid, maxRetries = 3) {
+  const entry = getRirekiCacheEntry(ssid);
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[利用履歴] A:J列一括ロード開始...（${attempt}/${maxRetries}・SA認証）`);
+      console.log(`[利用履歴] A:J列一括ロード開始 ssid=${ssid.slice(0,8)}…（${attempt}/${maxRetries}・SA認証）`);
       const auth = createSAAuthClient();
       const sheets = google.sheets({ version: 'v4', auth });
       const res = await sheets.spreadsheets.values.get({
-        spreadsheetId: RIREKI_SHEET_ID,
+        spreadsheetId: ssid,
         range: `${RIREKI_SHEET_NAME}!A:J`,
         valueRenderOption: 'FORMATTED_VALUE',
       });
@@ -1019,10 +1035,10 @@ async function _loadRirekiWithRetry(maxRetries = 3) {
         if (!phoneIndex[tel]) phoneIndex[tel] = [];
         phoneIndex[tel].push(i);
       }
-      rirekiCache.allRows = rows;
-      rirekiCache.phoneIndex = phoneIndex;
-      rirekiCache.expiresAt = Date.now() + RIREKI_CACHE_TTL;
-      console.log(`[利用履歴] キャッシュ完了: ${rows.length}行, ${Object.keys(phoneIndex).length}件の電話番号`);
+      entry.allRows = rows;
+      entry.phoneIndex = phoneIndex;
+      entry.expiresAt = Date.now() + RIREKI_CACHE_TTL;
+      console.log(`[利用履歴] キャッシュ完了 ssid=${ssid.slice(0,8)}…: ${rows.length}行, ${Object.keys(phoneIndex).length}件の電話番号`);
       return;
     } catch (err) {
       const is429 = err.message && err.message.includes('429');
@@ -1033,9 +1049,9 @@ async function _loadRirekiWithRetry(maxRetries = 3) {
         continue;
       }
       // リトライ失敗 or 429以外のエラー
-      if (rirekiCache.allRows) {
+      if (entry.allRows) {
         console.log(`[利用履歴] キャッシュ更新失敗（${err.message}）→ 既存データで継続`);
-        rirekiCache.expiresAt = Date.now() + 10 * 60 * 1000; // 10分後に再試行
+        entry.expiresAt = Date.now() + 10 * 60 * 1000; // 10分後に再試行
         return;
       }
       throw err;
@@ -1045,11 +1061,13 @@ async function _loadRirekiWithRetry(maxRetries = 3) {
 
 // 電話番号で利用履歴を検索（J列に部分一致＝シート側CONTAINSと同じ挙動）
 // nameKeyword 指定時は C列(源氏名) にも部分一致するものだけに絞り込み（AND）
-async function searchRirekiByPhone(phone, allRecords = false, nameKeyword = '') {
+// ssid 指定時はその顧客管理SSを検索（店舗別 #T-XXX コマンド用）
+async function searchRirekiByPhone(phone, allRecords = false, nameKeyword = '', ssid = RIREKI_SHEET_ID) {
   const normalized = normalizePhone(phone);
   if (normalized.length < 9) return null; // 最低9桁
-  await buildRirekiCache();
-  const rows = rirekiCache.allRows || [];
+  await buildRirekiCache(ssid);
+  const entry = getRirekiCacheEntry(ssid);
+  const rows = entry.allRows || [];
   const kw = nameKeyword ? String(nameKeyword).trim() : '';
   const targets = [];
   // 末尾(=新しい行)から走査して降順に揃える
@@ -1130,6 +1148,55 @@ function parsePhoneCommand(text) {
 // 後方互換: 電話番号のみかチェック
 function isPhoneNumber(text) {
   return parsePhoneCommand(text) !== null;
+}
+
+// 「T-001 09012345678」「T-001 09012345678 谷村」「T-001 09012345678 全件」「T-001 全件 09012345678」を解析
+// 戻り値: { storeId, phone, allRecords, nameKeyword } / null
+function parseStorePhoneCommand(text) {
+  // 全角英数・全角ハイフンを半角化してから判定
+  let normalized = String(text || '')
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[－ー―−–—]/g, '-')
+    .replace(/[　]/g, ' ')
+    .trim();
+  // T-001 / T001 / T-1043 などを許容
+  const m = normalized.match(/^([Tt]-?\d{3,5})\s+(.+)$/);
+  if (!m) return null;
+  let storeId = m[1].toUpperCase();
+  if (!storeId.includes('-')) storeId = storeId.replace(/^T(\d+)/, 'T-$1');
+  const rest = m[2].trim();
+  const phoneCmd = parsePhoneCommand(rest);
+  if (!phoneCmd) return null;
+  return { storeId, ...phoneCmd };
+}
+
+// 店舗フォルダ内から「■1.顧客管理」スプレッドシートを検索（IDキャッシュ付き）
+const kokyakuKanriIdCache = new Map(); // storeId → spreadsheetId（24時間）
+const KOKYAKU_KANRI_NAME = '■1.顧客管理';
+const KOKYAKU_KANRI_ID_TTL = 24 * 60 * 60 * 1000;
+
+async function findKokyakuKanriSpreadsheetId(storeId, folderId) {
+  const cached = kokyakuKanriIdCache.get(storeId);
+  if (cached && Date.now() < cached.expiresAt) return cached.id;
+  const auth = createSAAuthClient();
+  const drive = google.drive({ version: 'v3', auth });
+  // 名前先頭一致で検索（末尾スペース等の揺れに対応）
+  const res = await drive.files.list({
+    q: `'${folderId}' in parents and trashed=false and mimeType='application/vnd.google-apps.spreadsheet' and name contains '${KOKYAKU_KANRI_NAME}'`,
+    fields: 'files(id,name)',
+    pageSize: 10,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  const files = res.data.files || [];
+  if (files.length === 0) {
+    throw new Error(`${storeId} のフォルダに「${KOKYAKU_KANRI_NAME}」が見つかりません`);
+  }
+  // 名前先頭一致で最も短い（末尾装飾なし）を採用
+  files.sort((a, b) => a.name.length - b.name.length);
+  const id = files[0].id;
+  kokyakuKanriIdCache.set(storeId, { id, expiresAt: Date.now() + KOKYAKU_KANRI_ID_TTL });
+  return id;
 }
 
 // バックグラウンドでプリロード（起動時に呼び出す）
@@ -1306,6 +1373,37 @@ async function handleLineEvent(event) {
         const target = getPushTarget(event);
         console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
         processAndPush(target, client).catch(err => console.error('[LINE] 未処理エラー:', err.message));
+        return;
+      }
+
+      // 「T-001 09012345678 [名前/全件]」形式: 店舗別 顧客検索（許可userIdチェック付き）
+      const storePhoneCmd = parseStorePhoneCommand(text);
+      if (storePhoneCmd) {
+        const replyToken = event.replyToken;
+        console.log(`[LINE] 店舗別顧客検索: ${storePhoneCmd.storeId} / ${storePhoneCmd.phone} 名前=${storePhoneCmd.nameKeyword || '(なし)'}`);
+        setImmediate(async () => {
+          try {
+            // 1. 店舗ID + userId で許可チェック → フォルダID取得
+            const folderInfo = await getFolderByStoreId(storePhoneCmd.storeId, userId);
+            // 2. フォルダ内から「■1.顧客管理」を検索
+            const kokyakuSsid = await findKokyakuKanriSpreadsheetId(folderInfo.storeId, folderInfo.folderId);
+            // 3. 利用履歴を検索（既存ロジックを spreadsheetId 指定で再利用）
+            const result = await searchRirekiByPhone(storePhoneCmd.phone, storePhoneCmd.allRecords, storePhoneCmd.nameKeyword, kokyakuSsid);
+            console.log(`[利用履歴] ${folderInfo.storeId}/${folderInfo.storeName} 検索結果: ${result ? result.total + '件' : '該当なし'}`);
+            const headerKey = storePhoneCmd.nameKeyword ? `${storePhoneCmd.phone} / ${storePhoneCmd.nameKeyword}` : storePhoneCmd.phone;
+            const storePrefix = `📍 ${folderInfo.storeId} ${folderInfo.storeName}\n`;
+            const msg = (result && result.total > 0)
+              ? storePrefix + formatRirekiResult(storePhoneCmd.phone, result, storePhoneCmd.allRecords, storePhoneCmd.nameKeyword)
+              : `${storePrefix}📋 利用履歴: ${headerKey}\n該当なし`;
+            await client.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] });
+          } catch (err) {
+            console.error('[店舗別顧客検索] エラー:', err.message);
+            await client.replyMessage({
+              replyToken,
+              messages: [{ type: 'text', text: `❌ ${err.message}` }],
+            }).catch(() => {});
+          }
+        });
         return;
       }
 
