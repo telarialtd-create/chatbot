@@ -331,8 +331,9 @@ function normalizeSlashDate(raw) {
 }
 
 // 明細書（新フォーマット）リクエストの解析
-// `【明細】` を含む複数行メッセージから日付/名前/交通費/バンス/お釣りを抽出する。
+// `【明細】` と `T-XXX` の両方を含む複数行メッセージから店舗ID/日付/名前/交通費/バンス/お釣りを抽出する。
 // 例:
+//   T-001
 //   【明細】
 //   日付:4/27
 //   名前:柚月
@@ -343,6 +344,23 @@ const MEISAISYO_TRIGGER = /[【\[]\s*明\s*細\s*[】\]]/;
 function parseMeisaisyoRequest(text) {
   if (!text) return null;
   if (!MEISAISYO_TRIGGER.test(text)) return null;
+
+  // 全角→半角 normalize（T-XXX判定のため）
+  const normalized = String(text)
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[－ー―−–—]/g, '-');
+
+  // T-XXX を独立行として抽出（例: "T-001", "T1043" などを許容）
+  let storeId = null;
+  for (const rawLine of normalized.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (/^[Tt]-?\d{3,5}$/.test(line)) {
+      storeId = line.toUpperCase();
+      if (!storeId.includes('-')) storeId = storeId.replace(/^T(\d+)/, 'T-$1');
+      break;
+    }
+  }
+  if (!storeId) return null;
 
   let dateStr = null, name = null, transport = null, bance = null, otsuri = null;
   // トリガー文字列を除去（行頭/行末に単独で書かれていても、文中に書かれていても削る）
@@ -359,7 +377,7 @@ function parseMeisaisyoRequest(text) {
   }
 
   if (!dateStr || !name) return null;
-  return { dateStr, name, transport, bance, otsuri };
+  return { storeId, dateStr, name, transport, bance, otsuri };
 }
 
 // 交通費種別を正規化（片道/往復/P/なし → そのまま返す、それ以外はnull）
@@ -385,7 +403,8 @@ function normalizeDateStr(dateStr) {
 
 // 日付文字列でファイルを検索
 // MEISAI_TEST_ID が設定されている場合はそのスプレッドシートを使用
-async function findSpreadsheetByDateStr(dateStr) {
+// folderId が指定されない場合は環境変数 NIPPO_FOLDER_ID を使用
+async function findSpreadsheetByDateStr(dateStr, folderId = null) {
   if (process.env.MEISAI_TEST_ID) {
     console.log(`[明細] テストモード: MEISAI_TEST_ID=${process.env.MEISAI_TEST_ID}`);
     return process.env.MEISAI_TEST_ID;
@@ -395,10 +414,11 @@ async function findSpreadsheetByDateStr(dateStr) {
 
   // 年を補完して検索精度を上げる（「4月7日」→「2026年4月7日」）
   const normalizedDate = normalizeDateStr(dateStr);
-  console.log(`[明細] 検索キー: "${dateStr}" → "${normalizedDate}"`);
+  const targetFolderId = folderId || NIPPO_FOLDER_ID;
+  console.log(`[明細] 検索キー: "${dateStr}" → "${normalizedDate}" / folderId=${targetFolderId}`);
 
   const res = await drive.files.list({
-    q: `'${NIPPO_FOLDER_ID}' in parents and name contains '${normalizedDate}'`,
+    q: `'${targetFolderId}' in parents and name contains '${normalizedDate}'`,
     fields: 'files(id, name)',
     orderBy: 'createdTime desc',
     pageSize: 10,
@@ -711,9 +731,15 @@ async function screenshotMeisai(spreadsheetId, sheetName = MEISAI_SHEET_NAME, ra
 }
 
 // 明細書（新フォーマット）処理本体
-async function processMeisaisyoAndPush(target, client, parsed) {
+// parsed: { storeId, dateStr, name, transport, bance, otsuri }
+// userId: LINEイベントの発言者userId（許可チェック用）
+async function processMeisaisyoAndPush(target, client, parsed, userId) {
   try {
-    const spreadsheetId = await findSpreadsheetByDateStr(parsed.dateStr);
+    // T-XXX から店舗フォルダIDを取得（許可userIdチェック付き）
+    const folderInfo = await getFolderByStoreId(parsed.storeId, userId);
+    console.log(`[明細書] 店舗特定: ${folderInfo.storeId}/${folderInfo.storeName} folderId=${folderInfo.folderId}`);
+
+    const spreadsheetId = await findSpreadsheetByDateStr(parsed.dateStr, folderInfo.folderId);
     const auth = createAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
@@ -1320,12 +1346,12 @@ async function handleLineEvent(event) {
         return;
       }
 
-      // [C-033] 【明細】形式: 明細書（新フォーマット）への直接書込
+      // [C-033] 【明細】形式: 明細書（新フォーマット）への直接書込（T-XXX必須）
       const meisaisyo = parseMeisaisyoRequest(text);
       if (meisaisyo) {
         const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
-        console.log(`[LINE] [C-033] 明細書リクエスト受信: ${meisaisyo.dateStr} / ${meisaisyo.name} / 交通費=${meisaisyo.transport ?? '指定なし'} / バンス=${meisaisyo.bance ?? 'なし'} / お釣り=${meisaisyo.otsuri ?? 'なし'} → target=${target}`);
-        setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyo).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
+        console.log(`[LINE] [C-033] 明細書リクエスト受信: ${meisaisyo.storeId} / ${meisaisyo.dateStr} / ${meisaisyo.name} / 交通費=${meisaisyo.transport ?? '指定なし'} / バンス=${meisaisyo.bance ?? 'なし'} / お釣り=${meisaisyo.otsuri ?? 'なし'} → target=${target}`);
+        setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyo, userId).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
         return;
       }
 
@@ -1578,12 +1604,12 @@ async function handleLineEvent(event) {
     return;
   }
 
-  // [C-033] 【明細】形式: 明細書（新フォーマット）への直接書込
+  // [C-033] 【明細】形式: 明細書（新フォーマット）への直接書込（T-XXX必須）
   const meisaisyoG = parseMeisaisyoRequest(text);
   if (meisaisyoG) {
     const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
-    console.log(`[LINE] [C-033] 明細書リクエスト受信(G): ${meisaisyoG.dateStr} / ${meisaisyoG.name} / 交通費=${meisaisyoG.transport ?? '指定なし'} / バンス=${meisaisyoG.bance ?? 'なし'} / お釣り=${meisaisyoG.otsuri ?? 'なし'} → target=${target}`);
-    setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyoG).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
+    console.log(`[LINE] [C-033] 明細書リクエスト受信(G): ${meisaisyoG.storeId} / ${meisaisyoG.dateStr} / ${meisaisyoG.name} / 交通費=${meisaisyoG.transport ?? '指定なし'} / バンス=${meisaisyoG.bance ?? 'なし'} / お釣り=${meisaisyoG.otsuri ?? 'なし'} → target=${target}`);
+    setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyoG, userId).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
     return;
   }
 
