@@ -433,7 +433,7 @@
           <li>LINE障害通知</li>
           <li>メールサポート</li>
         </ul>
-        <a href="#" onclick="startPayment('starter')" class="plan-btn plan-btn-dark">このプランで申し込む</a>
+        <a href="#contact" onclick="selectPlan('starter')" class="plan-btn plan-btn-dark">このプランで相談する</a>
       </div>
 
       <!-- Standard (featured) -->
@@ -451,7 +451,7 @@
           <li>複数店舗対応</li>
           <li>優先サポート</li>
         </ul>
-        <a href="#" onclick="startPayment('standard')" class="plan-btn plan-btn-white">このプランで申し込む</a>
+        <a href="#contact" onclick="selectPlan('standard')" class="plan-btn plan-btn-white">このプランで相談する</a>
       </div>
 
       <!-- Premium -->
@@ -468,7 +468,7 @@
           <li>専任サポート担当</li>
           <li>オンライン設定サポート</li>
         </ul>
-        <a href="#" onclick="startPayment('premium')" class="plan-btn plan-btn-dark">このプランで申し込む</a>
+        <a href="#contact" onclick="selectPlan('premium')" class="plan-btn plan-btn-dark">このプランで相談する</a>
       </div>
 
     </div>
@@ -541,15 +541,24 @@
 </footer>
 
 <script>
-// KOMOJU決済ページへ遷移
-const KOMOJU_LINKS = {
-  starter:  'https://komoju.com/buys/0o25t7tniwkb373a65jchgcxd?account_id=cmcebwk38mtg89w50z26jwexq',
-  standard: 'https://komoju.com/buys/1z04n7d62tv53eyy9t4hn6jc5?account_id=cmcebwk38mtg89w50z26jwexq',
-  premium:  'https://komoju.com/buys/a57vdkh6nkvxddmsk6yft2xjc?account_id=cmcebwk38mtg89w50z26jwexq',
+// 料金プランボタン → お問い合わせフォームへ誘導（プラン名を自動選択）
+const PLAN_LABELS = {
+  starter:  'スタータープラン（¥9,800/月）',
+  standard: 'スタンダードプラン（¥19,800/月）',
+  premium:  'プレミアムプラン（¥45,000/月）',
 };
 
-function startPayment(plan) {
-  window.location.href = KOMOJU_LINKS[plan];
+function selectPlan(plan) {
+  const select = document.querySelector('#contact select');
+  const label = PLAN_LABELS[plan];
+  if (select && label) {
+    for (const opt of select.options) {
+      if (opt.text === label) {
+        select.value = opt.value || opt.text;
+        break;
+      }
+    }
+  }
 }
 
 // お問い合わせフォーム送信
