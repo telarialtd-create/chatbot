@@ -13,6 +13,7 @@ on:
       - 'build_dashboard.js'
       - 'app.js'
       - 'chatbot/**'
+      - 'public/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch: {}
 
@@ -40,6 +41,14 @@ jobs:
               echo "✅ $f → /app/chatbot/$f"
             fi
           done
+
+          # public/ フォルダ全体を同期（HTMLや画像など）。サーバー側_backupは保持。
+          if [ -d public ]; then
+            rsync -az --exclude='_backup' \
+              -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+              public/ root@46.225.82.240:/app/chatbot/public/
+            echo "✅ public/ → /app/chatbot/public/ (synced)"
+          fi
 
           # PM2診断＋完全再起動（cwd/file pathを表示して異常検知）
           REMOTE_CMD='set -e; echo "=== pm2 list ==="; pm2 list; echo "=== pm2 describe chatbot ==="; pm2 describe chatbot || true; echo "=== /app/chatbot head ==="; ls -la /app/chatbot/ | head -15; echo "=== app.js mtime ==="; stat /app/chatbot/app.js /app/chatbot/line_handler.js 2>/dev/null || true; echo "=== force reload: delete+start ==="; pm2 delete chatbot 2>/dev/null || true; cd /app/chatbot && pm2 start app.js --name chatbot --update-env; pm2 save; echo "=== post-restart pm2 list ==="; pm2 list'
