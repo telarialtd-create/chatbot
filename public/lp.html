@@ -110,6 +110,75 @@
     .stat-num { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
     .stat-label { font-size: 12px; color: var(--gray-400); letter-spacing: 0.1em; margin-top: 4px; }
 
+    /* ─── LINE Features (Highlight) ─── */
+    #line-features {
+      background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+      color: var(--white);
+      padding: 110px 24px;
+      text-align: center;
+    }
+    #line-features .section-inner { max-width: 1100px; margin: 0 auto; }
+    .line-tag {
+      display: inline-block;
+      border: 1px solid rgba(201,168,76,0.5);
+      color: var(--gold);
+      font-size: 11px; letter-spacing: 0.25em;
+      padding: 6px 18px; border-radius: 100px;
+      margin-bottom: 28px;
+    }
+    .line-title {
+      font-size: clamp(28px, 4.5vw, 48px);
+      font-weight: 700; line-height: 1.3;
+      letter-spacing: -0.01em;
+      margin-bottom: 18px;
+    }
+    .line-title span { color: var(--gold); }
+    .line-sub {
+      font-size: 15px;
+      color: rgba(255,255,255,0.55);
+      margin: 0 auto 60px;
+      max-width: 540px;
+      line-height: 1.9;
+    }
+    .line-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 18px;
+      text-align: left;
+    }
+    .line-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 32px 26px;
+      transition: transform 0.25s, border-color 0.25s, background 0.25s;
+    }
+    .line-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(201,168,76,0.4);
+      background: rgba(255,255,255,0.06);
+    }
+    .line-emoji {
+      font-size: 36px;
+      margin-bottom: 18px;
+      line-height: 1;
+    }
+    .line-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--white);
+    }
+    .line-card p {
+      font-size: 13px;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.7;
+    }
+    .line-card p strong {
+      color: var(--gold);
+      font-weight: 700;
+    }
+
     /* ─── Section commons ─── */
     section { padding: 100px 24px; }
     .section-inner { max-width: 1000px; margin: 0 auto; }
@@ -304,6 +373,43 @@
   <div class="hero-btns">
     <a href="#pricing" class="btn-primary">料金プランを見る</a>
     <a href="#tools" class="btn-outline">ツール一覧</a>
+  </div>
+</section>
+
+<!-- LINE Features (NEW) -->
+<section id="line-features">
+  <div class="section-inner">
+    <div class="line-tag">LINE INTEGRATION</div>
+    <h2 class="line-title">LINEひとつで、<br>面倒な入力作業を<span>すべて自動化</span>。</h2>
+    <p class="line-sub">スマホからLINEで送るだけ。<br>秒で結果が返ってくる、現場の新しいスタンダード。</p>
+
+    <div class="line-grid">
+      <div class="line-card">
+        <div class="line-emoji">📊</div>
+        <h3>日報入力</h3>
+        <p>売上・給与を<strong>リアルタイム</strong>で把握</p>
+      </div>
+      <div class="line-card">
+        <div class="line-emoji">🧾</div>
+        <h3>明細出力</h3>
+        <p>送信から<strong>わずか3秒</strong>で画像明細をお届け</p>
+      </div>
+      <div class="line-card">
+        <div class="line-emoji">🔄</div>
+        <h3>出勤情報の更新</h3>
+        <p>ベンリーから<strong>各種媒体</strong>まで自動同期</p>
+      </div>
+      <div class="line-card">
+        <div class="line-emoji">📈</div>
+        <h3>月報作成</h3>
+        <p><strong>詳細グラフ付き</strong>で、経営状況が一目瞭然</p>
+      </div>
+      <div class="line-card">
+        <div class="line-emoji">👤</div>
+        <h3>顧客情報の照会</h3>
+        <p>LINEで<strong>5秒以内</strong>に利用履歴を返信</p>
+      </div>
+    </div>
   </div>
 </section>
 
