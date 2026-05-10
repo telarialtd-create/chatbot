@@ -552,8 +552,19 @@ function dateToNippoName(date) {
 
 async function warmupCache() {
   console.log('キャッシュ事前取得中...');
-  await Promise.all([getAvailability(), getUpcomingSchedule(), getIntervalMap()]);
-  console.log('キャッシュ完了');
+  const tasks = [
+    { name: 'getAvailability', fn: getAvailability },
+    { name: 'getUpcomingSchedule', fn: getUpcomingSchedule },
+    { name: 'getIntervalMap', fn: getIntervalMap }
+  ];
+  const results = await Promise.allSettled(tasks.map(t => t.fn()));
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      console.log(`[ウォームアップ] ${tasks[i].name} スキップ: ${r.reason?.message || r.reason}`);
+    }
+  });
+  const ok = results.filter(r => r.status === 'fulfilled').length;
+  console.log(`キャッシュ完了 (${ok}/${results.length} 成功)`);
 }
 
 module.exports = { getAvailability, getUpcomingSchedule, getDailyReportBookings, getIntervalMap, parseDateStr, dateToNippoName, warmupCache, getBusinessDate };
