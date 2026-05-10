@@ -1,0 +1,49 @@
+name: Deploy LP to Hetzner (LINE server 46.225.82.240)
+
+# LP（public/**）専用のデプロイワークフロー。
+# JS本体（chatbot プロセス）には一切影響を与えない（pm2 ノータッチ）。
+# 5/8事故の根本対処：LP修正でJSが上書きされるのを防ぐ。
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'public/**'
+      - '.github/workflows/deploy-lp.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 46.225.82.240 >> ~/.ssh/known_hosts
+
+      - name: Sync public/ folder only
+        run: |
+          # public/ のみ同期。サーバー側の_backup・tempは保持。
+          rsync -az --exclude='_backup' --exclude='temp/' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            public/ root@46.225.82.240:/app/chatbot/public/
+          echo "✅ public/ → /app/chatbot/public/ (synced)"
+          # nginxは静的ファイル配信なので再起動不要
+          # pm2 もノータッチ（chatbot 完全無停止）
+
+      - name: Verify LP accessible
+        run: |
+          sleep 2
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            https://kiraku.telaria.tech/ || echo "000")
+          echo "LP access check: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ LP正常配信"
+          else
+            echo "⚠️ LP応答: $STATUS"
+          fi

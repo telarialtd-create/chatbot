@@ -1,19 +1,28 @@
-name: Deploy to Hetzner (LINE server 46.225.82.240)
+name: Deploy JS to Hetzner (LINE server 46.225.82.240)
 
 on:
   push:
     branches: [ main ]
     paths:
+      # 本番運用JSファイル（手動check/fix系は監視対象外）
+      - 'app.js'
       - 'line_handler.js'
+      - 'line_nippo_input.js'
       - 'nippo_to_geppo.js'
       - 'nippo_to_geppo_v2.js'
-      - 'line_nippo_input.js'
       - 'create_sb_dashboard.js'
       - 'scheduleReader.js'
       - 'build_dashboard.js'
-      - 'app.js'
-      - 'chatbot/**'
-      - 'public/**'
+      - 'customer_search.js'
+      - 'meisai_handler.js'
+      - 'kokyaku_update.js'
+      - 'geppo_update.js'
+      - 'nippo_screenshot.js'
+      - 'shift_reflect.js'
+      - 'shift_route.js'
+      - 'shift_route_date.js'
+      - 'sync_monthly_overlap.js'
+      - 'lib/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch: {}
 
@@ -31,10 +40,15 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H 46.225.82.240 >> ~/.ssh/known_hosts
 
-      - name: Deploy to server
+      - name: Deploy JS files to server
         run: |
-          # 変更されたJSファイルをサーバーにコピー（app.js・依存モジュールも含む）
-          for f in app.js line_handler.js nippo_to_geppo.js nippo_to_geppo_v2.js line_nippo_input.js create_sb_dashboard.js scheduleReader.js build_dashboard.js; do
+          # 本番運用JSファイルをサーバーにコピー
+          for f in app.js line_handler.js line_nippo_input.js nippo_to_geppo.js \
+                   nippo_to_geppo_v2.js create_sb_dashboard.js scheduleReader.js \
+                   build_dashboard.js customer_search.js meisai_handler.js \
+                   kokyaku_update.js geppo_update.js nippo_screenshot.js \
+                   shift_reflect.js shift_route.js shift_route_date.js \
+                   sync_monthly_overlap.js; do
             if [ -f "$f" ]; then
               scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
                 "$f" root@46.225.82.240:/app/chatbot/"$f"
@@ -42,21 +56,21 @@ jobs:
             fi
           done
 
-          # public/ フォルダ全体を同期（HTMLや画像など）。サーバー側_backupは保持。
-          if [ -d public ]; then
-            rsync -az --exclude='_backup' \
+          # lib/ フォルダ全体を同期（C-043分離成果）
+          if [ -d lib ]; then
+            rsync -az \
               -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
-              public/ root@46.225.82.240:/app/chatbot/public/
-            echo "✅ public/ → /app/chatbot/public/ (synced)"
+              lib/ root@46.225.82.240:/app/chatbot/lib/
+            echo "✅ lib/ → /app/chatbot/lib/ (synced)"
           fi
 
-          # PM2診断＋完全再起動（cwd/file pathを表示して異常検知）
-          REMOTE_CMD='set -e; echo "=== pm2 list ==="; pm2 list; echo "=== pm2 describe chatbot ==="; pm2 describe chatbot || true; echo "=== /app/chatbot head ==="; ls -la /app/chatbot/ | head -15; echo "=== app.js mtime ==="; stat /app/chatbot/app.js /app/chatbot/line_handler.js 2>/dev/null || true; echo "=== force reload: delete+start ==="; pm2 delete chatbot 2>/dev/null || true; cd /app/chatbot && pm2 start app.js --name chatbot --update-env; pm2 save; echo "=== post-restart pm2 list ==="; pm2 list'
+          # pm2 startOrReload で安全に反映（delete不要・停止1〜3秒）
+          REMOTE_CMD='set -e; cd /app/chatbot && pm2 startOrReload app.js --name chatbot --update-env; pm2 save; echo "=== post-reload pm2 list ==="; pm2 list'
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@46.225.82.240 "$REMOTE_CMD"
 
       - name: Health check
         run: |
-          sleep 10
+          sleep 5
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
             https://46.225.82.240.nip.io/api/availability || echo "000")
           echo "Health check status: $STATUS"
