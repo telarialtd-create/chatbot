@@ -64,8 +64,9 @@ jobs:
             echo "✅ lib/ → /app/chatbot/lib/ (synced)"
           fi
 
-          # pm2 startOrReload で安全に反映（delete不要・停止1〜3秒）
-          REMOTE_CMD='set -e; cd /app/chatbot && pm2 startOrReload app.js --name chatbot --update-env; pm2 save; echo "=== post-reload pm2 list ==="; pm2 list'
+          # pm2 reload で安全に反映（delete不要・停止1〜3秒）
+          # 既存プロセスがあればreload、無ければstart のフォールバック方式
+          REMOTE_CMD='set -e; cd /app/chatbot && if pm2 describe chatbot > /dev/null 2>&1; then pm2 reload chatbot --update-env; else pm2 start app.js --name chatbot --update-env; fi; pm2 save; echo "=== post-reload pm2 list ==="; pm2 list'
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@46.225.82.240 "$REMOTE_CMD"
 
       - name: Health check
