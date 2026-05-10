@@ -21,8 +21,8 @@ const FONT_PATH = path.join(__dirname, 'fonts', 'NotoSansJP.ttf');
 registerFont(FONT_PATH, { family: 'NotoJP' });
 
 const NIPPO_FOLDER_ID = '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If';
-const TARGET_GID = 1873674341;
-const RANGE = 'CA3:CR32';
+const TARGET_SHEET_NAME = 'ダッシュボード';
+const RANGE = 'U1:AN56';
 const TEMP_DIR = path.join(__dirname, 'public', 'temp');
 
 // ── 明細機能の定数 ────────────────────────────────────────
@@ -104,13 +104,15 @@ function dateToNippoName(date) {
 }
 
 // ── Drive からスプレッドシート ID を取得 ──────────────────
-async function findSpreadsheetId(date) {
+// folderIdOverride を渡すと「📁 店舗フォルダ」由来のT-XXX店舗別フォルダで検索する
+async function findSpreadsheetId(date, folderIdOverride) {
   const auth = createAuthClient();
   const drive = google.drive({ version: 'v3', auth });
   const dateStr = dateToNippoName(date);
+  const targetFolderId = folderIdOverride || NIPPO_FOLDER_ID;
 
   const res = await drive.files.list({
-    q: `'${NIPPO_FOLDER_ID}' in parents and name contains '${dateStr}'`,
+    q: `'${targetFolderId}' in parents and name contains '${dateStr}'`,
     fields: 'files(id, name)',
     orderBy: 'createdTime desc',
     pageSize: 5,
@@ -129,8 +131,11 @@ async function fetchCellsData(spreadsheetId) {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const sheet = meta.data.sheets.find(s => s.properties.sheetId === TARGET_GID);
-  if (!sheet) throw new Error(`シートが見つかりません (gid=${TARGET_GID})`);
+  const sheet = meta.data.sheets.find(s => s.properties.title === TARGET_SHEET_NAME);
+  if (!sheet) {
+    const available = meta.data.sheets.map(s => s.properties.title).join('|');
+    throw new Error(`シートが見つかりません (name='${TARGET_SHEET_NAME}', available=[${available}])`);
+  }
   const sheetName = sheet.properties.title;
   const res = await sheets.spreadsheets.get({
     spreadsheetId,
@@ -188,9 +193,36 @@ async function screenshotCells(spreadsheetId) {
   const rowMeta  = gridData?.rowMetadata || [];
   const numCols  = rows.reduce((m, r) => Math.max(m, (r.values || []).length), 0);
 
+  // 描画対象: hiddenByUser/hiddenByFilter で隠された行のみスキップ
+  // 加えて、末尾側に連続する「完全に何もない行」（値も背景も罫線も無い）はトリミング
+  const isTrulyEmpty = (row) => {
+    const cells = row?.values || [];
+    if (cells.length === 0) return true;
+    for (const c of cells) {
+      if (!c) continue;
+      if (c.formattedValue && String(c.formattedValue).trim() !== '') return false;
+      const bg = c.effectiveFormat?.backgroundColor;
+      const hasBg = bg && !((bg.red === 1 && bg.green === 1 && bg.blue === 1) || (!bg.red && !bg.green && !bg.blue));
+      if (hasBg) return false;
+      const b = c.effectiveFormat?.borders;
+      if (b && (b.top || b.bottom || b.left || b.right)) return false;
+    }
+    return true;
+  };
+  // 末尾の空行のみ削る（中間の空行は残す）
+  let lastNonEmpty = rows.length - 1;
+  while (lastNonEmpty >= 0 && isTrulyEmpty(rows[lastNonEmpty])) lastNonEmpty--;
+  const visibleIdx = [];
+  for (let i = 0; i <= lastNonEmpty; i++) {
+    const m = rowMeta[i] || {};
+    if (m.hiddenByUser || m.hiddenByFilter) continue;
+    visibleIdx.push(i);
+  }
+  console.log(`[LINE] スクショ対象行数: ${visibleIdx.length}/${rows.length} (末尾空行カット後=${lastNonEmpty + 1})`);
+
   const colWidths  = Array.from({ length: numCols }, (_, i) =>
     colMeta[i]?.pixelSize ? Math.max(colMeta[i].pixelSize * 0.85, 28) : 56);
-  const rowHeights = rows.map((_, i) =>
+  const rowHeights = visibleIdx.map(i =>
     rowMeta[i]?.pixelSize ? Math.max(rowMeta[i].pixelSize * 0.85, 17) : 20);
 
   const totalW = Math.round(colWidths.reduce((s, w) => s + w, 0));
@@ -204,7 +236,8 @@ async function screenshotCells(spreadsheetId) {
   ctx.fillRect(0, 0, totalW, totalH);
 
   let y = 0;
-  for (let ri = 0; ri < rows.length; ri++) {
+  for (let vi = 0; vi < visibleIdx.length; vi++) {
+    const ri = visibleIdx[vi];
     const cells = rows[ri].values || [];
     let x = 0;
     for (let ci = 0; ci < numCols; ci++) {
@@ -212,7 +245,7 @@ async function screenshotCells(spreadsheetId) {
       const value = toFullWidth(cell.formattedValue ?? '');
       const fmt   = cell.effectiveFormat || {};
       const tf    = fmt.textFormat || {};
-      const w = colWidths[ci], h = rowHeights[ri];
+      const w = colWidths[ci], h = rowHeights[vi];
 
       // 背景色
       const bg = fmt.backgroundColor;
@@ -252,7 +285,7 @@ async function screenshotCells(spreadsheetId) {
       }
       x += w;
     }
-    y += rowHeights[ri];
+    y += rowHeights[vi];
   }
 
   if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -350,12 +383,12 @@ function parseMeisaisyoRequest(text) {
     .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
     .replace(/[－ー―−–—]/g, '-');
 
-  // T-XXX を独立行として抽出（例: "T-001", "T1043" などを許容）
+  // T-XXX を独立行として抽出（例: "T-001", "T1043", "#T-001" などを許容・他コマンドと統一）
   let storeId = null;
   for (const rawLine of normalized.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (/^[Tt]-?\d{3,5}$/.test(line)) {
-      storeId = line.toUpperCase();
+    if (/^#?[Tt]-?\d{3,5}$/.test(line)) {
+      storeId = line.toUpperCase().replace(/^#/, '');
       if (!storeId.includes('-')) storeId = storeId.replace(/^T(\d+)/, 'T-$1');
       break;
     }
@@ -417,14 +450,29 @@ async function findSpreadsheetByDateStr(dateStr, folderId = null) {
   const targetFolderId = folderId || NIPPO_FOLDER_ID;
   console.log(`[明細] 検索キー: "${dateStr}" → "${normalizedDate}" / folderId=${targetFolderId}`);
 
-  const res = await drive.files.list({
-    q: `'${targetFolderId}' in parents and name contains '${normalizedDate}'`,
+  // ① 完全一致検索（trashed除外）
+  let res = await drive.files.list({
+    q: `'${targetFolderId}' in parents and name = '${normalizedDate}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
     fields: 'files(id, name)',
     orderBy: 'createdTime desc',
-    pageSize: 10,
+    pageSize: 5,
   });
-  const files = res.data.files || [];
-  console.log(`[明細] 検索結果 (${files.length}件):`, files.map(f => f.name).join(', '));
+  let files = res.data.files || [];
+  console.log(`[明細] 完全一致検索結果 (${files.length}件):`, files.map(f => f.name).join(', '));
+
+  // ② 完全一致なしなら部分一致 + startsWithフィルタ
+  if (!files.length) {
+    res = await drive.files.list({
+      q: `'${targetFolderId}' in parents and name contains '${normalizedDate}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+      fields: 'files(id, name)',
+      orderBy: 'createdTime desc',
+      pageSize: 20,
+    });
+    const allHits = res.data.files || [];
+    files = allHits.filter(f => f.name.startsWith(normalizedDate));
+    console.log(`[明細] 部分一致(startsWithフィルタ後) (${files.length}件):`, files.map(f => f.name).join(', '));
+  }
+
   if (!files.length) throw new Error(`ファイルが見つかりません: ${normalizedDate}`);
 
   // 複数ヒット時は名前が短いもの（店舗名サフィックスがない本体ファイル）を優先
@@ -730,6 +778,138 @@ async function screenshotMeisai(spreadsheetId, sheetName = MEISAI_SHEET_NAME, ra
   return filename;
 }
 
+// =============================================
+// [TRANSFER_DIRECT_2026-04-30] 明細書 → 給料UI/現金管理 への直接転記
+// API経由のチェックON はGASのonEditを発火させないため、Node.js側で実行する
+// 元実装: bound script の transferMeisai() 関数（2026-04-30 LINE自動化対応で複製）
+// =============================================
+async function transferMeisaiDirect(spreadsheetId, sheets) {
+  const r = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId,
+    ranges: [
+      "'明細書'!C3","'明細書'!F2",
+      "'明細書'!D36","'明細書'!E36","'明細書'!E39","'明細書'!E40",
+      "'明細書'!E41","'明細書'!E42","'明細書'!E45","'明細書'!E46",
+      "'明細書'!C6:C35",
+      "'料金設定'!B2"
+    ],
+    valueRenderOption: 'UNFORMATTED_VALUE'
+  });
+  const v = r.data.valueRanges;
+  const name = String(v[0].values?.[0]?.[0]||'').trim();
+  if (!name) return { ok:false, error:'C3 name not set' };
+  const store = String(v[1].values?.[0]?.[0]||'');
+  const ryokin = Number(v[2].values?.[0]?.[0])||0;
+  const kyuryoAmt = Number(v[3].values?.[0]?.[0])||0;
+  const kyuryoG = Number(v[4].values?.[0]?.[0])||0;
+  const kotsuhi = Number(v[5].values?.[0]?.[0])||0;
+  const bance = Number(v[6].values?.[0]?.[0])||0;
+  const zenkai = Number(v[7].values?.[0]?.[0])||0;
+  const cardTotal = Number(v[8].values?.[0]?.[0])||0;
+  const otsuri = Number(v[9].values?.[0]?.[0])||0;
+  const shimeData = v[10].values||[];
+  const store1Name = String(v[11].values?.[0]?.[0]||'CREA');
+
+  let cntS=0,cntF=0,cntR=0,cntX=0;
+  for (const row of shimeData) {
+    const sv = String(row[0]||'').trim().toUpperCase();
+    if (sv==='S') cntS++; else if (sv==='F') cntF++; else if (sv==='R') cntR++; else if (sv==='X') cntX++;
+  }
+
+  // ダッシュボードから実働時間
+  let jitsudo = 0;
+  try {
+    const dashR = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "'ダッシュボード'!X4:AE70",
+      valueRenderOption: 'UNFORMATTED_VALUE'
+    });
+    for (const row of (dashR.data.values||[])) {
+      if (String(row[0]||'').trim() === name) { jitsudo = Number(row[7])||0; break; }
+    }
+  } catch (e) { /* ダッシュボードなしでも続行 */ }
+
+  const isCrea = store.indexOf(store1Name) !== -1;
+
+  // 給料UI転記（30行分の配列を強制構築して名前検索→空行検索）
+  const colA = isCrea ? 'A' : 'L';
+  const r2 = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'給料UI'!${colA}4:${colA}33`,
+    valueRenderOption: 'UNFORMATTED_VALUE'
+  });
+  const namesRaw = r2.data.values || [];
+  const namesArr = [];
+  for (let i = 0; i < 30; i++) {
+    namesArr.push((namesRaw[i] && namesRaw[i][0] !== undefined) ? namesRaw[i][0] : '');
+  }
+  let tr = -1;
+  for (let i = 0; i < namesArr.length; i++) {
+    if (String(namesArr[i] || '').trim() === name) { tr = i + 4; break; }
+  }
+  if (tr === -1) {
+    for (let i = 0; i < namesArr.length; i++) {
+      if (!String(namesArr[i] || '').trim()) { tr = i + 4; break; }
+    }
+  }
+  if (tr === -1) {
+    throw new Error('給料UI 行4-33が満杯（' + (isCrea?'CREA':'ふわもこ') + '）');
+  }
+  const startCol = isCrea ? 'A' : 'L';
+  const endCol = isCrea ? 'I' : 'T';
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'給料UI'!${startCol}${tr}:${endCol}${tr}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[name, ryokin, kyuryoAmt, kotsuhi, cntS, cntF, cntR, cntX, jitsudo]] }
+  });
+
+  // 現金管理転記（同様に30行強制構築）
+  const cashStart = isCrea ? 5 : 37;
+  const cashEnd = isCrea ? 34 : 66;
+  const cashRowCount = cashEnd - cashStart + 1;
+  const r3 = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'現金管理'!A${cashStart}:A${cashEnd}`,
+    valueRenderOption: 'UNFORMATTED_VALUE'
+  });
+  const cashRaw = r3.data.values || [];
+  const cashArr = [];
+  for (let i = 0; i < cashRowCount; i++) {
+    cashArr.push((cashRaw[i] && cashRaw[i][0] !== undefined) ? cashRaw[i][0] : '');
+  }
+  let tr2 = -1;
+  for (let i = 0; i < cashArr.length; i++) {
+    if (String(cashArr[i] || '').trim() === name) { tr2 = cashStart + i; break; }
+  }
+  if (tr2 === -1) {
+    for (let i = 0; i < cashArr.length; i++) {
+      if (!String(cashArr[i] || '').trim()) { tr2 = cashStart + i; break; }
+    }
+  }
+  if (tr2 === -1) {
+    throw new Error('現金管理 が満杯（' + (isCrea?'CREA':'ふわもこ') + '）');
+  }
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: [
+        { range: `'現金管理'!A${tr2}`, values: [[name]] },
+        { range: `'現金管理'!B${tr2}`, values: [[ryokin]] },
+        { range: `'現金管理'!C${tr2}`, values: [[cardTotal]] },
+        { range: `'現金管理'!D${tr2}`, values: [[kotsuhi]] },
+        { range: `'現金管理'!E${tr2}`, values: [[kyuryoG]] },
+        { range: `'現金管理'!F${tr2}`, values: [[zenkai]] },
+        { range: `'現金管理'!H${tr2}`, values: [[bance]] },
+        { range: `'現金管理'!I${tr2}`, values: [[otsuri]] }
+      ]
+    }
+  });
+
+  return { ok:true, name, store: isCrea ? 'CREA' : 'ふわもこ', kyuryoUIRow: tr, genkinRow: tr2 };
+}
+
 // 明細書（新フォーマット）処理本体
 // parsed: { storeId, dateStr, name, transport, bance, otsuri }
 // userId: LINEイベントの発言者userId（許可チェック用）
@@ -776,6 +956,15 @@ async function processMeisaisyoAndPush(target, client, parsed, userId) {
       requestBody: { valueInputOption: 'USER_ENTERED', data },
     });
     console.log(`[明細書] 残フィールド書込完了 transport=${parsed.transport} bance=${parsed.bance} otsuri=${parsed.otsuri}`);
+
+    // [TRANSFER_DIRECT_2026-04-30] E48=trueをAPI経由で書いてもonEdit不発火→GAS転記が動かないため、
+    //                              Node.js側で直接 給料UI/現金管理 へ転記する
+    try {
+      await transferMeisaiDirect(spreadsheetId, sheets);
+      console.log('[明細書] 給料UI/現金管理 直接転記完了');
+    } catch (transferErr) {
+      console.error('[明細書] 直接転記エラー:', transferErr.message);
+    }
 
     const filename = await screenshotMeisai(spreadsheetId, MEISAISYO_SHEET_NAME, MEISAISYO_RANGE, 'meisaisyo', { compactEmpty: true });
     const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
@@ -835,11 +1024,12 @@ function getPushTarget(event) {
 }
 
 // ── バックグラウンドでスクショしてPush送信 ────────────────
-async function processAndPush(target, client) {
+// folderIdOverride: 「📁 店舗フォルダ」由来のT-XXX店舗別フォルダID（権限OK後に渡す）
+async function processAndPush(target, client, folderIdOverride) {
   try {
     const date          = getSheetBusinessDate();
-    console.log(`[LINE] 検索日付(JST): ${dateToNippoName(date)}`);
-    const spreadsheetId = await findSpreadsheetId(date);
+    console.log(`[LINE] 検索日付(JST): ${dateToNippoName(date)} folder=${folderIdOverride || NIPPO_FOLDER_ID}`);
+    const spreadsheetId = await findSpreadsheetId(date, folderIdOverride);
     const filename      = await screenshotCells(spreadsheetId);
 
     const baseUrl  = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
@@ -871,14 +1061,32 @@ const KOKYAKU_TARGET_SHEET_ID   = '1A_LaiWm2QhvXk4jKINSRvKKX3-xKYLzygNnlY3ZtI9A'
 const KOKYAKU_TARGET_SHEET_NAME = '利用履歴';
 const NIPPO_ZENKEN_SHEET_NAME  = '日報_全件';
 
-// 「4月23日 顧客更新」「4月23日　顧客更新」形式をパース
+// 顧客更新コマンドをパース（T-XXX必須）
+// 対応形式（複数行・順序自由）:
+//   ・「【顧客更新】\n#T001\n4月30日」
+//   ・「T-001 4月30日 顧客更新」
+//   ・「【4月30日 顧客更新】 T-001」など、顧客更新キーワード+T-XXX+日付を含めば可
+// 戻り値:
+//   ・正常: { dateStr, storeId }
+//   ・キーワード有り・パラメータ不足: { error: 'メッセージ' }
+//   ・無関係テキスト: null
 function parseKokyakuUpdateCommand(text) {
-  const m = text.match(/^(\d{1,2}月\d{1,2}日)[\s　]+顧客更新$/);
-  if (m) return { dateStr: m[1] };
-  // 【4月23日　顧客更新】形式も対応
-  const m2 = text.match(/^【(\d{1,2}月\d{1,2}日)[\s　]+顧客更新】$/);
-  if (m2) return { dateStr: m2[1] };
-  return null;
+  const normalized = String(text || '')
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[－ー―−–—]/g, '-')
+    .replace(/[　]/g, ' ')
+    .trim();
+  if (!/顧客更新/.test(normalized)) return null;
+  const sm = normalized.match(/[Tt]-?(\d{3,5})/);
+  // 「N月N日」または「M/D」両対応（T-XXXに含まれる数字を誤検出しないようT-XXX除去後に判定）
+  const dateSrc = normalized.replace(/[Tt]-?\d{3,5}/g, ' ');
+  const dm = dateSrc.match(/(\d{1,2})月(\d{1,2})日/) || dateSrc.match(/(?:^|\D)(\d{1,2})\/(\d{1,2})(?!\d)/);
+  if (!sm || !dm) {
+    return { error: '顧客更新コマンドにはT-XXX店舗IDと日付（例: 4月30日 / 4/30）が必須です。\n\n例:\n【顧客更新】\n#T001\n4月30日' };
+  }
+  const storeId = `T-${sm[1]}`;
+  const dateStr = `${dm[1]}月${dm[2]}日`;
+  return { dateStr, storeId };
 }
 
 // 「2026年4月23日」→「2026/4/23」に変換（利用履歴の既存フォーマットに合わせる）
@@ -889,10 +1097,15 @@ function toSlashDate(nenGappiStr) {
 }
 
 // 日報全件シートから利用履歴シートへコピー
-const KOKYAKU_VERSION = 'v3-2026-04-24';
-async function processKokyakuUpdate(dateStr) {
+const KOKYAKU_VERSION = 'v4-2026-04-30';
+async function processKokyakuUpdate(dateStr, storeId, userId) {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
+
+  // 0. 店舗別 ■1.顧客管理 スプレッドシートを特定（userId許可チェック付き）
+  const folderInfo = await getFolderByStoreId(storeId, userId);
+  const targetSsid = await findKokyakuKanriSpreadsheetId(folderInfo.storeId, folderInfo.folderId);
+  console.log(`[顧客更新] ${folderInfo.storeId}/${folderInfo.storeName} 書込先: ${targetSsid}`);
 
   // 1. ソーススプレッドシート（日付から動的に検索）
   const normalizedDate = normalizeDateStr(dateStr);
@@ -931,14 +1144,14 @@ async function processKokyakuUpdate(dateStr) {
   let targetRes;
   try {
     targetRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: KOKYAKU_TARGET_SHEET_ID,
+      spreadsheetId: targetSsid,
       range: `'${KOKYAKU_TARGET_SHEET_NAME}'!A:A`,
       valueRenderOption: 'FORMATTED_VALUE',
     });
   } catch (e) {
-    const meta = await sheets.spreadsheets.get({ spreadsheetId: KOKYAKU_TARGET_SHEET_ID }).catch(() => null);
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: targetSsid }).catch(() => null);
     const sheetNames = meta?.data?.sheets?.map(s => s.properties.title) || [];
-    throw new Error(`[${KOKYAKU_VERSION}][ターゲット読取失敗] file=${KOKYAKU_TARGET_SHEET_ID} sheet='${KOKYAKU_TARGET_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
+    throw new Error(`[${KOKYAKU_VERSION}][ターゲット読取失敗] file=${targetSsid} sheet='${KOKYAKU_TARGET_SHEET_NAME}' available=[${sheetNames.join('|')}] orig=${e.message}`);
   }
   const targetACol = targetRes.data.values || [];
   let firstEmptyRow = targetACol.length + 1;
@@ -965,16 +1178,16 @@ async function processKokyakuUpdate(dateStr) {
   ];
 
   await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: KOKYAKU_TARGET_SHEET_ID,
+    spreadsheetId: targetSsid,
     requestBody: { valueInputOption: 'USER_ENTERED', data: batchData },
   });
   console.log(`[顧客更新] 書き込み完了: ${srcRows.length}行`);
 
   // 5. 利用履歴キャッシュをクリア（電話番号検索が最新データを使えるように）
-  const defaultEntry = rirekiCacheMap.get(KOKYAKU_TARGET_SHEET_ID);
-  if (defaultEntry) defaultEntry.expiresAt = 0;
+  const targetEntry = rirekiCacheMap.get(targetSsid);
+  if (targetEntry) targetEntry.expiresAt = 0;
 
-  return { count: srcRows.length, dateLabel: slashDate };
+  return { count: srcRows.length, dateLabel: slashDate, storeId: folderInfo.storeId, storeName: folderInfo.storeName };
 }
 
 // ── 利用履歴シート ────────────────────────────────────────
@@ -1185,7 +1398,30 @@ function parseStorePhoneCommand(text) {
     .replace(/[－ー―−–—]/g, '-')
     .replace(/[　]/g, ' ')
     .trim();
-  // T-001 / T001 / T-1043 などを許容
+
+  // 新形式: 【番号検索】キーワード必須・T-XXX+電話番号を順序自由で抽出
+  //   例: 【番号検索】\n#T001\n09012345678 [名前/全件]
+  if (/【\s*番号検索\s*】/.test(normalized)) {
+    const sm = normalized.match(/[Tt]-?(\d{3,5})/);
+    const pm = normalized.match(/0\d{9,10}(?!\d)/);
+    if (!sm || !pm) {
+      return { error: '【番号検索】コマンドにはT-XXX店舗IDと電話番号（10〜11桁）が必須です。\n\n例:\n【番号検索】\n#T001\n09012345678' };
+    }
+    const storeId = `T-${sm[1]}`;
+    const phone = pm[0];
+    // 残りトークンから 全件 / 名前キーワード を抽出
+    const rest = normalized
+      .replace(/【\s*番号検索\s*】/g, ' ')
+      .replace(/#?[Tt]-?\d{3,5}/g, ' ')
+      .replace(new RegExp(phone, 'g'), ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const allRecords = /全件/.test(rest);
+    const nameKeyword = rest.replace(/全件/g, '').trim();
+    return { storeId, phone, allRecords, nameKeyword };
+  }
+
+  // 旧形式: T-001 / T001 / T-1043 などを許容（T-XXX 09012345678 [名前/全件]）
   const m = normalized.match(/^([Tt]-?\d{3,5})\s+(.+)$/);
   if (!m) return null;
   let storeId = m[1].toUpperCase();
@@ -1230,6 +1466,33 @@ function preloadPhoneIndex() {
   setImmediate(() => buildRirekiCache().catch(e => console.error('[利用履歴] プリロードエラー:', e.message)));
 }
 
+// botコマンドにマッチするテキストか判定。マッチしないメッセージは雑談として完全に無視（C-002 2026-05-03 かず）
+function isBotCommand(text, event) {
+  if (!text) return false;
+  if (/^#whoami$/i.test(text)) return true;
+  try {
+    const sr = require('./shift_route');
+    if (event?.source?.type === 'group' && event?.source?.groupId === sr.SHIFT_GROUP_ID) {
+      const parts = String(text).trim().split(/[\s　]+/);
+      if (parts.length >= 2 || text === '確認' || text === '出勤確認') return true;
+      // C-040 v1.1 (2026-05-08): shift_route_date のM/D出勤更新コマンド (1パーツ) を許可
+      try { if (require('./shift_route_date').isShiftDateCommand(text)) return true; } catch (_) {}
+      // C-040 v1.1 (2026-05-08): shift_route_date のM/D出勤更新コマンド (1パーツ) を許可
+    }
+  } catch (_) {}
+  if (parseStorePhoneCommand(text)) return true;
+  try { if (require('./load_schedule').parseShiftUpdateCommand(text)) return true; } catch (_) {}
+  try { if (require('./apply_input').parseApplyInputCommand(text)) return true; } catch (_) {}
+  if (parseKokyakuUpdateCommand(text)) return true;
+  if (isNippoInput(text)) return true;
+  if (text.includes('月報更新')) return true;
+  if (parseMeisaisyoRequest(text)) return true;
+  if (parseMeisaiRequest(text)) return true;
+  if (text.includes('教えて')) return true;
+  if (parsePhoneCommand(text)) return true;
+  return false;
+}
+
 // ── LINE イベントハンドラ（200を即返してバックグラウンド処理） ──
 async function handleLineEvent(event) {
   const client = createLineClient();
@@ -1246,10 +1509,16 @@ async function handleLineEvent(event) {
     console.log(`[LINE] #whoami リクエスト userId=${userId || '(なし)'} target=${target}`);
     setImmediate(async () => {
       const msg = userId
-        ? `🆔 あなたのLINE userId:\n${userId}\n\nオーナーにこのIDを伝えて「📁 店舗フォルダ」シートのD列に登録してもらってください。登録後は店舗名と日付だけで日報入力できます。`
+        ? `🆔 あなたのLINE userId:\n${userId}\n\nオーナーにこのIDを伝えて「👥 LINE登録者」シートに登録してもらってください（A=userId / B=氏名 / C=役職 / D=所属契約ID(例: T-001) / E=有効 / F=登録日）。登録後は店舗名と日付だけで日報入力できます。`
         : `❌ userIdを取得できませんでした。botを友達追加してから再度お試しください。`;
       await client.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] }).catch(() => {});
     });
+    return;
+  }
+
+  // [C-002] コマンドにマッチしないメッセージは完全に無反応（雑談に「登録してください」を返さない）
+  if (!isBotCommand(text, event)) {
+    console.log(`[無視] 非コマンド userId=${userId || '(なし)'} text="${text.slice(0,40)}"`);
     return;
   }
 
@@ -1266,16 +1535,20 @@ async function handleLineEvent(event) {
     console.log(`[認証] 拒否 userId=${userId || '(なし)'} text="${text.slice(0,40)}"`);
     await client.replyMessage({
       replyToken: event.replyToken,
-      messages: [{ type: 'text', text: '❌ このLINEは登録されていないため利用できません。\n\n#whoami と送信して自分のLINE userIdを確認し、オーナーに「📁 店舗フォルダ」シートD列への登録を依頼してください。' }],
+      messages: [{ type: 'text', text: '❌ このLINEは登録されていないため利用できません。\n\n#whoami と送信して自分のLINE userIdを確認し、オーナーに「👥 LINE登録者」シートへの登録を依頼してください。' }],
     }).catch(() => {});
     return;
   }
   console.log(`[認証] 許可 userId=${userId} 店舗=${allowedStores.map(s => s.storeId+'/'+s.storeName).join(',')}`);
 
-  // 「T-001 09012345678 [名前/全件]」形式: 店舗別 顧客検索（1対1/グループ両対応・許可userIdチェック付き）
+  // 「【番号検索】#T001 09012345678」または「T-001 09012345678 [名前/全件]」形式: 店舗別 顧客検索
   const storePhoneCmd = parseStorePhoneCommand(text);
   if (storePhoneCmd) {
     const replyToken = event.replyToken;
+    if (storePhoneCmd.error) {
+      await client.replyMessage({ replyToken, messages: [{ type: 'text', text: storePhoneCmd.error }] }).catch(() => {});
+      return;
+    }
     const sourceType = event.source?.type || 'user';
     console.log(`[LINE] 店舗別顧客検索: ${storePhoneCmd.storeId} / ${storePhoneCmd.phone} 名前=${storePhoneCmd.nameKeyword || '(なし)'} source=${sourceType}`);
     setImmediate(async () => {
@@ -1307,15 +1580,93 @@ async function handleLineEvent(event) {
   // 1対1トークのコマンド処理
   if (event.source?.type === 'user' && userId) {
     setImmediate(async () => {
-      // 「4月23日 顧客更新」形式: 日報全件→利用履歴コピー
+      // ════════════════════════════════════════════════════════════════════
+      // ▼ [日報UI V3] シフト更新 → load_schedule.js
+      //   コマンド: 「#T001 5/6 シフト更新」 (T-XXX必須・店舗フォルダ内検索)
+      //   成功時: サイレント / エラー時のみ通知
+      // ════════════════════════════════════════════════════════════════════
+      {
+        const ls = require('./load_schedule');
+        const cmd = ls.parseShiftUpdateCommand(text);
+        if (cmd) {
+          const target = userId || process.env.LINE_USER_ID;
+          console.log(`[シフト更新] 受信(個人) storeId=${cmd.storeId || '(なし)'} dateInfo=${JSON.stringify(cmd.dateInfo || {})}`);
+          setImmediate(async () => {
+            try {
+              if (cmd.error) throw new Error(cmd.error);
+              const folderInfo = await getFolderByStoreId(cmd.storeId, userId);
+              const result = await ls.loadScheduleDirect(cmd.dateInfo, folderInfo.folderId);
+              console.log(`[シフト更新] 完了: ${cmd.storeId} ${result.targetName} CREA=${result.creaCount} ふわもこ=${result.fuwaCount}` +
+                (result.overflow.crea || result.overflow.fuwa
+                  ? ` (溢れ CREA=${result.overflow.crea} ふわもこ=${result.overflow.fuwa})` : ''));
+            } catch (err) {
+              console.error('[シフト更新] エラー:', err.message);
+              const dateLabel = cmd.dateInfo ? `${cmd.dateInfo.month}/${cmd.dateInfo.day}` : '?';
+              await client.pushMessage({
+                to: target,
+                messages: [{ type: 'text', text: `❌ シフト更新エラー (${dateLabel}): ${err.message}` }]
+              }).catch(() => {});
+            }
+          });
+          return;
+        }
+      }
+
+      // ════════════════════════════════════════════════════════════════════
+      // ▼ [日報UI V3] 入力反映 → apply_input.js (C16経由なし・GAS不要)
+      //   コマンド: 「#T001 入力反映」 / 「#T001 5/6 入力反映」
+      //   「📝 入力」のC4-C13を読んでダッシュボード空き行に直接書込
+      //   成功時: サイレント / エラー時のみ通知
+      // ════════════════════════════════════════════════════════════════════
+      {
+        const ai = require('./apply_input');
+        const cmd = ai.parseApplyInputCommand(text);
+        if (cmd) {
+          const target = userId || process.env.LINE_USER_ID;
+          console.log(`[入力反映] 受信(個人) storeId=${cmd.storeId || '(なし)'} dateInfo=${JSON.stringify(cmd.dateInfo || {})}`);
+          setImmediate(async () => {
+            try {
+              if (cmd.error) throw new Error(cmd.error);
+              const folderInfo = await getFolderByStoreId(cmd.storeId, userId);
+              const ls = require('./load_schedule');
+              const ssInfo = await ls.findTargetSpreadsheetInFolder(folderInfo.folderId, cmd.dateInfo.year, cmd.dateInfo.month, cmd.dateInfo.day);
+              const result = await ai.applyInputFormDirect(ssInfo.id);
+              console.log(`[入力反映] 完了: ${cmd.storeId} ${ssInfo.name} → ${result.store}/${result.name} 行${result.targetRow}`);
+            } catch (err) {
+              console.error('[入力反映] エラー:', err.message);
+              const dateLabel = cmd.dateInfo ? `${cmd.dateInfo.month}/${cmd.dateInfo.day}` : '?';
+              await client.pushMessage({
+                to: target,
+                messages: [{ type: 'text', text: `❌ 入力反映エラー (${dateLabel}): ${err.message}` }]
+              }).catch(() => {});
+            }
+          });
+          return;
+        }
+      }
+
+      // 顧客更新（T-XXX必須）: 日報全件→店舗別 ■1.顧客管理 の利用履歴タブにコピー
       const kokyaku = parseKokyakuUpdateCommand(text);
       if (kokyaku) {
         const target = userId || process.env.LINE_USER_ID;
-        console.log(`[LINE] 顧客更新リクエスト受信: ${kokyaku.dateStr}`);
+        if (kokyaku.error) {
+          await client.pushMessage({
+            to: target,
+            messages: [{ type: 'text', text: kokyaku.error }],
+          }).catch(() => {});
+          return;
+        }
+        console.log(`[LINE] 顧客更新リクエスト受信: ${kokyaku.storeId} / ${kokyaku.dateStr}`);
         setImmediate(async () => {
           try {
-            const result = await processKokyakuUpdate(kokyaku.dateStr);
-            console.log(`[顧客更新] 完了: ${result.dateLabel} ${result.count}件`);
+            const result = await processKokyakuUpdate(kokyaku.dateStr, kokyaku.storeId, userId);
+            console.log(`[顧客更新] 完了: ${result.storeId}/${result.storeName} ${result.dateLabel} ${result.count}件`);
+            if (result.count === 0) {
+              await client.pushMessage({
+                to: target,
+                messages: [{ type: 'text', text: `【顧客更新】${result.storeId || ''} ${result.dateLabel}：該当する利用履歴が見つかりませんでした。日付やT-XXX、日報の内容をご確認ください。` }],
+              }).catch(() => {});
+            }
           } catch (err) {
             console.error('[顧客更新] エラー:', err.message);
             await client.pushMessage({
@@ -1364,11 +1715,22 @@ async function handleLineEvent(event) {
         return;
       }
 
-      // 「月報更新」「月報更新 4月7日」「4月7日 月報更新」: 日報→月報同期
+      // 「#T001 月報更新 4月7日」: 日報→月報同期（T-XXX必須・👥 LINE登録者の同行許可者のみ）
       if (text.includes('月報更新')) {
         const target = userId || process.env.LINE_USER_ID;
         setImmediate(async () => {
           try {
+            // T-XXX 必須化（例: T-001 / T001 / T-1043 / #T001 すべて許容）
+            const storeMatch = text.match(/T[\-]?(\d{3,})/i);
+            if (!storeMatch) {
+              throw new Error('店舗IDが指定されていません。T-XXXを含めて送信してください\n例: 「#T001\\n月報更新\\n4月28日」');
+            }
+            const storeId = `T-${storeMatch[1]}`;
+            // 権限チェック: 「📁 店舗フォルダ」シートの該当T-XXX行のD列許可LINEに含まれているか
+            // （D列は「👥 LINE登録者」シートから状態=有効の人を自動取得しているので、同行許可者のみ通る）
+            await getFolderByStoreId(storeId, userId);
+            console.log(`[月報] ${storeId} 権限OK userId=${userId}`);
+
             // 日付指定があれば解析（順序不問: 「月報更新 4月7日」「4月7日 月報更新」「月報更新 4/7」）
             let syncDate = null;
             const dateMatch = text.match(/(\d{1,2})[月\/](\d{1,2})日?/);
@@ -1426,11 +1788,27 @@ async function handleLineEvent(event) {
         return;
       }
 
-      // 「教えて」: 日報スクショ
+      // 「教えて」: 日報スクショ（T-XXX必須・👥 LINE登録者の同行許可者のみ・店舗別フォルダから日報取得）
       if (text.includes('教えて')) {
         const target = getPushTarget(event);
-        console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
-        processAndPush(target, client).catch(err => console.error('[LINE] 未処理エラー:', err.message));
+        setImmediate(async () => {
+          try {
+            const storeMatch = text.match(/T[\-]?(\d{3,})/i);
+            if (!storeMatch) {
+              throw new Error('店舗IDが指定されていません。T-XXXを含めて送信してください\n例: 「#T001 教えて」');
+            }
+            const storeId = `T-${storeMatch[1]}`;
+            const folderInfo = await getFolderByStoreId(storeId, userId);
+            console.log(`[教えて] ${storeId} 権限OK userId=${userId} folder=${folderInfo.folderId}`);
+            await processAndPush(target, client, folderInfo.folderId);
+          } catch (err) {
+            console.error('[教えて] エラー:', err.message);
+            await client.pushMessage({
+              to: target,
+              messages: [{ type: 'text', text: `❌ 教えてエラー: ${err.message}` }],
+            }).catch(() => {});
+          }
+        });
         return;
       }
 
@@ -1463,55 +1841,116 @@ async function handleLineEvent(event) {
   // グループからのコマンド
 
   // ════════════════════════════════════════════════════════════════════
-  // ▼ [C-036] 出勤表グループ → 新SS自動反映ブロック  ⚠️ 編集禁止 ⚠️
+  // ▼ [C-036/C-040] 出勤表シフト反映 → shift_route系へ委譲（すい管轄・編集禁止）
   // ════════════════════════════════════════════════════════════════════
-  // このブロックは shift_reflect.js 経由で LINEシフト→月次SSへ自動反映。
-  // 削除・改変すると C-036 機能（出勤表LINEのシフト自動反映）が壊れます。
-  // 何か変更が必要な場合は shift_reflect.js 側で対応してください。
-  // 削除された場合、サーバー上のガーディアン (cron 1分毎) が自動復旧します。
-  // 詳細: 共有記憶シート C-036 行 を参照
-  //   https://docs.google.com/spreadsheets/d/1-ITHWZsvH9Z6iNTNtEUp4LTM5pWN2VwT6A41SeTBy_c
+  // 本体ロジックは /app/chatbot/shift_route*.js に集約。
+  // - shift_route_date.js: 「(M/D)の出勤更新して」LINEコマンド (C-040 v1)
+  // - shift_route.js     : 通常シフト投稿の SS反映 + ベンリー連携 (C-036/C-040 v5.4)
+  // ガーディアン (cron 1分毎) が削除を検知して自動復旧します。
+  // 詳細: 共有記憶シート C-036 / C-040 行 を参照
   // ════════════════════════════════════════════════════════════════════
-  const SHIFT_GROUP_ID = 'C4befe4675d94c864734eae6b897f1484';
-  if (event.source?.type === 'group' && event.source?.groupId === SHIFT_GROUP_ID) {
-    const parts = text.trim().split(/[\s　]+/);
-    if (parts.length >= 3 || text === '確認' || text === '出勤確認') {
+  if (await require('./shift_route_date').handle(event, text, client)) return;
+  if (await require('./shift_route').handle(event, text, client)) return;
+
+
+  // ════════════════════════════════════════════════════════════════════
+  // ▼ [日報UI V3] シフト更新 → load_schedule.js
+  //   コマンド: 「#T001 5/6 シフト更新」 (T-XXX必須・店舗フォルダ内検索)
+  //   成功時: サイレント / エラー時のみ通知
+  // ════════════════════════════════════════════════════════════════════
+  {
+    const ls = require('./load_schedule');
+    const cmd = ls.parseShiftUpdateCommand(text);
+    if (cmd) {
+      const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+      console.log(`[シフト更新] 受信(グループ) storeId=${cmd.storeId || '(なし)'} dateInfo=${JSON.stringify(cmd.dateInfo || {})}`);
       setImmediate(async () => {
         try {
-          const shiftReflect = require('./shift_reflect');
-          const result = await shiftReflect.reflectShiftMessage(text);
-          if (result.type === 'ignore') {
-            console.log('[Shift] 非シフトメッセージ→スルー');
-          } else if (result.type === 'success') {
-            console.log(`[Shift] 結果: success ${result.writtenCount} 件 (${result.staffName} / ${result.store})`);
-          } else {
-            console.log(`[Shift] 結果: ${JSON.stringify(result)}`);
-          }
-          const reply = shiftReflect.formatReply(result);
-          if (reply) {
-            await client.pushMessage({
-              to: event.source.groupId,
-              messages: [{ type: 'text', text: reply }],
-            }).catch(() => {});
-          }
+          if (cmd.error) throw new Error(cmd.error);
+          const folderInfo = await getFolderByStoreId(cmd.storeId, userId);
+          const result = await ls.loadScheduleDirect(cmd.dateInfo, folderInfo.folderId);
+          console.log(`[シフト更新] 完了: ${cmd.storeId} ${result.targetName} CREA=${result.creaCount} ふわもこ=${result.fuwaCount}` +
+            (result.overflow.crea || result.overflow.fuwa
+              ? ` (溢れ CREA=${result.overflow.crea} ふわもこ=${result.overflow.fuwa})` : ''));
         } catch (err) {
-          console.error('[Shift] エラー:', err.message);
+          console.error('[シフト更新] エラー:', err.message);
+          const dateLabel = cmd.dateInfo ? `${cmd.dateInfo.month}/${cmd.dateInfo.day}` : '?';
+          await client.pushMessage({
+            to: target,
+            messages: [{ type: 'text', text: `❌ シフト更新エラー (${dateLabel}): ${err.message}` }]
+          }).catch(() => {});
         }
       });
       return;
     }
   }
 
+  // ════════════════════════════════════════════════════════════════════
+  // ▼ [日報UI V3] 入力反映 → apply_input.js (C16経由なし・GAS不要)
+  //   コマンド: 「#T001 入力反映」 / 「#T001 5/6 入力反映」
+  //   成功時: サイレント / エラー時のみ通知
+  // ════════════════════════════════════════════════════════════════════
+  {
+    const ai = require('./apply_input');
+    const cmd = ai.parseApplyInputCommand(text);
+    if (cmd) {
+      const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+      console.log(`[入力反映] 受信(グループ) storeId=${cmd.storeId || '(なし)'} dateInfo=${JSON.stringify(cmd.dateInfo || {})}`);
+      setImmediate(async () => {
+        try {
+          if (cmd.error) throw new Error(cmd.error);
+          const folderInfo = await getFolderByStoreId(cmd.storeId, userId);
+          const ls = require('./load_schedule');
+          const ssInfo = await ls.findTargetSpreadsheetInFolder(folderInfo.folderId, cmd.dateInfo.year, cmd.dateInfo.month, cmd.dateInfo.day);
+          const result = await ai.applyInputFormDirect(ssInfo.id);
+          console.log(`[入力反映] 完了: ${cmd.storeId} ${ssInfo.name} → ${result.store}/${result.name} 行${result.targetRow}`);
+        } catch (err) {
+          console.error('[入力反映] エラー:', err.message);
+          const dateLabel = cmd.dateInfo ? `${cmd.dateInfo.month}/${cmd.dateInfo.day}` : '?';
+          await client.pushMessage({
+            to: target,
+            messages: [{ type: 'text', text: `❌ 入力反映エラー (${dateLabel}): ${err.message}` }]
+          }).catch(() => {});
+        }
+      });
+      return;
+    }
+  }
 
-  // 「4月23日 顧客更新」形式: 日報全件→利用履歴コピー（グループ）
+  // ════════════════════════════════════════════════════════════════════
+  // ▼ [C-036] 出勤表シフト反映 → shift_route.js へ委譲（すい管轄・編集禁止）
+  // ════════════════════════════════════════════════════════════════════
+  // 本体ロジック(parts.length緩和等)は /app/chatbot/shift_route.js に集約。
+  // ガーディアン (cron 1分毎) が削除を検知して自動復旧します。
+  // 詳細: 共有記憶シート C-036 行 を参照
+  // ════════════════════════════════════════════════════════════════════
+  if (await require('./shift_route').handle(event, text, client)) return;
+
+
+
+
+  // 顧客更新（T-XXX必須・グループ）: 日報全件→店舗別 ■1.顧客管理 の利用履歴タブにコピー
   const kokyakuG = parseKokyakuUpdateCommand(text);
   if (kokyakuG) {
     const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
-    console.log(`[LINE] 顧客更新リクエスト受信（グループ）: ${kokyakuG.dateStr}`);
+    if (kokyakuG.error) {
+      await client.pushMessage({
+        to: target,
+        messages: [{ type: 'text', text: kokyakuG.error }],
+      }).catch(() => {});
+      return;
+    }
+    console.log(`[LINE] 顧客更新リクエスト受信（グループ）: ${kokyakuG.storeId} / ${kokyakuG.dateStr}`);
     setImmediate(async () => {
       try {
-        const result = await processKokyakuUpdate(kokyakuG.dateStr);
-        console.log(`[顧客更新] グループ完了: ${result.dateLabel} ${result.count}件`);
+        const result = await processKokyakuUpdate(kokyakuG.dateStr, kokyakuG.storeId, userId);
+        console.log(`[顧客更新] グループ完了: ${result.storeId}/${result.storeName} ${result.dateLabel} ${result.count}件`);
+        if (result.count === 0) {
+          await client.pushMessage({
+            to: target,
+            messages: [{ type: 'text', text: `【顧客更新】${result.storeId || ''} ${result.dateLabel}：該当する利用履歴が見つかりませんでした。日付やT-XXX、日報の内容をご確認ください。` }],
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error('[顧客更新] グループ エラー:', err.message);
         await client.pushMessage({
@@ -1542,11 +1981,19 @@ async function handleLineEvent(event) {
     return;
   }
 
-  // 「月報更新」「月報更新 4月7日」「4月7日 月報更新」: 日報→月報同期
+  // 「#T001 月報更新 4月7日」: 日報→月報同期（T-XXX必須・👥 LINE登録者の同行許可者のみ・グループ）
   if (text.includes('月報更新')) {
     const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
     setImmediate(async () => {
       try {
+        const storeMatch = text.match(/T[\-]?(\d{3,})/i);
+        if (!storeMatch) {
+          throw new Error('店舗IDが指定されていません。T-XXXを含めて送信してください\n例: 「#T001\\n月報更新\\n4月28日」');
+        }
+        const storeId = `T-${storeMatch[1]}`;
+        await getFolderByStoreId(storeId, userId);
+        console.log(`[月報グループ] ${storeId} 権限OK userId=${userId}`);
+
         let syncDate = null;
         const dateMatch = text.match(/(\d{1,2})[月\/](\d{1,2})日?/);
         if (dateMatch) {
@@ -1622,11 +2069,27 @@ async function handleLineEvent(event) {
     return;
   }
 
-  // 「教えて」: 日報スクショ
+  // 「教えて」: 日報スクショ（T-XXX必須・👥 LINE登録者の同行許可者のみ・店舗別フォルダから日報取得）
   if (text.includes('教えて')) {
     const target = getPushTarget(event);
-    console.log(`[LINE] (教えて) 受信 → バックグラウンド処理開始 target=${target}`);
-    setImmediate(() => processAndPush(target, client).catch(err => console.error('[LINE] 未処理エラー:', err.message)));
+    setImmediate(async () => {
+      try {
+        const storeMatch = text.match(/T[\-]?(\d{3,})/i);
+        if (!storeMatch) {
+          throw new Error('店舗IDが指定されていません。T-XXXを含めて送信してください\n例: 「#T001 教えて」');
+        }
+        const storeId = `T-${storeMatch[1]}`;
+        const folderInfo = await getFolderByStoreId(storeId, userId);
+        console.log(`[教えて(G)] ${storeId} 権限OK userId=${userId} folder=${folderInfo.folderId}`);
+        await processAndPush(target, client, folderInfo.folderId);
+      } catch (err) {
+        console.error('[教えて(G)] エラー:', err.message);
+        await client.pushMessage({
+          to: target,
+          messages: [{ type: 'text', text: `❌ 教えてエラー: ${err.message}` }],
+        }).catch(() => {});
+      }
+    });
     return;
   }
 

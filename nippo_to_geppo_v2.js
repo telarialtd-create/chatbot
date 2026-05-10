@@ -123,12 +123,18 @@ async function findGeppoByStoreMonth(storeName, year, month) {
   const drive = google.drive({ version: 'v3', auth });
   const res = await drive.files.list({
     q: `'${DATA_FOLDER_ID}' in parents and name='${name}' and trashed=false`,
-    fields: 'files(id,name)',
+    fields: 'files(id,name,mimeType,shortcutDetails)',
     pageSize: 5,
   });
   const files = res.data.files || [];
   if (!files.length) throw new Error(`月報シートが見つかりません: ${name}`);
-  return files[0].id;
+  // ショートカットなら実体ファイルIDに解決（2026-5月以降の運用変化に対応）
+  const f = files[0];
+  if (f.mimeType === 'application/vnd.google-apps.shortcut' && f.shortcutDetails && f.shortcutDetails.targetId) {
+    console.log(`[v2] "${name}" はショートカット → 実体 ${f.shortcutDetails.targetId} を使用`);
+    return f.shortcutDetails.targetId;
+  }
+  return f.id;
 }
 
 // ── メイン同期関数 ───────────────────────────
@@ -204,7 +210,7 @@ async function syncNippoToGeppo(jstDate) {
   // ── 日報_全件 ───────────────────────────
   const zenRes = await sheets.spreadsheets.values.get({
     spreadsheetId: nippo.id,
-    range: "'日報_全件'!B2:O1000",
+    range: "'日報_全件'!B3:O1000",
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const zenRows = zenRes.data.values || [];
@@ -328,7 +334,7 @@ async function syncNippoToGeppo(jstDate) {
   // ── 回収シート書込 ────────────────────────
   const kaishuuSrc = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: nippo.id,
-    ranges: ["'現金管理'!A5:G34", "'現金管理'!A37:G80"],
+    ranges: ["'現金管理'!A5:H34", "'現金管理'!A37:H80"],
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const [creaRows, fuwaRows] = kaishuuSrc.data.valueRanges.map(v => v.values || []);
@@ -341,9 +347,9 @@ async function syncNippoToGeppo(jstDate) {
       if (name.replace(/\s/g, '').includes('合計')) continue;
       const fn = isNaN(Number(r[5])) ? 0 : Number(r[5]);
       const gn = isNaN(Number(r[6])) ? 0 : Number(r[6]);
-      const amount = (fn > 0 && gn >= 0) ? (gn - fn) : (fn + gn);
-      if (amount === 0) continue;
-      items.push({ name, amount });
+      const sum = fn + gn;
+      if (sum === 0) continue;
+      items.push({ name, amount: -sum });
     }
     return items;
   };
@@ -376,35 +382,120 @@ async function syncNippoToGeppo(jstDate) {
     }
 
     const toAdd = items.filter(it => !nameMap[it.name]);
+    const overflow = [];
     if (toAdd.length > 0) {
-      if (toAdd.length > emptyRows.length) {
-        throw new Error(`[v2/回収/${label2}] D2〜D46に空白行不足（必要${toAdd.length}/空${emptyRows.length}）: ${toAdd.map(i=>i.name).join(',')}`);
+      const writable = toAdd.slice(0, emptyRows.length);
+      const overflowItems = toAdd.slice(emptyRows.length);
+      overflowItems.forEach(it => overflow.push(it.name));
+
+      if (writable.length > 0) {
+        const addUpdates = writable.map((it, idx) => ({
+          range: `'回収'!D${emptyRows[idx]}`,
+          values: [[it.name]],
+        }));
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: sheetId,
+          requestBody: { valueInputOption: 'RAW', data: addUpdates },
+        });
+        writable.forEach((it, idx) => { nameMap[it.name] = emptyRows[idx]; });
+        console.log(`[v2/回収/${label2}] 新規登録: ${writable.map((it,i)=>`${it.name}→D${emptyRows[i]}`).join(', ')}`);
       }
-      const addUpdates = toAdd.map((it, idx) => ({
-        range: `'回収'!D${emptyRows[idx]}`,
-        values: [[it.name]],
-      }));
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: sheetId,
-        requestBody: { valueInputOption: 'RAW', data: addUpdates },
-      });
-      toAdd.forEach((it, idx) => { nameMap[it.name] = emptyRows[idx]; });
-      console.log(`[v2/回収/${label2}] 新規登録: ${toAdd.map((it,i)=>`${it.name}→D${emptyRows[i]}`).join(', ')}`);
     }
 
-    const updates = items.map(item => ({
-      range: `'回収'!${colStr}${nameMap[item.name]}`,
-      values: [[item.amount]],
-    }));
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: sheetId,
-      requestBody: { valueInputOption: 'RAW', data: updates },
-    });
+    const updates = items
+      .filter(item => nameMap[item.name])
+      .map(item => ({
+        range: `'回収'!${colStr}${nameMap[item.name]}`,
+        values: [[item.amount]],
+      }));
+    if (updates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: { valueInputOption: 'RAW', data: updates },
+      });
+    }
     console.log(`[v2/回収/${label2}] ${d}日 ${updates.length}件 書込`);
+    return overflow.map(name => ({ section: `回収/${label2}`, name }));
   };
 
-  await writeKaishuu(creaGeppoId, 'CREA', creaKaishuu);
-  await writeKaishuu(fuwaGeppoId, 'ふわもこ', fuwaKaishuu);
+  const warnings = [];
+  warnings.push(...(await writeKaishuu(creaGeppoId, 'CREA', creaKaishuu)) || []);
+  warnings.push(...(await writeKaishuu(fuwaGeppoId, 'ふわもこ', fuwaKaishuu)) || []);
+
+  // ── バンス書込（現金管理H列 → 回収シート「{名前}バンス」行 該当日列・H列値そのまま） ─
+  const buildBansu = (rows) => {
+    const items = [];
+    for (const r of rows) {
+      const name = (r[0] || '').toString().trim();
+      if (!name || name.includes('▌')) continue;
+      if (name.replace(/\s/g, '').includes('合計')) continue;
+      const v = Number(r[7]);
+      if (isNaN(v) || v === 0) continue;
+      items.push({ name: `${name}バンス`, amount: v });
+    }
+    return items;
+  };
+  const creaBansu = buildBansu(creaRows);
+  const fuwaBansu = buildBansu(fuwaRows);
+
+  const writeBansu = async (sheetId, label2, items) => {
+    if (items.length === 0) return [];
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: "'回収'!A1:AK200",
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    const rows = res.data.values || [];
+    const header = rows[0] || [];
+    const colIdx = header.findIndex(h => String(h).trim() === `${d}日`);
+    if (colIdx === -1) { console.log(`[v2/バンス/${label2}] ${d}日 列なし`); return []; }
+    const colStr = idxToCol(colIdx);
+
+    const MAX_ROW = 46;
+    const nameMap = {};
+    const emptyRows = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = i + 1;
+      if (row > MAX_ROW) break;
+      const v = (rows[i]?.[3] || '').toString().trim();
+      if (v) nameMap[v] = row;
+      else emptyRows.push(row);
+    }
+
+    const overflow = [];
+    const addNameUpdates = [];
+    for (const it of items) {
+      if (nameMap[it.name]) continue;
+      if (emptyRows.length === 0) {
+        overflow.push(it.name);
+        continue;
+      }
+      const row = emptyRows.shift();
+      addNameUpdates.push({ range: `'回収'!D${row}`, values: [[it.name]] });
+      nameMap[it.name] = row;
+    }
+    if (addNameUpdates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: { valueInputOption: 'RAW', data: addNameUpdates },
+      });
+      console.log(`[v2/バンス/${label2}] 新規登録 ${addNameUpdates.length}件`);
+    }
+
+    const updates = items
+      .filter(it => nameMap[it.name])
+      .map(it => ({ range: `'回収'!${colStr}${nameMap[it.name]}`, values: [[it.amount]] }));
+    if (updates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: { valueInputOption: 'RAW', data: updates },
+      });
+    }
+    console.log(`[v2/バンス/${label2}] ${d}日 ${updates.length}件 書込${overflow.length ? ` / 空白不足: ${overflow.join(',')}` : ''}`);
+    return overflow.map(name => ({ section: `バンス/${label2}`, name }));
+  };
+  warnings.push(...(await writeBansu(creaGeppoId, 'CREA', creaBansu)) || []);
+  warnings.push(...(await writeBansu(fuwaGeppoId, 'ふわもこ', fuwaBansu)) || []);
 
   // ── SBシート書込 ────────────────────────
   const kyuryoRes = await sheets.spreadsheets.values.get({
@@ -428,24 +519,47 @@ async function syncNippoToGeppo(jstDate) {
   const creaSB = extractSB(0, 1);
   const fuwaSB = extractSB(11, 12);
 
+  // 交通費は給料UIではなく「現金管理」D列を参照（既に kaishuuSrc で A5:G34/A37:G80 取得済み）
+  const buildKotsuMap = (rows) => {
+    const map = {};
+    for (const r of rows) {
+      const name = (r[0] || '').toString().trim();
+      if (!name || name.includes('▌')) continue;
+      if (name.replace(/\s/g, '').includes('合計')) continue;
+      const k = Number(r[3]);
+      if (!isNaN(k)) map[name] = k;
+    }
+    return map;
+  };
+  const creaKotsuMap = buildKotsuMap(creaRows);
+  const fuwaKotsuMap = buildKotsuMap(fuwaRows);
+  const overrideKotsu = (items, map) => {
+    // vals = [売, 給料, 交通費, 指, フリー, リピ, X, 時間] → 交通費は idx 2
+    for (const it of items) {
+      if (map[it.name] !== undefined) it.vals[2] = map[it.name];
+    }
+  };
+  overrideKotsu(creaSB, creaKotsuMap);
+  overrideKotsu(fuwaSB, fuwaKotsuMap);
+
   const writeSB = async (sheetId, label2, items) => {
-    if (items.length === 0) return;
+    if (items.length === 0) return [];
     const hRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId, range: "'SB'!A7:KZ7",
+      spreadsheetId: sheetId, range: "'SB'!A7:ZZ7",
       valueRenderOption: 'UNFORMATTED_VALUE',
     });
     const header = hRes.data.values?.[0] || [];
     const dayColIdx  = header.findIndex(h => String(h).trim() === `${d}日`);
     const oneColIdx  = header.findIndex(h => String(h).trim() === '1日');
-    if (dayColIdx === -1 || oneColIdx === -1) { console.log(`[v2/SB/${label2}] 列検出失敗`); return; }
+    if (dayColIdx === -1 || oneColIdx === -1) { console.log(`[v2/SB/${label2}] 列検出失敗`); return []; }
 
-    const nameColIdx = oneColIdx - 1;
-    const nameColStr = idxToCol(nameColIdx);
+    // 名前列はA列固定（T列等は無視）
+    const nameColStr = 'A';
     const startColStr = idxToCol(dayColIdx);
     const endColStr   = idxToCol(dayColIdx + 7);
 
     const nRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId, range: `'SB'!${nameColStr}1:${nameColStr}100`,
+      spreadsheetId: sheetId, range: `'SB'!A1:A100`,
       valueRenderOption: 'UNFORMATTED_VALUE',
     });
     const nameCol = nRes.data.values || [];
@@ -456,17 +570,41 @@ async function syncNippoToGeppo(jstDate) {
       .split(/[\s　]/)[0]
       .trim();
 
+    // 行9〜48 を対象範囲とする（i=8..47）
+    const ROW_START = 9, ROW_END = 48;
     const nameMap = {};
-    nameCol.forEach((r, i) => {
-      const n = normalize(r[0]);
-      if (n && i >= 8) nameMap[n] = i + 1;
-    });
+    const emptyRows = [];
+    for (let i = ROW_START - 1; i <= ROW_END - 1; i++) {
+      const n = normalize(nameCol[i]?.[0]);
+      const row = i + 1;
+      if (n) nameMap[n] = row;
+      else emptyRows.push(row);
+    }
+
+    const overflow = [];
+    const addNameUpdates = [];
+    for (const item of items) {
+      if (nameMap[normalize(item.name)]) continue;
+      if (emptyRows.length === 0) {
+        overflow.push(item.name);
+        continue;
+      }
+      const row = emptyRows.shift();
+      addNameUpdates.push({ range: `'SB'!A${row}`, values: [[item.name]] });
+      nameMap[normalize(item.name)] = row;
+    }
+    if (addNameUpdates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: { valueInputOption: 'RAW', data: addNameUpdates },
+      });
+      console.log(`[v2/SB/${label2}] 新規登録 ${addNameUpdates.length}件`);
+    }
 
     const updates = [];
-    const notFound = [];
     for (const item of items) {
       const row = nameMap[normalize(item.name)];
-      if (!row) { notFound.push(item.name); continue; }
+      if (!row) continue;
       updates.push({
         range: `'SB'!${startColStr}${row}:${endColStr}${row}`,
         values: [item.vals],
@@ -478,36 +616,12 @@ async function syncNippoToGeppo(jstDate) {
         requestBody: { valueInputOption: 'RAW', data: updates },
       });
     }
-    if (notFound.length) console.log(`[v2/SB/${label2}] 未発見: ${notFound.join(',')}`);
-    console.log(`[v2/SB/${label2}] ${updates.length}件 書込`);
+    console.log(`[v2/SB/${label2}] ${updates.length}件 書込${overflow.length ? ` / 空白不足: ${overflow.join(',')}` : ''}`);
+    return overflow.map(name => ({ section: `SB/${label2}`, name }));
   };
 
-  await writeSB(creaGeppoId, 'CREA', creaSB);
-  await writeSB(fuwaGeppoId, 'ふわもこ', fuwaSB);
-
-  // ── AC18 給料+交通費合計
-  const salaryRes = await sheets.spreadsheets.values.batchGet({
-    spreadsheetId: nippo.id,
-    ranges: ["'給料UI'!C4:D25", "'給料UI'!N4:O25"],
-    valueRenderOption: 'UNFORMATTED_VALUE',
-  });
-  const sumRange = (rows) => (rows || []).reduce((s, r) => {
-    return s + (Number(r[0]) || 0) + (Number(r[1]) || 0);
-  }, 0);
-  const creaSalary = sumRange(salaryRes.data.valueRanges[0].values);
-  const fuwaSalary = sumRange(salaryRes.data.valueRanges[1].values);
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: creaGeppoId,
-    range: `'売上'!${col}18`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[creaSalary]] },
-  });
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: fuwaGeppoId,
-    range: `'売上'!${col}18`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[fuwaSalary]] },
-  });
+  warnings.push(...(await writeSB(creaGeppoId, 'CREA', creaSB)) || []);
+  warnings.push(...(await writeSB(fuwaGeppoId, 'ふわもこ', fuwaSB)) || []);
 
   // ── AC23 経費合計（CREAのみ）
   const p24Res = await sheets.spreadsheets.values.get({
@@ -537,22 +651,45 @@ async function syncNippoToGeppo(jstDate) {
   if (attendItems.length > 0) {
     const nameRes = await sheets.spreadsheets.values.get({
       spreadsheetId: creaGeppoId,
-      range: "'人件費'!D1:D50",
+      range: "'人件費'!D1:D200",
       valueRenderOption: 'UNFORMATTED_VALUE',
     });
     const nameCol = nameRes.data.values || [];
     const nameMap = {};
-    nameCol.forEach((r, i) => {
-      const n = (r[0] || '').toString().trim();
-      if (n) nameMap[n] = i + 1;
-    });
+    const emptyRows = [];
+    const SCAN_ROWS = 200;
+    for (let i = 0; i < SCAN_ROWS; i++) {
+      const n = (nameCol[i]?.[0] || '').toString().trim();
+      const row = i + 1;
+      if (n) nameMap[n] = row;
+      else emptyRows.push(row);
+    }
 
     const jinkenCol = dayToJinkenCol(d);
+    const addNameUpdates = [];
+    const overflow = [];
+    for (const it of attendItems) {
+      if (nameMap[it.name]) continue;
+      if (emptyRows.length === 0) {
+        overflow.push(it.name);
+        continue;
+      }
+      const row = emptyRows.shift();
+      addNameUpdates.push({ range: `'人件費'!D${row}`, values: [[it.name]] });
+      nameMap[it.name] = row;
+    }
+    if (addNameUpdates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: creaGeppoId,
+        requestBody: { valueInputOption: 'RAW', data: addNameUpdates },
+      });
+      console.log(`[v2/人件費/CREA] 新規登録 ${addNameUpdates.length}件`);
+    }
+
     const jinkenUpdates = [];
-    const notFound = [];
     for (const it of attendItems) {
       const row = nameMap[it.name];
-      if (!row) { notFound.push(it.name); continue; }
+      if (!row) continue;
       jinkenUpdates.push({
         range: `'人件費'!${jinkenCol}${row}`,
         values: [[it.hours]],
@@ -564,8 +701,8 @@ async function syncNippoToGeppo(jstDate) {
         requestBody: { valueInputOption: 'RAW', data: jinkenUpdates },
       });
     }
-    if (notFound.length) console.log(`[v2/人件費/CREA] 名前未発見: ${notFound.join(',')}`);
-    console.log(`[v2/人件費/CREA] ${d}日(${jinkenCol}列) ${jinkenUpdates.length}件 書込`);
+    console.log(`[v2/人件費/CREA] ${d}日(${jinkenCol}列) ${jinkenUpdates.length}件 書込${overflow.length ? ` / 空白不足: ${overflow.join(',')}` : ''}`);
+    overflow.forEach(name => warnings.push({ section: '人件費/CREA', name }));
   } else {
     console.log('[v2/人件費/CREA] 該当データなし');
   }
@@ -575,6 +712,7 @@ async function syncNippoToGeppo(jstDate) {
   // line_handler.js 互換の返り値
   return {
     label,
+    warnings,
     totalSales: creaSales,
     total_hon:  creaHon,
     am_hon:     creaHonBySlot.am,

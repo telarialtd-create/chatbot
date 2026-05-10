@@ -32,3 +32,18 @@ tmp/
 # Claude / 個人運用
 sessions/
 context/thoughts/.claude/settings.local.json
+
+# T01同期作業（2026-05-10）で除外追加
+_backup_before_vps_overwrite_20260510/
+_c002_recovery_20260508/
+case_a/
+public/temp/
+
+# 会社内部資産（GitHub公開しない・別途管理）
+CLAUDE.md
+agents/
+company_ceo/
+context/
+skills/
+staff_setup/
+.claude/commands/

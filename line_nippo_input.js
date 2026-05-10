@@ -25,6 +25,7 @@ const path = require('path');
 const STORES_SHEET_ID  = '19LgvtnN12QGQzqwQgOVpmFckg111C2RzbyjxI2_hkvA';
 const FOLDER_SHEET     = '📁 店舗フォルダ';
 const DASHBOARD_SHEET  = 'ダッシュボード';
+const INPUT_FORM_SHEET = '📝 入力';  // 🆕 入力フォーム（C4-C13/C16）の書込先
 const REGISTER_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby6kPgHPcn8aaUm96LLmgZUT4IwfTAg2B3Ow17uawzrWNTWiQLx2cmUXg8_BTPyVRgB/exec';
 
 // セルマッピング（項目名 → セル）
@@ -286,42 +287,81 @@ async function writeToDashboard(spreadsheetId, fields) {
   const auth   = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
+  // 🆕 [日報UI V3] 書込先を「📝 入力」シートのC4-C13に変更
+  //   旧: ダッシュボードシートのC4-C13に書いていた → 予約名前列を破壊
+  //   新: 入力フォーム(📝 入力)のC4-C13に書く
+  //   電話番号(番号→C11)は stringValue + TEXT書式で先頭0保持
   const data = [];
   for (const [key, cell] of Object.entries(CELL_MAP)) {
+    if (key === '番号') continue;  // 電話番号は下で別処理
     const value = fields[key] ?? '';
     data.push({
-      range: `'${DASHBOARD_SHEET}'!${cell}`,
+      range: `'${INPUT_FORM_SHEET}'!${cell}`,
       values: [[value]],
     });
   }
 
-  // データ書き込み
+  // データ書き込み（電話番号以外）
   const res = await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
     requestBody: { valueInputOption: 'USER_ENTERED', data },
   });
-  console.log(`[日報入力] ${res.data.totalUpdatedCells}セル書き込み完了`);
+  console.log(`[日報入力] ${res.data.totalUpdatedCells}セル書き込み完了 (📝 入力)`);
 
-  // C16チェックボックスをON
+  // 📞 電話番号C11 は stringValue + TEXT書式で別書込（先頭0保持）
+  const telValue = fields['番号'] ?? '';
+  if (telValue !== '') {
+    const meta = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets(properties(sheetId,title))'
+    });
+    const inputSheetMeta = meta.data.sheets.find(s => s.properties.title === INPUT_FORM_SHEET);
+    if (inputSheetMeta) {
+      const inputGid = inputSheetMeta.properties.sheetId;
+      // C11 = rowIndex=10, colIndex=2
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              repeatCell: {
+                range: { sheetId: inputGid, startRowIndex: 10, endRowIndex: 11, startColumnIndex: 2, endColumnIndex: 3 },
+                cell: { userEnteredFormat: { numberFormat: { type: 'TEXT' } } },
+                fields: 'userEnteredFormat.numberFormat'
+              }
+            },
+            {
+              updateCells: {
+                range: { sheetId: inputGid, startRowIndex: 10, endRowIndex: 11, startColumnIndex: 2, endColumnIndex: 3 },
+                rows: [{ values: [{ userEnteredValue: { stringValue: String(telValue) } }] }],
+                fields: 'userEnteredValue'
+              }
+            }
+          ]
+        }
+      });
+      console.log(`[日報入力] 📝 入力!C11 (電話番号) = "${telValue}" を TEXT書式で書込`);
+    }
+  }
+
+  // C16チェックボックスをON（applyInputFormDirect は「📝 入力」!C16を参照していないが互換のため残す）
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${DASHBOARD_SHEET}'!C16`,
+    range: `'${INPUT_FORM_SHEET}'!C16`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [[true]] },
   });
-  console.log('[日報入力] C16チェックボックス → TRUE');
+  console.log('[日報入力] 📝 入力!C16 チェックボックス → TRUE');
 
-  // GAS WebApp 即時登録エンドポイントへ通知
+  // 🆕 [日報UI V3] applyInputFormDirect で直接ダッシュボードに書込
+  //   旧 GAS WebApp(REGISTER_WEBAPP_URL) は削除済みのため VPS で代替
   try {
-    const r = await fetch(REGISTER_WEBAPP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'register', ssId: spreadsheetId }),
-    });
-    const txt = await r.text();
-    console.log(`[日報入力] GAS即時登録: ${r.status} ${txt}`);
+    const { applyInputFormDirect } = require('./apply_input');
+    const result = await applyInputFormDirect(spreadsheetId);
+    console.log(`[日報入力] applyInputFormDirect 完了: ${result.store}/${result.name} → 行${result.targetRow}`);
   } catch (e) {
-    console.log(`[日報入力] GAS即時登録エラー（処理続行）: ${e.message}`);
+    console.error(`[日報入力] applyInputFormDirect エラー: ${e.message}`);
+    throw e;  // 上位に伝播してLINE通知させる
   }
 
   return res.data.totalUpdatedCells;
