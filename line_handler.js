@@ -1788,6 +1788,57 @@ async function handleLineEvent(event) {
         return;
       }
 
+      // [C-057] 「#T001 ベンリー再配信 岡本さえ」: ベンリー強制再配信（T-XXX必須・👥 LINE登録者の同行許可者のみ）
+      if (text.includes('ベンリー再配信')) {
+        const target = userId || process.env.LINE_USER_ID;
+        setImmediate(async () => {
+          try {
+            const storeMatch = text.match(/T[\-]?(\d{3,})/i);
+            if (!storeMatch) {
+              throw new Error('店舗IDが指定されていません。T-XXXを含めて送信してください\n例: 「#T001 ベンリー再配信 岡本さえ」');
+            }
+            const storeId = `T-${storeMatch[1]}`;
+            await getFolderByStoreId(storeId, userId);
+            console.log(`[ベンリー再配信] ${storeId} 権限OK userId=${userId}`);
+
+            const staffMatch = text.match(/ベンリー再配信\s+([^\s\n]+)/);
+            if (!staffMatch) {
+              throw new Error('スタッフ名が指定されていません\n例: 「#T001 ベンリー再配信 岡本さえ」');
+            }
+            const staffName = staffMatch[1].trim();
+
+            const { execFile } = require('child_process');
+            execFile('/root/venrey_dispatch_specific.sh', [staffName], { timeout: 60000 }, (err, stdout, stderr) => {
+              if (err) {
+                console.error('[ベンリー再配信] dispatch失敗:', err.message, stderr);
+                client.pushMessage({
+                  to: target,
+                  messages: [{ type: 'text', text: `❌ ベンリー再配信エラー: ${err.message}` }],
+                }).catch(() => {});
+                return;
+              }
+              console.log(`[ベンリー再配信] dispatch成功 staff=${staffName} storeId=${storeId}`);
+              client.pushMessage({
+                to: target,
+                messages: [{ type: 'text', text:
+                  `✅ ベンリー再配信dispatch完了\n` +
+                  `👤 スタッフ: ${staffName}\n` +
+                  `🏪 店舗ID: ${storeId}\n` +
+                  `GitHub Actions で実行中（数分後に各サイト反映）`
+                }],
+              }).catch(() => {});
+            });
+          } catch (err) {
+            console.error('[ベンリー再配信] エラー:', err.message);
+            await client.pushMessage({
+              to: target,
+              messages: [{ type: 'text', text: `❌ ベンリー再配信エラー: ${err.message}` }],
+            }).catch(() => {});
+          }
+        });
+        return;
+      }
+
       // 「教えて」: 日報スクショ（T-XXX必須・👥 LINE登録者の同行許可者のみ・店舗別フォルダから日報取得）
       if (text.includes('教えて')) {
         const target = getPushTarget(event);
@@ -2045,6 +2096,58 @@ async function handleLineEvent(event) {
         await client.pushMessage({
           to: target,
           messages: [{ type: 'text', text: `❌ 月報更新エラー: ${err.message}` }],
+        }).catch(() => {});
+      }
+    });
+    return;
+  }
+
+  // [C-057] 「#T001 ベンリー再配信 岡本さえ」: ベンリー強制再配信（T-XXX必須・👥 LINE登録者の同行許可者のみ・グループ）
+  if (text.includes('ベンリー再配信')) {
+    const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+    setImmediate(async () => {
+      try {
+        const storeMatch = text.match(/T[\-]?(\d{3,})/i);
+        if (!storeMatch) {
+          throw new Error('店舗IDが指定されていません。T-XXXを含めて送信してください\n例: 「#T001 ベンリー再配信 岡本さえ」');
+        }
+        const storeId = `T-${storeMatch[1]}`;
+        await getFolderByStoreId(storeId, userId);
+        console.log(`[ベンリー再配信グループ] ${storeId} 権限OK userId=${userId}`);
+
+        const staffMatch = text.match(/ベンリー再配信\s+([^\s\n]+)/);
+        if (!staffMatch) {
+          throw new Error('スタッフ名が指定されていません\n例: 「#T001 ベンリー再配信 岡本さえ」');
+        }
+        const staffName = staffMatch[1].trim();
+
+        const { execFile } = require('child_process');
+        execFile('/root/venrey_dispatch_specific.sh', [staffName], { timeout: 60000 }, (err, stdout, stderr) => {
+          if (err) {
+            console.error('[ベンリー再配信グループ] dispatch失敗:', err.message, stderr);
+            client.pushMessage({
+              to: target,
+              messages: [{ type: 'text', text: `❌ ベンリー再配信エラー: ${err.message}` }],
+            }).catch(() => {});
+            return;
+          }
+          console.log(`[ベンリー再配信グループ] dispatch成功 staff=${staffName} storeId=${storeId}`);
+          client.pushMessage({
+            to: target,
+            messages: [{ type: 'text', text:
+              `✅ ベンリー再配信dispatch完了\n` +
+              `👤 スタッフ: ${staffName}\n` +
+              `🏪 店舗ID: ${storeId}\n` +
+              `GitHub Actions で実行中（数分後に各サイト反映）`
+            }],
+          }).catch(() => {});
+        });
+      } catch (err) {
+        console.error('[ベンリー再配信] グループ エラー:', err.message);
+        const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
+        await client.pushMessage({
+          to: target,
+          messages: [{ type: 'text', text: `❌ ベンリー再配信エラー: ${err.message}` }],
         }).catch(() => {});
       }
     });

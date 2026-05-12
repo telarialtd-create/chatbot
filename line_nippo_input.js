@@ -65,6 +65,7 @@ function createAuthClient() {
 // #T001 で始まる、または「店名:〜 + 日付:〜」を含むメッセージを日報入力として検知
 function isNippoInput(text) {
   const t = text.trim();
+  if (t.includes('ベンリー再配信')) return false;  // [C-057] ベンリー再配信コマンドの誤吸収防止
   if (/^#T\d{3}/i.test(t)) return true;
   // ID省略形: 店名(店舗名) と 日付 が両方揃っていれば日報入力とみなす
   const hasStore = /(^|\n)\s*(店名|店舗名)[:：\s　]/.test(t);
