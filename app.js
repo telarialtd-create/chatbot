@@ -429,6 +429,9 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// C-058 サーバー監視エンドポイント（/healthz, /heartbeat）
+require('./lib/health_monitor').register(app);
+
 // 稼働バージョン確認用（どのデプロイ先が応答しているか切り分け）
 app.get('/api/version', (req, res) => {
   res.json({
