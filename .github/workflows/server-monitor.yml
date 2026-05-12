@@ -1,0 +1,26 @@
+name: Server Monitor (KIRAKU + estama)
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: server-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run monitor
+        env:
+          SERVER_URL: ${{ secrets.MONITOR_SERVER_URL }}
+          HEALTHZ_SECRET: ${{ secrets.HEALTHZ_SECRET }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_MONITOR_GROUP_ID: ${{ secrets.LINE_MONITOR_GROUP_ID }}
+        run: node scripts/server_monitor.js
