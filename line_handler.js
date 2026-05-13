@@ -1490,6 +1490,7 @@ function isBotCommand(text, event) {
   if (parseMeisaiRequest(text)) return true;
   if (text.includes('教えて')) return true;
   if (parsePhoneCommand(text)) return true;
+  if (text.includes('ベンリー再配信')) return true;
   return false;
 }
 
