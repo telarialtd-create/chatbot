@@ -10,6 +10,36 @@
 require('dotenv').config();
 const { middleware, messagingApi } = require('@line/bot-sdk');
 const { syncNippoToGeppo } = require('./nippo_to_geppo_v2');
+
+// 月報更新完了メッセージ組立（CREA系列+任意のふわもこ系列+2店舗合算）
+// C-029 v5 2026-05-19: ふわもこ無しの店舗では2店舗合算セクションを省略・店舗ラベル動的化
+function buildGeppoResultMessage(result) {
+  const lines = [
+    `✅ 月報更新完了`,
+    `📅 ${result.label}`,
+    ``,
+    `━━ ${result.storeLabel} ━━`,
+    `💰 総売上: ${result.totalSales.toLocaleString()}円`,
+    `📊 本数: ${result.total_hon}本（朝${result.am_hon}/昼${result.pm_hon}/夜${result.night_hon}）`,
+    `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）`,
+  ];
+  const fw = result.fuwamoko;
+  if (fw) {
+    lines.push(
+      ``,
+      `━━ ${fw.storeLabel} ━━`,
+      `💰 総売上: ${fw.totalSales.toLocaleString()}円`,
+      `📊 本数: ${fw.total_hon}本（朝${fw.am_hon}/昼${fw.pm_hon}/夜${fw.night_hon}）`,
+      `👥 出勤: ${fw.total_count}人（朝${fw.am_count}/昼${fw.pm_count}/夜${fw.night_count}）`,
+      ``,
+      `━━ 2店舗合算 ━━`,
+      `💰 総売上: ${(result.totalSales + fw.totalSales).toLocaleString()}円`,
+      `📊 本数: ${result.total_hon + fw.total_hon}本`,
+      `👥 出勤: ${result.total_count + fw.total_count}人`,
+    );
+  }
+  return lines.join('\n');
+}
 const { isNippoInput, processNippoInput, getStoresByUserId, getFolderByStoreId } = require('./line_nippo_input');
 const { google } = require('googleapis');
 const { createCanvas, registerFont } = require('canvas');
@@ -1758,28 +1788,9 @@ async function handleLineEvent(event) {
               syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
             }
             const result = await syncNippoToGeppo({ jstDate: syncDate, storeId, folderInfo });
-            const fw = result.fuwamoko;
-            const combinedSales = result.totalSales + fw.totalSales;
-            const combinedHon   = result.total_hon  + fw.total_hon;
-            const combinedCount = result.total_count + fw.total_count;
             await client.pushMessage({
               to: target,
-              messages: [{ type: 'text', text:
-                `✅ 月報更新完了\n` +
-                `📅 ${result.label}\n\n` +
-                `━━ CREA ━━\n` +
-                `💰 総売上: ${result.totalSales.toLocaleString()}円\n` +
-                `📊 本数: ${result.total_hon}本（朝${result.am_hon}/昼${result.pm_hon}/夜${result.night_hon}）\n` +
-                `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）\n\n` +
-                `━━ ふわもこSPA ━━\n` +
-                `💰 総売上: ${fw.totalSales.toLocaleString()}円\n` +
-                `📊 本数: ${fw.total_hon}本（朝${fw.am_hon}/昼${fw.pm_hon}/夜${fw.night_hon}）\n` +
-                `👥 出勤: ${fw.total_count}人（朝${fw.am_count}/昼${fw.pm_count}/夜${fw.night_count}）\n\n` +
-                `━━ 2店舗合算 ━━\n` +
-                `💰 総売上: ${combinedSales.toLocaleString()}円\n` +
-                `📊 本数: ${combinedHon}本\n` +
-                `👥 出勤: ${combinedCount}人`
-              }],
+              messages: [{ type: 'text', text: buildGeppoResultMessage(result) }],
             });
             if (result.warnings && result.warnings.length > 0) {
               const grouped = {};
@@ -2072,28 +2083,9 @@ async function handleLineEvent(event) {
           syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
         }
         const result = await syncNippoToGeppo({ jstDate: syncDate, storeId, folderInfo });
-        const fw = result.fuwamoko;
-        const combinedSales = result.totalSales + fw.totalSales;
-        const combinedHon   = result.total_hon  + fw.total_hon;
-        const combinedCount = result.total_count + fw.total_count;
         await client.pushMessage({
           to: target,
-          messages: [{ type: 'text', text:
-            `✅ 月報更新完了\n` +
-            `📅 ${result.label}\n\n` +
-            `━━ CREA ━━\n` +
-            `💰 総売上: ${result.totalSales.toLocaleString()}円\n` +
-            `📊 本数: ${result.total_hon}本（朝${result.am_hon}/昼${result.pm_hon}/夜${result.night_hon}）\n` +
-            `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）\n\n` +
-            `━━ ふわもこSPA ━━\n` +
-            `💰 総売上: ${fw.totalSales.toLocaleString()}円\n` +
-            `📊 本数: ${fw.total_hon}本（朝${fw.am_hon}/昼${fw.pm_hon}/夜${fw.night_hon}）\n` +
-            `👥 出勤: ${fw.total_count}人（朝${fw.am_count}/昼${fw.pm_count}/夜${fw.night_count}）\n\n` +
-            `━━ 2店舗合算 ━━\n` +
-            `💰 総売上: ${combinedSales.toLocaleString()}円\n` +
-            `📊 本数: ${combinedHon}本\n` +
-            `👥 出勤: ${combinedCount}人`
-          }],
+          messages: [{ type: 'text', text: buildGeppoResultMessage(result) }],
         });
         if (result.warnings && result.warnings.length > 0) {
           const grouped = {};

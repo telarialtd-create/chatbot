@@ -27,14 +27,14 @@ const DATA_FOLDER_ID = process.env.DATA_FOLDER_ID || '16R1BK5NnvYkH4Eqh6t51OGQl0
 //     ので、誤更新の防御は維持される（書込先が無ければ書き込めない）。
 const STORE_GEPPO_SERIES_OVERRIDE = {
   'T-001': {
-    crea:     { sheetPrefix: 'CREA',     storeFieldValue: 'CREA'     },
-    fuwamoko: { sheetPrefix: 'ふわもこ', storeFieldValue: 'ふわもこ' },
+    crea:     { sheetPrefix: 'CREA',     storeFieldValue: 'CREA',     label: 'CREA'        },
+    fuwamoko: { sheetPrefix: 'ふわもこ', storeFieldValue: 'ふわもこ', label: 'ふわもこSPA' },
   },
 };
 
 // 店舗の月報シリーズ設定を取得
 // - T-001 はオーバーライド適用
-// - その他は folderInfo.storeName を sheetPrefix にした1系列（CREA同等）
+// - その他は folderInfo.storeName を sheetPrefix / label にした1系列（CREA同等）
 function resolveGeppoSeries(storeId, folderInfo) {
   const override = STORE_GEPPO_SERIES_OVERRIDE[storeId];
   if (override) return override;
@@ -45,6 +45,7 @@ function resolveGeppoSeries(storeId, folderInfo) {
     crea: {
       sheetPrefix: folderInfo.storeName,  // 例: "Angel Spa" → 「Angel Spa売上YYYY-M月」を検索
       storeFieldValue: 'CREA',             // 日報の店舗フィールド判定値（テンプレ共通のCREA前提）
+      label: folderInfo.storeName,         // LINE返信メッセージ用のラベル（"Angel Spa" 等）
     },
     // fuwamoko: なし
   };
@@ -819,6 +820,7 @@ async function syncNippoToGeppo(opts) {
   return {
     label,
     warnings,
+    storeLabel: creaCfg.label,   // ← LINE返信メッセージのCREA系列セクション名（"CREA" or "Angel Spa" 等）
     totalSales: creaSales,
     total_hon:  creaHon,
     am_hon:     creaHonBySlot.am,
@@ -828,7 +830,9 @@ async function syncNippoToGeppo(opts) {
     am_count:   creaU.am,
     pm_count:   creaU.pm,
     night_count: creaU.night,
-    fuwamoko: {
+    // ふわもこ系列：無い店舗では null を返す（LINE返信側で省略判定）
+    fuwamoko: hasFuwa ? {
+      storeLabel: fuwaCfg.label,
       totalSales: fuwaSales,
       total_hon:  fuwaHon,
       am_hon:     fuwaHonBySlot.am,
@@ -838,7 +842,7 @@ async function syncNippoToGeppo(opts) {
       am_count:   fuwaU.am,
       pm_count:   fuwaU.pm,
       night_count: fuwaU.night,
-    },
+    } : null,
   };
 }
 
