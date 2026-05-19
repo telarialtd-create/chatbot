@@ -17,9 +17,38 @@ const path = require('path');
 // （2026-05-19 C-029: T-1043指定でT-001月報誤更新事故の再発防止）
 const DATA_FOLDER_ID = process.env.DATA_FOLDER_ID || '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If';
 
-// 月報更新を許可する店舗ID（ホワイトリスト・第2層防御）
-// 新店舗の月報シート構造ができたら追加すること
-const ALLOWED_STORES_FOR_GEPPO = new Set(['T-001']);
+// ── 月報シリーズ設定 ─────────────────────────
+// 設計方針（2026-05-19 オーナー指示）:
+//   T-001 (CREA) だけが「CREA + ふわもこ」の2系列という特殊パターン。
+//   それ以外の全店舗は「店舗名そのままで1系列」のデフォルト挙動で動く。
+//   → 新店舗追加時の設定変更は不要。月報シートを「{店舗名}売上YYYY-M月」で
+//     店舗フォルダに置くだけで自動的に動く。
+//   → 月報シートが存在しなければ findGeppoByStoreMonth が自然にエラーで止まる
+//     ので、誤更新の防御は維持される（書込先が無ければ書き込めない）。
+const STORE_GEPPO_SERIES_OVERRIDE = {
+  'T-001': {
+    crea:     { sheetPrefix: 'CREA',     storeFieldValue: 'CREA'     },
+    fuwamoko: { sheetPrefix: 'ふわもこ', storeFieldValue: 'ふわもこ' },
+  },
+};
+
+// 店舗の月報シリーズ設定を取得
+// - T-001 はオーバーライド適用
+// - その他は folderInfo.storeName を sheetPrefix にした1系列（CREA同等）
+function resolveGeppoSeries(storeId, folderInfo) {
+  const override = STORE_GEPPO_SERIES_OVERRIDE[storeId];
+  if (override) return override;
+  if (!folderInfo || !folderInfo.storeName) {
+    throw new Error(`resolveGeppoSeries: ${storeId} の folderInfo.storeName が空です`);
+  }
+  return {
+    crea: {
+      sheetPrefix: folderInfo.storeName,  // 例: "Angel Spa" → 「Angel Spa売上YYYY-M月」を検索
+      storeFieldValue: 'CREA',             // 日報の店舗フィールド判定値（テンプレ共通のCREA前提）
+    },
+    // fuwamoko: なし
+  };
+}
 
 // 認証
 let _authClient = null;
@@ -173,14 +202,9 @@ async function syncNippoToGeppo(opts) {
     );
   }
 
-  // ── 第2層：ホワイトリストで未対応店舗を弾く ──
-  if (!ALLOWED_STORES_FOR_GEPPO.has(storeId)) {
-    throw new Error(
-      `月報更新は ${[...ALLOWED_STORES_FOR_GEPPO].join(', ')} のみ対応しています。` +
-      `${storeId} の月報シート構造は未定義のため実行できません。` +
-      `（新店舗対応は ALLOWED_STORES_FOR_GEPPO に追加してから）`
-    );
-  }
+  // ── 第2層：シリーズ設定を解決（T-001は2系列、それ以外は1系列の自動デフォルト）──
+  // 月報シートが店舗フォルダに無ければ findGeppoByStoreMonth が自然にエラーで止まる
+  // ので、ホワイトリストは不要（書込先が無ければ書き込めない）。
 
   let jstDate = inputDate;
   if (!jstDate) {
@@ -198,6 +222,12 @@ async function syncNippoToGeppo(opts) {
 
   console.log(`[v2] ${label} 同期開始 (store=${storeId} folder=${folderInfo.folderId})`);
 
+  // 店舗のシリーズ設定（T-001は2系列・それ以外は1系列の自動デフォルト）
+  const series = resolveGeppoSeries(storeId, folderInfo);
+  const hasFuwa = !!series.fuwamoko;
+  const creaCfg = series.crea;
+  const fuwaCfg = series.fuwamoko || null;
+
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
@@ -206,9 +236,12 @@ async function syncNippoToGeppo(opts) {
   console.log(`[v2] 日報: ${nippo.name} (${nippo.id})`);
 
   // 月報SS検索（店舗×月・folderInfo.folderId 配下に限定）
-  const creaGeppoId = await findGeppoByStoreMonth('CREA', y, m, folderInfo.folderId);
-  const fuwaGeppoId = await findGeppoByStoreMonth('ふわもこ', y, m, folderInfo.folderId);
-  console.log(`[v2] CREA月報=${creaGeppoId}, FUWA月報=${fuwaGeppoId}`);
+  const creaGeppoId = await findGeppoByStoreMonth(creaCfg.sheetPrefix, y, m, folderInfo.folderId);
+  const fuwaGeppoId = hasFuwa
+    ? await findGeppoByStoreMonth(fuwaCfg.sheetPrefix, y, m, folderInfo.folderId)
+    : null;
+  console.log(`[v2] CREA系月報(${creaCfg.sheetPrefix})=${creaGeppoId}` +
+    (hasFuwa ? `, FUWA系月報(${fuwaCfg.sheetPrefix})=${fuwaGeppoId}` : ', FUWA系=なし'));
 
   // ── ダッシュボード取得 ─────────────────────
   const dashRes = await sheets.spreadsheets.values.batchGet({
@@ -263,8 +296,9 @@ async function syncNippoToGeppo(opts) {
   let creaCard = 0, fuwaCard = 0, creaPay = 0, fuwaPay = 0;
   for (const r of zenRows) {
     const store = (r[0] || '').toString().trim();
-    const isCrea = store === 'CREA';
-    const isFuwa = store.includes('ふわもこ');
+    // store フィールド値による系列判定（config の storeFieldValue を使用）
+    const isCrea = store === creaCfg.storeFieldValue;
+    const isFuwa = hasFuwa && store.includes(fuwaCfg.storeFieldValue);
     const slot = timeSlot(r[13]);
     if (slot) {
       if (isCrea) creaHonBySlot[slot]++;
@@ -312,11 +346,13 @@ async function syncNippoToGeppo(opts) {
     hon: creaHon, am_u: creaU.am, pm_u: creaU.pm, night_u: creaU.night, shukkin: creaShukkin,
     taiki: creaTaiki, card: creaCard, pay: creaPay,
   });
-  await writeSales(fuwaGeppoId, 'ふわもこ', {
-    sales: fuwaSales, am_hon: fuwaHonBySlot.am, pm_hon: fuwaHonBySlot.pm, night_hon: fuwaHonBySlot.night,
-    hon: fuwaHon, am_u: fuwaU.am, pm_u: fuwaU.pm, night_u: fuwaU.night, shukkin: fuwaShukkin,
-    taiki: fuwaTaiki, card: fuwaCard, pay: fuwaPay,
-  });
+  if (hasFuwa) {
+    await writeSales(fuwaGeppoId, 'ふわもこ', {
+      sales: fuwaSales, am_hon: fuwaHonBySlot.am, pm_hon: fuwaHonBySlot.pm, night_hon: fuwaHonBySlot.night,
+      hon: fuwaHon, am_u: fuwaU.am, pm_u: fuwaU.pm, night_u: fuwaU.night, shukkin: fuwaShukkin,
+      taiki: fuwaTaiki, card: fuwaCard, pay: fuwaPay,
+    });
+  }
 
   // ── CREA 経費シート書込（現金管理 O4:P23 → 経費 C/D/H）
   const genkinRes = await sheets.spreadsheets.values.get({
@@ -464,7 +500,9 @@ async function syncNippoToGeppo(opts) {
 
   const warnings = [];
   warnings.push(...(await writeKaishuu(creaGeppoId, 'CREA', creaKaishuu)) || []);
-  warnings.push(...(await writeKaishuu(fuwaGeppoId, 'ふわもこ', fuwaKaishuu)) || []);
+  if (hasFuwa) {
+    warnings.push(...(await writeKaishuu(fuwaGeppoId, 'ふわもこ', fuwaKaishuu)) || []);
+  }
 
   // ── バンス書込（現金管理H列 → 回収シート「{名前}バンス」行 該当日列・H列値そのまま） ─
   const buildBansu = (rows) => {
@@ -539,7 +577,9 @@ async function syncNippoToGeppo(opts) {
     return overflow.map(name => ({ section: `バンス/${label2}`, name }));
   };
   warnings.push(...(await writeBansu(creaGeppoId, 'CREA', creaBansu)) || []);
-  warnings.push(...(await writeBansu(fuwaGeppoId, 'ふわもこ', fuwaBansu)) || []);
+  if (hasFuwa) {
+    warnings.push(...(await writeBansu(fuwaGeppoId, 'ふわもこ', fuwaBansu)) || []);
+  }
 
   // ── SBシート書込 ────────────────────────
   const kyuryoRes = await sheets.spreadsheets.values.get({
@@ -665,7 +705,9 @@ async function syncNippoToGeppo(opts) {
   };
 
   warnings.push(...(await writeSB(creaGeppoId, 'CREA', creaSB)) || []);
-  warnings.push(...(await writeSB(fuwaGeppoId, 'ふわもこ', fuwaSB)) || []);
+  if (hasFuwa) {
+    warnings.push(...(await writeSB(fuwaGeppoId, 'ふわもこ', fuwaSB)) || []);
+  }
 
   // ── AC23 経費合計（CREAのみ）
   const p24Res = await sheets.spreadsheets.values.get({
