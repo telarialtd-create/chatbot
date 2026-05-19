@@ -866,7 +866,9 @@ async function transferMeisaiDirect(spreadsheetId, sheets) {
     }
   } catch (e) { /* ダッシュボードなしでも続行 */ }
 
-  const isCrea = store.indexOf(store1Name) !== -1;
+  // 明細書F2が空のスプシ（Angel Spa等の1店舗運用）は店舗1（CREA枠 A:I列, 行5-34）扱い
+  // 2026-05-19 C-033 T-1043対応
+  const isCrea = !store || store.indexOf(store1Name) !== -1;
 
   // 給料UI転記（30行分の配列を強制構築して名前検索→空行検索）
   const colA = isCrea ? 'A' : 'L';
