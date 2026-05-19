@@ -504,8 +504,10 @@ async function findSpreadsheetByDateStr(dateStr, folderId) {
       pageSize: 20,
     });
     const allHits = res.data.files || [];
-    files = allHits.filter(f => f.name.startsWith(normalizedDate));
-    console.log(`[明細] 部分一致(startsWithフィルタ後) (${files.length}件):`, files.map(f => f.name).join(', '));
+    // Angel Spa等の店舗名プレフィックス付きファイル名（例:「Angel Spa　2026年5月19日」）を拾えるよう
+    // startsWith → includes に変更（2026-05-19 C-033 T-1043対応）
+    files = allHits.filter(f => f.name.includes(normalizedDate));
+    console.log(`[明細] 部分一致(includesフィルタ後) (${files.length}件):`, files.map(f => f.name).join(', '));
   }
 
   if (!files.length) throw new Error(`ファイルが見つかりません: ${normalizedDate}`);
