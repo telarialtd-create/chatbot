@@ -134,6 +134,7 @@ function timeSlot(v) {
 
 // ── ファイル検索 ─────────────────────────────
 // folderId は必須引数（C-029 2026-05-19: T-001fallback廃止）
+// 検索順: ①完全一致「2026年5月19日」 → ②末尾一致「Angel Spa　2026年5月19日」等
 async function findNippoByDate(jstDate, folderId) {
   if (!folderId) throw new Error('findNippoByDate: folderId は必須引数です');
   const y = jstDate.getUTCFullYear();
@@ -143,37 +144,56 @@ async function findNippoByDate(jstDate, folderId) {
 
   const auth = createAuthClient();
   const drive = google.drive({ version: 'v3', auth });
+  // contains クエリで「日付文字列を含む」全ファイルを取得 → 完全一致 or 末尾一致で絞込
   const res = await drive.files.list({
-    q: `'${folderId}' in parents and name='${dateStr}' and trashed=false`,
+    q: `'${folderId}' in parents and name contains '${dateStr}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
     fields: 'files(id,name)',
-    pageSize: 5,
+    pageSize: 20,
   });
   const files = res.data.files || [];
+  // ① 完全一致を最優先
   const exact = files.find(f => f.name.trim() === dateStr);
-  if (!exact) throw new Error(`日報ファイルが見つかりません: ${dateStr} (folder=${folderId})`);
-  return { id: exact.id, name: exact.name };
+  if (exact) return { id: exact.id, name: exact.name };
+  // ② 末尾一致（「{店舗名}　{日付}」「{店舗名} {日付}」等のクライアント店舗命名に対応）
+  const endsWith = files.find(f => f.name.trim().endsWith(dateStr));
+  if (endsWith) return { id: endsWith.id, name: endsWith.name };
+  // 見つからない
+  throw new Error(
+    `日報ファイルが見つかりません: ${dateStr} (folder=${folderId}` +
+    (files.length ? ` / 候補=${files.map(f => f.name).join(',')}` : '') + ')'
+  );
 }
 
 // folderId は必須引数（C-029 2026-05-19: T-001fallback廃止）
+// 検索順: ①完全一致「Angel Spa売上2026-5月」 → ②末尾一致（前置店舗名等の許容）
 async function findGeppoByStoreMonth(storeName, year, month, folderId) {
   if (!folderId) throw new Error('findGeppoByStoreMonth: folderId は必須引数です');
   const name = `${storeName}売上${year}-${month}月`;
+  const monthTail = `売上${year}-${month}月`;  // 末尾一致用
   const auth = createAuthClient();
   const drive = google.drive({ version: 'v3', auth });
   const res = await drive.files.list({
-    q: `'${folderId}' in parents and name='${name}' and trashed=false`,
+    q: `'${folderId}' in parents and name contains '${name}' and trashed=false`,
     fields: 'files(id,name,mimeType,shortcutDetails)',
-    pageSize: 5,
+    pageSize: 10,
   });
   const files = res.data.files || [];
-  if (!files.length) throw new Error(`月報シートが見つかりません: ${name} (folder=${folderId})`);
-  // ショートカットなら実体ファイルIDに解決（2026-5月以降の運用変化に対応）
-  const f = files[0];
-  if (f.mimeType === 'application/vnd.google-apps.shortcut' && f.shortcutDetails && f.shortcutDetails.targetId) {
-    console.log(`[v2] "${name}" はショートカット → 実体 ${f.shortcutDetails.targetId} を使用`);
-    return f.shortcutDetails.targetId;
+  // ① 完全一致を最優先
+  let target = files.find(f => f.name.trim() === name);
+  // ② 末尾一致（「店舗名前置」等の命名揺れ吸収。ただし storeName 文字列を含むものに限定）
+  if (!target) {
+    target = files.find(f => {
+      const n = f.name.trim();
+      return n.endsWith(monthTail) && n.includes(storeName);
+    });
   }
-  return f.id;
+  if (!target) throw new Error(`月報シートが見つかりません: ${name} (folder=${folderId})`);
+  // ショートカットなら実体ファイルIDに解決（2026-5月以降の運用変化に対応）
+  if (target.mimeType === 'application/vnd.google-apps.shortcut' && target.shortcutDetails && target.shortcutDetails.targetId) {
+    console.log(`[v2] "${target.name}" はショートカット → 実体 ${target.shortcutDetails.targetId} を使用`);
+    return target.shortcutDetails.targetId;
+  }
+  return target.id;
 }
 
 // ── メイン同期関数 ───────────────────────────
