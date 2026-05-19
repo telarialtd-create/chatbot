@@ -437,7 +437,12 @@ function normalizeDateStr(dateStr) {
 // 日付文字列でファイルを検索
 // MEISAI_TEST_ID が設定されている場合はそのスプレッドシートを使用
 // folderId が指定されない場合は環境変数 NIPPO_FOLDER_ID を使用
-async function findSpreadsheetByDateStr(dateStr, folderId = null) {
+async function findSpreadsheetByDateStr(dateStr, folderId) {
+  // C-029 2026-05-19: folderId 必須化（T-001 fallback廃止・誤読込事故対策）
+  // 呼び出し側で店舗フォルダID（または明示的にNIPPO_FOLDER_ID）を渡すこと
+  if (!folderId) {
+    throw new Error('findSpreadsheetByDateStr: folderId は必須引数です（旧デフォルト fallback は2026-05-19廃止）');
+  }
   if (process.env.MEISAI_TEST_ID) {
     console.log(`[明細] テストモード: MEISAI_TEST_ID=${process.env.MEISAI_TEST_ID}`);
     return process.env.MEISAI_TEST_ID;
@@ -447,7 +452,7 @@ async function findSpreadsheetByDateStr(dateStr, folderId = null) {
 
   // 年を補完して検索精度を上げる（「4月7日」→「2026年4月7日」）
   const normalizedDate = normalizeDateStr(dateStr);
-  const targetFolderId = folderId || NIPPO_FOLDER_ID;
+  const targetFolderId = folderId;
   console.log(`[明細] 検索キー: "${dateStr}" → "${normalizedDate}" / folderId=${targetFolderId}`);
 
   // ① 完全一致検索（trashed除外）
@@ -984,9 +989,12 @@ async function processMeisaisyoAndPush(target, client, parsed, userId) {
 }
 
 // 明細処理本体（バックグラウンド）
+// ⚠️ 旧形式「【日付、名前】」コマンドは T-001 自社案件 (NIPPO_FOLDER_ID) 専用。
+// 新形式「【明細書】#T-XXX ...」は processMeisaisyoAndPush 側で folderInfo経由処理する。
 async function processMeisaiAndPush(target, client, dateStr, name, transportType = null) {
   try {
-    const spreadsheetId = await findSpreadsheetByDateStr(dateStr);
+    // C-029 2026-05-19: 旧コマンドは T-001 専用と明示。folderId必須化に対応。
+    const spreadsheetId = await findSpreadsheetByDateStr(dateStr, NIPPO_FOLDER_ID);
     await writeCellValue(spreadsheetId, MEISAI_SHEET_NAME, MEISAI_NAME_CELL, name);
     // 交通費種別が指定されていればH18に書き込む（省略時はシートの既存値を使用）
     if (transportType !== null) {
@@ -1108,13 +1116,14 @@ async function processKokyakuUpdate(dateStr, storeId, userId) {
   console.log(`[顧客更新] ${folderInfo.storeId}/${folderInfo.storeName} 書込先: ${targetSsid}`);
 
   // 1. ソーススプレッドシート（日付から動的に検索）
+  // C-029 2026-05-19: folderInfo.folderId 配下に限定（T-001fallback廃止・他社シート読込事故対策）
   const normalizedDate = normalizeDateStr(dateStr);
   const slashDate = toSlashDate(normalizedDate);
   let spreadsheetId;
   try {
-    spreadsheetId = await findSpreadsheetByDateStr(dateStr);
+    spreadsheetId = await findSpreadsheetByDateStr(dateStr, folderInfo.folderId);
   } catch (e) {
-    throw new Error(`[${KOKYAKU_VERSION}][日報検索失敗] folder=${NIPPO_FOLDER_ID} date=${normalizedDate} orig=${e.message}`);
+    throw new Error(`[${KOKYAKU_VERSION}][日報検索失敗] folder=${folderInfo.folderId} date=${normalizedDate} orig=${e.message}`);
   }
   console.log(`[顧客更新] 日報ファイル: ${spreadsheetId}`);
 
@@ -1491,6 +1500,7 @@ function isBotCommand(text, event) {
   if (text.includes('教えて')) return true;
   if (parsePhoneCommand(text)) return true;
   if (text.includes('ベンリー再配信')) return true;
+  try { if (require('./shift_route_t').parseStoreIdFromText(text)) return true; } catch (_) {}  // [C-064] T-XXX 新店舗 (T-001以外)
   return false;
 }
 
@@ -1518,6 +1528,13 @@ async function handleLineEvent(event) {
   }
 
   // [C-002] コマンドにマッチしないメッセージは完全に無反応（雑談に「登録してください」を返さない）
+  // [C-064] T-XXX 系コマンド (T-001以外・新店舗対応) - shift_route_t 委譲
+  try {
+    if (await require('./shift_route_t').handle(event, text, client)) return;
+  } catch (e) {
+    console.error('[shift_route_t] エラー:', e.message);
+  }
+
   if (!isBotCommand(text, event)) {
     console.log(`[無視] 非コマンド userId=${userId || '(なし)'} text="${text.slice(0,40)}"`);
     return;
@@ -1729,8 +1746,9 @@ async function handleLineEvent(event) {
             const storeId = `T-${storeMatch[1]}`;
             // 権限チェック: 「📁 店舗フォルダ」シートの該当T-XXX行のD列許可LINEに含まれているか
             // （D列は「👥 LINE登録者」シートから状態=有効の人を自動取得しているので、同行許可者のみ通る）
-            await getFolderByStoreId(storeId, userId);
-            console.log(`[月報] ${storeId} 権限OK userId=${userId}`);
+            // C-029 2026-05-19: folderInfo を受け取り処理関数に必ず渡す（誤更新事故対策）
+            const folderInfo = await getFolderByStoreId(storeId, userId);
+            console.log(`[月報] ${storeId} 権限OK userId=${userId} folder=${folderInfo.folderId}`);
 
             // 日付指定があれば解析（順序不問: 「月報更新 4月7日」「4月7日 月報更新」「月報更新 4/7」）
             let syncDate = null;
@@ -1739,7 +1757,7 @@ async function handleLineEvent(event) {
               const jst = new Date(Date.now() + 9 * 3600 * 1000);
               syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
             }
-            const result = await syncNippoToGeppo(syncDate);
+            const result = await syncNippoToGeppo({ jstDate: syncDate, storeId, folderInfo });
             const fw = result.fuwamoko;
             const combinedSales = result.totalSales + fw.totalSales;
             const combinedHon   = result.total_hon  + fw.total_hon;
@@ -2043,8 +2061,9 @@ async function handleLineEvent(event) {
           throw new Error('店舗IDが指定されていません。T-XXXを含めて送信してください\n例: 「#T001\\n月報更新\\n4月28日」');
         }
         const storeId = `T-${storeMatch[1]}`;
-        await getFolderByStoreId(storeId, userId);
-        console.log(`[月報グループ] ${storeId} 権限OK userId=${userId}`);
+        // C-029 2026-05-19: folderInfo を受け取り処理関数に必ず渡す（誤更新事故対策）
+        const folderInfo = await getFolderByStoreId(storeId, userId);
+        console.log(`[月報グループ] ${storeId} 権限OK userId=${userId} folder=${folderInfo.folderId}`);
 
         let syncDate = null;
         const dateMatch = text.match(/(\d{1,2})[月\/](\d{1,2})日?/);
@@ -2052,7 +2071,7 @@ async function handleLineEvent(event) {
           const jst = new Date(Date.now() + 9 * 3600 * 1000);
           syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
         }
-        const result = await syncNippoToGeppo(syncDate);
+        const result = await syncNippoToGeppo({ jstDate: syncDate, storeId, folderInfo });
         const fw = result.fuwamoko;
         const combinedSales = result.totalSales + fw.totalSales;
         const combinedHon   = result.total_hon  + fw.total_hon;

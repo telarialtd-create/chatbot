@@ -2,8 +2,18 @@
  * geppo_update.js
  * 「月報更新」「月報更新 4月7日」「4月7日 月報更新」
  *  → nippo_to_geppo_v2.syncNippoToGeppo を起動して結果通知
+ *
+ * ⚠️ 現状このファイルは require されていないデッドコード（2026-05-19時点）
+ *    実際の月報更新は line_handler.js 内のハンドラで完結。
+ *    将来再有効化する場合は handleEvent に storeId/folderInfo を渡す改修必須。
  */
 const { syncNippoToGeppo } = require('./nippo_to_geppo_v2');
+// T-001 専用 folderInfo（このラッパーは現状T-001専用前提）
+const T001_FOLDER_INFO = {
+  storeId: 'T-001',
+  storeName: 'CREA',
+  folderId: process.env.DATA_FOLDER_ID || '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If',
+};
 
 function buildResultMessage(result) {
   const fw = result.fuwamoko;
@@ -43,7 +53,8 @@ async function processGeppoUpdate(target, client, text) {
       const jst = new Date(Date.now() + 9 * 3600 * 1000);
       syncDate = new Date(Date.UTC(jst.getUTCFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2])));
     }
-    const result = await syncNippoToGeppo(syncDate);
+    // C-029 2026-05-19: 新シグネチャ対応
+    const result = await syncNippoToGeppo({ jstDate: syncDate, storeId: 'T-001', folderInfo: T001_FOLDER_INFO });
     await client.pushMessage({
       to: target,
       messages: [{ type: 'text', text: buildResultMessage(result) }],

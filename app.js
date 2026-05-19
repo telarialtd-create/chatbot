@@ -9,6 +9,12 @@ const { lineConfig, handleLineEvent, middleware: lineMiddleware, preloadPhoneInd
 // アプリ起動時に利用履歴の電話番号インデックスをバックグラウンドでプリロード
 preloadPhoneIndex();
 const { syncNippoToGeppo } = require('./nippo_to_geppo_v2');
+// C-029 2026-05-19: 自動月報更新用 T-001 folderInfo（システム内部呼び出し・権限チェックバイパス）
+const T001_AUTO_FOLDER_INFO = {
+  storeId: 'T-001',
+  storeName: 'CREA',
+  folderId: process.env.DATA_FOLDER_ID || '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If',
+};
 
 const app = express();
 app.use(express.static('public'));
@@ -1086,7 +1092,11 @@ function scheduleGeppoSync() {
   setTimeout(async () => {
     console.log('[月報] 自動更新開始（前日分）');
     try {
-      const result = await syncNippoToGeppo(); // 引数なし = 昨日
+      // C-029 2026-05-19: 新シグネチャ。jstDate省略で昨日扱い、T-001固定で自動実行
+      const result = await syncNippoToGeppo({
+        storeId: 'T-001',
+        folderInfo: T001_AUTO_FOLDER_INFO,
+      });
       console.log('[月報] 自動更新完了:', result.label, result.totalSales, '円');
     } catch (err) {
       console.error('[月報] 自動更新エラー:', err.message);

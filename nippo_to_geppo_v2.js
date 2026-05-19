@@ -12,8 +12,14 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
 
-// データフォルダ（日報・月報の両方が入っている）
+// データフォルダ（日報・月報の両方が入っている）= T-001 自社案件専用
+// ⚠️ 直接参照禁止。syncNippoToGeppo の folderInfo.folderId 経由で動的に解決すること。
+// （2026-05-19 C-029: T-1043指定でT-001月報誤更新事故の再発防止）
 const DATA_FOLDER_ID = process.env.DATA_FOLDER_ID || '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If';
+
+// 月報更新を許可する店舗ID（ホワイトリスト・第2層防御）
+// 新店舗の月報シート構造ができたら追加すること
+const ALLOWED_STORES_FOR_GEPPO = new Set(['T-001']);
 
 // 認証
 let _authClient = null;
@@ -98,7 +104,9 @@ function timeSlot(v) {
 }
 
 // ── ファイル検索 ─────────────────────────────
-async function findNippoByDate(jstDate) {
+// folderId は必須引数（C-029 2026-05-19: T-001fallback廃止）
+async function findNippoByDate(jstDate, folderId) {
+  if (!folderId) throw new Error('findNippoByDate: folderId は必須引数です');
   const y = jstDate.getUTCFullYear();
   const m = jstDate.getUTCMonth() + 1;
   const d = jstDate.getUTCDate();
@@ -107,27 +115,29 @@ async function findNippoByDate(jstDate) {
   const auth = createAuthClient();
   const drive = google.drive({ version: 'v3', auth });
   const res = await drive.files.list({
-    q: `'${DATA_FOLDER_ID}' in parents and name='${dateStr}' and trashed=false`,
+    q: `'${folderId}' in parents and name='${dateStr}' and trashed=false`,
     fields: 'files(id,name)',
     pageSize: 5,
   });
   const files = res.data.files || [];
   const exact = files.find(f => f.name.trim() === dateStr);
-  if (!exact) throw new Error(`日報ファイルが見つかりません: ${dateStr}`);
+  if (!exact) throw new Error(`日報ファイルが見つかりません: ${dateStr} (folder=${folderId})`);
   return { id: exact.id, name: exact.name };
 }
 
-async function findGeppoByStoreMonth(storeName, year, month) {
+// folderId は必須引数（C-029 2026-05-19: T-001fallback廃止）
+async function findGeppoByStoreMonth(storeName, year, month, folderId) {
+  if (!folderId) throw new Error('findGeppoByStoreMonth: folderId は必須引数です');
   const name = `${storeName}売上${year}-${month}月`;
   const auth = createAuthClient();
   const drive = google.drive({ version: 'v3', auth });
   const res = await drive.files.list({
-    q: `'${DATA_FOLDER_ID}' in parents and name='${name}' and trashed=false`,
+    q: `'${folderId}' in parents and name='${name}' and trashed=false`,
     fields: 'files(id,name,mimeType,shortcutDetails)',
     pageSize: 5,
   });
   const files = res.data.files || [];
-  if (!files.length) throw new Error(`月報シートが見つかりません: ${name}`);
+  if (!files.length) throw new Error(`月報シートが見つかりません: ${name} (folder=${folderId})`);
   // ショートカットなら実体ファイルIDに解決（2026-5月以降の運用変化に対応）
   const f = files[0];
   if (f.mimeType === 'application/vnd.google-apps.shortcut' && f.shortcutDetails && f.shortcutDetails.targetId) {
@@ -138,7 +148,41 @@ async function findGeppoByStoreMonth(storeName, year, month) {
 }
 
 // ── メイン同期関数 ───────────────────────────
-async function syncNippoToGeppo(jstDate) {
+// シグネチャ変更（C-029 2026-05-19）: { jstDate, storeId, folderInfo } の名前付き引数必須
+// - storeId: 'T-001' などの店舗ID（必須）
+// - folderInfo: { storeId, storeName, folderId } getFolderByStoreId() の戻り値（必須）
+// - jstDate: 同期対象日（省略時は昨日）
+//
+// 旧シグネチャ syncNippoToGeppo(jstDate) は禁止。引数オブジェクト未指定なら即throw。
+async function syncNippoToGeppo(opts) {
+  // ── 第1層：シグネチャで必須引数を強制 ──
+  if (!opts || typeof opts !== 'object' || opts instanceof Date) {
+    throw new Error(
+      'syncNippoToGeppo: 引数は { jstDate, storeId, folderInfo } 形式必須。' +
+      '旧シグネチャ(jstDateのみ)は2026-05-19で廃止しました。'
+    );
+  }
+  const { jstDate: inputDate, storeId, folderInfo } = opts;
+  if (!storeId) throw new Error('syncNippoToGeppo: storeId は必須引数です');
+  if (!folderInfo || !folderInfo.folderId) {
+    throw new Error('syncNippoToGeppo: folderInfo.folderId は必須引数です');
+  }
+  if (folderInfo.storeId && folderInfo.storeId !== storeId) {
+    throw new Error(
+      `syncNippoToGeppo: storeId(${storeId}) と folderInfo.storeId(${folderInfo.storeId}) が不一致です`
+    );
+  }
+
+  // ── 第2層：ホワイトリストで未対応店舗を弾く ──
+  if (!ALLOWED_STORES_FOR_GEPPO.has(storeId)) {
+    throw new Error(
+      `月報更新は ${[...ALLOWED_STORES_FOR_GEPPO].join(', ')} のみ対応しています。` +
+      `${storeId} の月報シート構造は未定義のため実行できません。` +
+      `（新店舗対応は ALLOWED_STORES_FOR_GEPPO に追加してから）`
+    );
+  }
+
+  let jstDate = inputDate;
   if (!jstDate) {
     // JST昨日
     const now = new Date();
@@ -152,18 +196,18 @@ async function syncNippoToGeppo(jstDate) {
   const label = `${y}年${m}月${d}日`;
   const col = dayToCol(d);
 
-  console.log(`[v2] ${label} 同期開始`);
+  console.log(`[v2] ${label} 同期開始 (store=${storeId} folder=${folderInfo.folderId})`);
 
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // 日報SS検索
-  const nippo = await findNippoByDate(jstDate);
+  // 日報SS検索（folderInfo.folderId 配下に限定）
+  const nippo = await findNippoByDate(jstDate, folderInfo.folderId);
   console.log(`[v2] 日報: ${nippo.name} (${nippo.id})`);
 
-  // 月報SS検索（店舗×月）
-  const creaGeppoId = await findGeppoByStoreMonth('CREA', y, m);
-  const fuwaGeppoId = await findGeppoByStoreMonth('ふわもこ', y, m);
+  // 月報SS検索（店舗×月・folderInfo.folderId 配下に限定）
+  const creaGeppoId = await findGeppoByStoreMonth('CREA', y, m, folderInfo.folderId);
+  const fuwaGeppoId = await findGeppoByStoreMonth('ふわもこ', y, m, folderInfo.folderId);
   console.log(`[v2] CREA月報=${creaGeppoId}, FUWA月報=${fuwaGeppoId}`);
 
   // ── ダッシュボード取得 ─────────────────────
