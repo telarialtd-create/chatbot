@@ -182,6 +182,20 @@ async function getStoresByUserId(userId) {
     .map(r => ({ storeId: r[0], storeName: r[1], folderUrl: r[2], allowed: parseAllowedUserIds(r[3]) }));
 }
 
+// ── 店舗名を正規化して比較する（小文字化 + 全角英数字→半角 + 全空白除去）
+// 「Angel Spa」「Angel spa」「ＡｎｇｅｌＳｐａ」「angelspa」をすべて同一視する
+function normalizeStoreName_(s) {
+  if (s == null) return '';
+  let str = String(s);
+  // 全角英数字を半角に変換
+  str = str.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  // 小文字化
+  str = str.toLowerCase();
+  // 半角・全角空白とタブ・改行をすべて除去
+  str = str.replace(/[\s　]+/g, '');
+  return str;
+}
+
 // ── 店舗ID + 店名 → 日報フォルダID 取得（許可userIdチェック付き）─────
 // 「📁 店舗フォルダ」シートから (契約ID, 店舗名) でフォルダURLを検索
 // userIdが指定された場合、D列の許可リストに含まれているか検証する
@@ -194,8 +208,9 @@ async function getFolderByStoreAndName(storeId, inputStoreName, userId) {
     throw new Error(`店舗ID ${storeId} が店舗フォルダシートに見つかりません`);
   }
 
-  // 店名で絞り込み
-  const matched = storeRows.find(r => r[1] === inputStoreName);
+  // 店名で絞り込み（小文字・空白・全角差を無視）
+  const normalizedInput = normalizeStoreName_(inputStoreName);
+  const matched = storeRows.find(r => normalizeStoreName_(r[1]) === normalizedInput);
   if (!matched) {
     const available = storeRows.map(r => r[1]).join('、');
     throw new Error(`${storeId} に「${inputStoreName}」は登録されていません（登録店舗: ${available}）`);
@@ -531,7 +546,9 @@ async function processNippoInput(text, userId) {
     if (stores.length === 0) {
       throw new Error('あなたのLINE userIdは許可リストに登録されていません。オーナーに登録を依頼してください（#whoami で自分のuserIdを確認できます）');
     }
-    const matched = stores.find(s => s.storeName === inputStoreName);
+    // 店名比較は小文字・空白・全角差を無視
+    const normalizedInput = normalizeStoreName_(inputStoreName);
+    const matched = stores.find(s => normalizeStoreName_(s.storeName) === normalizedInput);
     if (!matched) {
       throw new Error(`「${inputStoreName}」はあなたが許可されている店舗にありません（許可: ${stores.map(s => `${s.storeId}/${s.storeName}`).join('、')}）`);
     }
