@@ -35,6 +35,9 @@ console.log('LINE webhook 有効: POST /webhook/line');
 
 app.use(express.json());
 
+const { registerSignRoute } = require('./lib/sign_handler');
+registerSignRoute(app);
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // 空き状況データを読みやすいテキストにまとめる

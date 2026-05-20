@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>利用規約 | KIRAKU - 株式会社TeLARIA</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black: #0a0a0a;
+      --white: #ffffff;
+      --gray-100: #f5f5f5;
+      --gray-200: #e8e8e8;
+      --gray-400: #999999;
+      --gray-600: #555555;
+      --gold: #c9a84c;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      color: var(--black);
+      background: var(--white);
+      line-height: 1.9;
+      font-size: 15px;
+    }
+
+    /* Nav */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(255,255,255,0.97);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--gray-200);
+      z-index: 100;
+      padding: 0 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav-logo {
+      font-size: 18px; font-weight: 700;
+      letter-spacing: 0.1em; color: var(--black);
+      text-decoration: none;
+    }
+    .nav-cta {
+      background: var(--black); color: var(--white);
+      padding: 10px 24px; border-radius: 4px;
+      font-size: 13px; text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+
+    /* Page header */
+    .page-header {
+      background: var(--black);
+      color: var(--white);
+      padding: 120px 24px 80px;
+      text-align: center;
+    }
+    .page-tag {
+      display: inline-block;
+      border: 1px solid rgba(255,255,255,0.25);
+      color: rgba(255,255,255,0.6);
+      font-size: 11px; letter-spacing: 0.2em;
+      padding: 6px 16px; border-radius: 100px;
+      margin-bottom: 28px;
+    }
+    .page-title {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 700; letter-spacing: -0.01em;
+      margin-bottom: 16px;
+    }
+    .page-date {
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.05em;
+    }
+
+    /* Content */
+    .content-wrap {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 80px 24px 120px;
+    }
+
+    .intro-box {
+      background: var(--gray-100);
+      border-left: 3px solid var(--gold);
+      padding: 24px 28px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 60px;
+      font-size: 14px;
+      color: var(--gray-600);
+      line-height: 1.9;
+    }
+
+    .article {
+      margin-bottom: 56px;
+    }
+
+    .article h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--black);
+      border-bottom: 1px solid var(--gray-200);
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+
+    .article h2 .art-num {
+      color: var(--gold);
+      margin-right: 8px;
+    }
+
+    .article p {
+      font-size: 14px;
+      color: #333;
+      line-height: 2;
+      margin-bottom: 12px;
+    }
+
+    .article ol, .article ul {
+      padding-left: 1.5em;
+      margin-bottom: 12px;
+    }
+
+    .article ol li, .article ul li {
+      font-size: 14px;
+      color: #333;
+      line-height: 2;
+      margin-bottom: 4px;
+    }
+
+    .article .sub-item {
+      margin-top: 16px;
+    }
+
+    .article .sub-item dt {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--black);
+      margin-bottom: 4px;
+    }
+
+    .article .sub-item dd {
+      font-size: 14px;
+      color: #333;
+      line-height: 2;
+      padding-left: 1em;
+      margin-bottom: 8px;
+    }
+
+    table.plan-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0;
+    }
+    table.plan-table th {
+      background: var(--black);
+      color: var(--white);
+      padding: 10px 16px;
+      text-align: left;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+    table.plan-table td {
+      border: 1px solid var(--gray-200);
+      padding: 10px 16px;
+      vertical-align: top;
+    }
+    table.plan-table tr:nth-child(even) td {
+      background: var(--gray-100);
+    }
+
+    /* 附則 */
+    .addendum {
+      background: var(--gray-100);
+      border-radius: 8px;
+      padding: 28px 32px;
+      margin-top: 60px;
+      font-size: 13px;
+      color: var(--gray-600);
+    }
+    .addendum p { margin-bottom: 6px; }
+
+    /* Sign CTA */
+    .sign-cta {
+      margin-top: 80px;
+      background: var(--black);
+      border-radius: 12px;
+      padding: 56px 40px;
+      text-align: center;
+      color: var(--white);
+    }
+    .sign-cta h3 {
+      font-size: 22px; font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+    .sign-cta p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 32px;
+    }
+    .sign-cta a {
+      display: inline-block;
+      background: var(--gold);
+      color: var(--white);
+      padding: 16px 48px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+
+    /* Footer */
+    footer {
+      background: var(--black);
+      color: rgba(255,255,255,0.4);
+      text-align: center;
+      padding: 40px 24px;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+
+    @media (max-width: 640px) {
+      nav { padding: 0 20px; }
+      .content-wrap { padding: 60px 20px 80px; }
+      table.plan-table { font-size: 12px; }
+      table.plan-table th, table.plan-table td { padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/lp.html">KIRAKU</a>
+  <a class="nav-cta" href="/sign.html">同意書・申込み</a>
+</nav>
+
+<div class="page-header">
+  <div class="page-tag">TERMS OF SERVICE</div>
+  <h1 class="page-title">利用規約</h1>
+  <p class="page-date">制定日：2026年5月20日 ／ 最終改定：2026年5月20日</p>
+</div>
+
+<div class="content-wrap">
+
+  <div class="intro-box">
+    本利用規約（以下「本規約」）は、株式会社TeLARIA（以下「当社」）が提供するエステサロン向け業務自動化サービス「KIRAKU」（以下「本サービス」）の利用に関する条件を定めるものです。本サービスをご利用いただく際は、必ず本規約をお読みください。本サービスへの申込または利用を開始した時点で、本規約に同意したものとみなします。
+  </div>
+
+  <!-- 第1条 -->
+  <div class="article" id="art1">
+    <h2><span class="art-num">第1条</span>総則・適用範囲</h2>
+    <ol>
+      <li>本規約は、当社が提供する本サービスの利用に関し、当社と利用者との間に適用されます。</li>
+      <li>当社が別途ウェブサイト上または書面にて提示する個別規定・ガイドライン・注意事項は、本規約の一部を構成し、本規約と一体のものとして効力を有します。</li>
+      <li>本規約の内容と個別規定の内容が異なる場合は、個別規定が優先されます。</li>
+      <li>当社は、利用者に対して事前に通知することにより、本規約をいつでも変更することができます。変更後の規約は、当社所定の方法により通知した時点から効力を生じるものとします。</li>
+    </ol>
+  </div>
+
+  <!-- 第2条 -->
+  <div class="article" id="art2">
+    <h2><span class="art-num">第2条</span>定義</h2>
+    <p>本規約において使用する用語の定義は以下のとおりです。</p>
+    <dl class="sub-item">
+      <dt>① 本サービス</dt>
+      <dd>当社が「KIRAKU」の名称で提供するエステサロン向け業務自動化サービス全般を指します（エスタマ自動更新・LINE業務自動化・カスタム構築等を含む）。</dd>
+      <dt>② 利用者</dt>
+      <dd>本規約に同意のうえ、本サービスの利用契約（以下「利用契約」）を締結した事業者（法人・個人事業主）を指します。</dd>
+      <dt>③ 利用契約</dt>
+      <dd>当社と利用者の間で成立する、本サービスの利用に関する契約（本規約を内容とする）を指します。</dd>
+      <dt>④ 料金</dt>
+      <dd>利用者が本サービスを利用するために当社に支払う月額利用料金を指します。</dd>
+      <dt>⑤ コンテンツ</dt>
+      <dd>本サービス上で提供されるプログラム・データ・テキスト・画像その他一切の情報を指します。</dd>
+    </dl>
+  </div>
+
+  <!-- 第3条 -->
+  <div class="article" id="art3">
+    <h2><span class="art-num">第3条</span>サービスの内容</h2>
+    <p>当社は、以下のサービスを提供します。各サービスの詳細な仕様・機能は、当社ウェブサイトおよび個別の説明資料に記載するとおりです。</p>
+
+    <table class="plan-table">
+      <tr>
+        <th>プラン名</th>
+        <th>主な提供機能</th>
+        <th>月額料金（税込）</th>
+      </tr>
+      <tr>
+        <td><strong>STARTER</strong></td>
+        <td>エスタマ自動更新（空席・求人・案内の自動掲載・1分ごと更新）</td>
+        <td>¥9,800 ／ 各エリア5店舗限定</td>
+      </tr>
+      <tr>
+        <td><strong>STANDARD</strong></td>
+        <td>LINE業務自動化フルセット（日報入力・明細出力・出勤同期・月報作成・顧客照会・シフト配信）</td>
+        <td>¥19,800</td>
+      </tr>
+      <tr>
+        <td><strong>PREMIUM</strong></td>
+        <td>STARTER＋STANDARD全機能＋カスタムツール開発・専属サポート・月次改善提案</td>
+        <td>¥45,000</td>
+      </tr>
+      <tr>
+        <td><strong>CUSTOM</strong></td>
+        <td>複数店舗・グループ運用・独自システム連携等、上記プランに含まれない個別要件への対応</td>
+        <td>個別見積もり（上限¥45,000）</td>
+      </tr>
+    </table>
+
+    <ol>
+      <li>当社は、技術的改善・法令対応・事業上の理由により、事前に通知のうえ、サービスの内容を変更することがあります。</li>
+      <li>STARTERプランは、地域ごとに5店舗限定（地域独占枠）とします。枠が埋まっている場合はご利用いただけない場合があります。</li>
+    </ol>
+  </div>
+
+  <!-- 第4条 -->
+  <div class="article" id="art4">
+    <h2><span class="art-num">第4条</span>申込みと契約の成立</h2>
+    <ol>
+      <li>利用契約は、利用者が当社所定の電子同意書フォームにて本規約に同意したうえ申込みを行い、当社が当該申込みを承諾した時点で成立します。</li>
+      <li>当社は、次の各号に該当する場合、申込みを承諾しないことがあります。
+        <ol type="a">
+          <li>申込み内容に虚偽・誤記がある場合</li>
+          <li>過去に本規約違反を行った事実がある場合</li>
+          <li>反社会的勢力（第13条参照）に該当すると判断した場合</li>
+          <li>その他、当社が契約の締結を不適切と判断した場合</li>
+        </ol>
+      </li>
+      <li>本サービスの利用開始日は、当社が別途書面または電子メールにてお知らせした日付とします。</li>
+    </ol>
+  </div>
+
+  <!-- 第5条 -->
+  <div class="article" id="art5">
+    <h2><span class="art-num">第5条</span>利用料金・支払い</h2>
+    <ol>
+      <li>利用者は、当社所定の方法（KOMOJUその他当社指定の決済サービス）にて、毎月の利用料金を支払うものとします。</li>
+      <li>料金はすべて税込表示です。消費税率の変更があった場合、税率変更後の金額が適用されます。</li>
+      <li>支払い期日を過ぎても支払いがない場合、当社は本サービスの提供を停止することがあります。</li>
+      <li>利用者の都合による支払い遅延・未払いに起因する損害は、利用者が負担するものとします。</li>
+      <li>初期費用・違約金は一切ありません。</li>
+      <li>CUSTOMプランについては、個別の見積書に記載された金額が適用されます。</li>
+    </ol>
+  </div>
+
+  <!-- 第6条 -->
+  <div class="article" id="art6">
+    <h2><span class="art-num">第6条</span>契約期間・解約</h2>
+    <ol>
+      <li>利用契約の期間は、利用開始月から1ヶ月単位で自動更新されます。</li>
+      <li>利用者は、解約希望月の月末までに当社所定の方法により解約申請を行うことで、翌月から解約することができます。解約の意思表示がない限り、自動更新されます。</li>
+      <li>月の途中で解約した場合でも、当該月の利用料金は日割りされず、月額全額が発生します。</li>
+      <li>当社は、利用者が本規約に違反した場合、または第4条第2項各号に定める事由が事後的に判明した場合、事前通知なく利用契約を解除することがあります。この場合、既払い料金は返金しません。</li>
+    </ol>
+  </div>
+
+  <!-- 第7条 -->
+  <div class="article" id="art7">
+    <h2><span class="art-num">第7条</span>利用者の義務</h2>
+    <ol>
+      <li>利用者は、自らの責任において本サービスを利用し、本サービスを利用した一切の行為およびその結果について責任を負います。</li>
+      <li>利用者は、本サービスを自己の事業目的のためにのみ利用し、第三者に対して本サービスへのアクセスを許可・提供してはなりません（サービスの再販・転貸・転売を含む）。</li>
+      <li>利用者は、当社から提供されたアクセス情報（ID・パスワード・API認証情報等）を適切に管理し、第三者に開示・漏洩させないようにする義務を負います。</li>
+      <li>利用者は、本サービスの利用にあたり、関係法令・規制を遵守するものとします。</li>
+    </ol>
+  </div>
+
+  <!-- 第8条 -->
+  <div class="article" id="art8">
+    <h2><span class="art-num">第8条</span>禁止事項</h2>
+    <p>利用者は、本サービスの利用にあたり、以下の行為を行ってはなりません。</p>
+    <ol>
+      <li>本サービスのリバースエンジニアリング・逆コンパイル・逆アセンブルその他の方法による解析</li>
+      <li>本サービスの複製・改変・翻訳・二次利用、または本サービスを用いた類似サービスの開発・販売</li>
+      <li>本サービスへの不正アクセスまたはサービス提供を妨害する行為</li>
+      <li>当社の知的財産権・商標権・プライバシーその他の権利を侵害する行為</li>
+      <li>法令・公序良俗に反する行為、または第三者に不利益を与える行為</li>
+      <li>虚偽の情報を申込みフォームに入力する行為</li>
+      <li>本サービスを第三者に転貸・再販する行為</li>
+      <li>その他、当社が不適切と判断する行為</li>
+    </ol>
+  </div>
+
+  <!-- 第9条 -->
+  <div class="article" id="art9">
+    <h2><span class="art-num">第9条</span>サービスの変更・停止・終了</h2>
+    <ol>
+      <li>当社は、以下の事由が生じた場合、事前通知なく本サービスの全部または一部を停止・中断することがあります。
+        <ol type="a">
+          <li>システムの保守・点検・更新を行う場合</li>
+          <li>天災・地震・停電・通信障害等の不可抗力により運用が困難な場合</li>
+          <li>外部サービス（エスタマ・LINE等）の仕様変更・規約変更・提供停止により、本サービスの継続提供が困難になった場合</li>
+          <li>その他、当社が必要と判断した場合</li>
+        </ol>
+      </li>
+      <li>前項による停止・中断に対して、当社は責任を負わないものとします。</li>
+      <li>当社は、合理的な理由がある場合、3ヶ月前の事前通知をもって本サービスを終了することができます。</li>
+    </ol>
+  </div>
+
+  <!-- 第10条 -->
+  <div class="article" id="art10">
+    <h2><span class="art-num">第10条</span>知的財産権</h2>
+    <ol>
+      <li>本サービスに関するソフトウェア・プログラム・ドキュメント・ロゴその他一切の著作物に関する著作権・特許権・商標権等の知的財産権は、当社または当社にライセンスを許諾した第三者に帰属します。</li>
+      <li>本規約のいかなる内容も、利用者に対し、当社の知的財産権を譲渡・使用許諾するものではありません。</li>
+      <li>利用者が本サービスを利用して作成・収集した業務データ（売上データ・顧客情報・日報データ等）の権利は、利用者に帰属します。</li>
+    </ol>
+  </div>
+
+  <!-- 第11条 -->
+  <div class="article" id="art11">
+    <h2><span class="art-num">第11条</span>個人情報・機密情報の取扱い</h2>
+    <ol>
+      <li>当社は、利用者および利用者の顧客（エンドユーザー）に関する個人情報を、当社プライバシーポリシーに従い適切に取り扱います。</li>
+      <li>当社は、利用者から取得した情報を、本サービスの提供・改善・サポート目的以外に使用しません。</li>
+      <li>当社および利用者は、本サービスの利用を通じて知り得た相手方の業務上の機密情報を、相手方の事前の書面による同意なく第三者に開示・漏洩してはなりません。</li>
+      <li>利用者は、エンドユーザーから個人情報を取得する場合、適切な同意取得・管理を自らの責任において行うものとします。</li>
+    </ol>
+  </div>
+
+  <!-- 第12条 -->
+  <div class="article" id="art12">
+    <h2><span class="art-num">第12条</span>免責事項・損害賠償</h2>
+    <ol>
+      <li>当社は、本サービスが利用者の特定の目的に適合すること、期待する機能・商業的価値・正確性・有用性を有すること、および本サービスの利用が利用者に適用のある法令・業界団体の内部規則等に適合することを保証しません。</li>
+      <li>当社は、本サービスを通じて利用者が取得する情報等の完全性・正確性・有用性について保証しません。</li>
+      <li>当社は、外部サービス（エスタマ・LINE・KOMOJU等）の仕様変更・障害・規約変更による本サービスへの影響について責任を負いません。</li>
+      <li>当社の責に帰すべき事由により利用者に損害が発生した場合、当社の損害賠償責任は、損害発生の起因となった月の利用料金相当額を上限とします。</li>
+      <li>当社は、利用者の逸失利益・間接損害・特別損害・偶発的損害については、当社に故意または重過失がある場合を除き、一切の責任を負いません。</li>
+    </ol>
+  </div>
+
+  <!-- 第13条 -->
+  <div class="article" id="art13">
+    <h2><span class="art-num">第13条</span>反社会的勢力の排除</h2>
+    <ol>
+      <li>利用者は、現在および将来にわたり、暴力団・暴力団員・暴力団関係企業・総会屋・社会運動標榜ゴロ・特殊知能暴力集団その他これらに準ずる者（以下「反社会的勢力等」）に該当しないことを表明・保証します。</li>
+      <li>利用者が反社会的勢力等に該当することが判明した場合、当社は直ちに利用契約を解除することができます。この場合、当社は利用者に対して一切の損害賠償責任を負いません。</li>
+    </ol>
+  </div>
+
+  <!-- 第14条 -->
+  <div class="article" id="art14">
+    <h2><span class="art-num">第14条</span>準拠法・管轄裁判所</h2>
+    <ol>
+      <li>本規約は、日本国法に準拠し、日本国法に従って解釈されます。</li>
+      <li>本サービスに関する紛争については、広島地方裁判所を第一審の専属的合意管轄裁判所とします。</li>
+    </ol>
+  </div>
+
+  <!-- 第15条 -->
+  <div class="article" id="art15">
+    <h2><span class="art-num">第15条</span>規約変更の通知</h2>
+    <ol>
+      <li>当社は本規約を変更する場合、当社ウェブサイト上への掲載および/または利用者への電子メール送信により通知します。</li>
+      <li>変更通知後も本サービスを継続して利用した場合、変更後の規約に同意したものとみなします。</li>
+      <li>重要な変更については、効力発生日の14日以上前に通知するものとします。</li>
+    </ol>
+  </div>
+
+  <!-- 第16条 -->
+  <div class="article" id="art16">
+    <h2><span class="art-num">第16条</span>分離可能性</h2>
+    <p>本規約のいずれかの条項が無効または執行不能と判断された場合でも、残りの条項は引き続き有効に存続します。</p>
+  </div>
+
+  <!-- 附則 -->
+  <div class="addendum">
+    <p><strong>附則</strong></p>
+    <p>本規約は、2026年5月20日より施行します。</p>
+    <p style="margin-top: 16px;"><strong>事業者情報</strong></p>
+    <p>事業者名：株式会社TeLARIA</p>
+    <p>代表者名：平岡和真</p>
+    <p>所在地：広島市中区</p>
+    <p>電話番号：082-909-2441</p>
+    <p>メールアドレス：ec.product@telaria.tech</p>
+    <p>サービス名：KIRAKU（kiraku.telaria.tech）</p>
+  </div>
+
+  <div class="sign-cta">
+    <h3>利用規約に同意して申し込む</h3>
+    <p>規約をご確認のうえ、電子サイン（同意書）フォームにお進みください。</p>
+    <a href="/sign.html">電子同意書フォームへ</a>
+  </div>
+
+</div>
+
+<footer>
+  <p>© 2026 株式会社TeLARIA. All rights reserved. | KIRAKU 利用規約</p>
+</footer>
+
+</body>
+</html>
