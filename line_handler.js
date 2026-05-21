@@ -62,15 +62,24 @@ const MEISAI_NAME_CELL = 'H5';
 const MEISAI_SCRIPT_FUNCTION = 'setMeisaiFromUriage';
 
 // ── 明細書（新フォーマット）の定数 ───────────────────────
-// C3=名前 / D40=交通費 / E41=バンス / E46=お釣り / E48=転記チェック
+// C3=名前 / D40=交通費(自社:種別文字列) / E40=交通費(クライアント:金額数値)
+// E41=バンス / E46=お釣り / E48=転記チェック
 // 描画範囲 A1:G47 を PNG で返信
 const MEISAISYO_SHEET_NAME = '明細書';
 const MEISAISYO_RANGE = 'A1:G47';
 const MEISAISYO_NAME_CELL = 'C3';
-const MEISAISYO_TRANSPORT_CELL = 'D40';
+const MEISAISYO_TRANSPORT_CELL = 'D40';        // 自社: 「片道/往復/P/なし」種別を書込
+const MEISAISYO_TRANSPORT_CELL_CLIENT = 'E40'; // クライアント: 金額をそのまま書込
 const MEISAISYO_BANCE_CELL = 'E41';
 const MEISAISYO_OTSURI_CELL = 'E46';
 const MEISAISYO_CHECK_CELL = 'E48';
+
+// クライアント仕様で動作する店舗ID（交通費=数字→E40書込み）
+// K-XXX 系クライアントを追加するときはここに store_id を足す
+const MEISAISYO_CLIENT_STORE_IDS = new Set(['T-1043']); // Angel Spa (K-001)
+function isClientMeisaisyoStore(storeId) {
+  return MEISAISYO_CLIENT_STORE_IDS.has(String(storeId || '').toUpperCase());
+}
 
 // ── LINE クライアント ─────────────────────────────────────
 const lineConfig = {
@@ -425,6 +434,9 @@ function parseMeisaisyoRequest(text) {
   }
   if (!storeId) return null;
 
+  // 店舗IDによってクライアント仕様か判定（交通費の解釈・書込セルが変わる）
+  const isClient = isClientMeisaisyoStore(storeId);
+
   let dateStr = null, name = null, transport = null, bance = null, otsuri = null;
   // トリガー文字列を除去（行頭/行末に単独で書かれていても、文中に書かれていても削る）
   const cleaned = text.replace(MEISAISYO_TRIGGER, '');
@@ -434,13 +446,19 @@ function parseMeisaisyoRequest(text) {
     let m;
     if ((m = line.match(/^(?:日付|日時)[\s　:：]*(.*)$/))) { if (!dateStr && m[1]) dateStr = normalizeSlashDate(m[1].trim()); continue; }
     if ((m = line.match(/^名前[\s　:：]*(.*)$/)))         { if (!name && m[1]) name = m[1].trim(); continue; }
-    if ((m = line.match(/^交通費[\s　:：]*(.*)$/)))       { if (m[1]) transport = normalizeTransportType(m[1]); continue; }
+    if ((m = line.match(/^交通費[\s　:：]*(.*)$/))) {
+      if (m[1]) {
+        // クライアント: 数字をそのままE40へ / 自社: 片道/往復/P/なし種別をD40へ
+        transport = isClient ? parseAmount(m[1]) : normalizeTransportType(m[1]);
+      }
+      continue;
+    }
     if ((m = line.match(/^バンス[\s　:：]*(.*)$/)))       { if (m[1]) bance = parseAmount(m[1]); continue; }
     if ((m = line.match(/^お釣り[\s　:：]*(.*)$/)))       { if (m[1]) otsuri = parseAmount(m[1]); continue; }
   }
 
   if (!dateStr || !name) return null;
-  return { storeId, dateStr, name, transport, bance, otsuri };
+  return { storeId, dateStr, name, transport, bance, otsuri, isClient };
 }
 
 // 交通費種別を正規化（片道/往復/P/なし → そのまま返す、それ以外はnull）
@@ -467,11 +485,17 @@ function normalizeDateStr(dateStr) {
 // 日付文字列でファイルを検索
 // MEISAI_TEST_ID が設定されている場合はそのスプレッドシートを使用
 // folderId が指定されない場合は環境変数 NIPPO_FOLDER_ID を使用
-async function findSpreadsheetByDateStr(dateStr, folderId) {
+// opts.isClient=true の場合は MEISAISYO_CLIENT_TEST_ID を最優先で参照する（K-001 Angel Spa等の動作確認用）
+async function findSpreadsheetByDateStr(dateStr, folderId, opts = {}) {
   // C-029 2026-05-19: folderId 必須化（T-001 fallback廃止・誤読込事故対策）
   // 呼び出し側で店舗フォルダID（または明示的にNIPPO_FOLDER_ID）を渡すこと
   if (!folderId) {
     throw new Error('findSpreadsheetByDateStr: folderId は必須引数です（旧デフォルト fallback は2026-05-19廃止）');
+  }
+  // K-001 Angel Spa等クライアント仕様店舗のテスト用シート固定（他店舗の本番運用には影響しない）
+  if (opts.isClient && process.env.MEISAISYO_CLIENT_TEST_ID) {
+    console.log(`[明細] クライアントテストモード: MEISAISYO_CLIENT_TEST_ID=${process.env.MEISAISYO_CLIENT_TEST_ID}`);
+    return process.env.MEISAISYO_CLIENT_TEST_ID;
   }
   if (process.env.MEISAI_TEST_ID) {
     console.log(`[明細] テストモード: MEISAI_TEST_ID=${process.env.MEISAI_TEST_ID}`);
@@ -958,7 +982,7 @@ async function processMeisaisyoAndPush(target, client, parsed, userId) {
     const folderInfo = await getFolderByStoreId(parsed.storeId, userId);
     console.log(`[明細書] 店舗特定: ${folderInfo.storeId}/${folderInfo.storeName} folderId=${folderInfo.folderId}`);
 
-    const spreadsheetId = await findSpreadsheetByDateStr(parsed.dateStr, folderInfo.folderId);
+    const spreadsheetId = await findSpreadsheetByDateStr(parsed.dateStr, folderInfo.folderId, { isClient: parsed.isClient });
     const auth = createAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
@@ -978,9 +1002,11 @@ async function processMeisaisyoAndPush(target, client, parsed, userId) {
     console.log(`[明細書] 名前書込&E41/E46クリア完了 ssid=${spreadsheetId} name=${parsed.name}`);
 
     // Phase 2: 残りのフィールドを書込
+    // 交通費の書込先セルは店舗仕様で切替（自社=D40種別文字列 / クライアント=E40金額数値）
+    const transportCell = parsed.isClient ? MEISAISYO_TRANSPORT_CELL_CLIENT : MEISAISYO_TRANSPORT_CELL;
     const data = [];
     if (parsed.transport !== null && parsed.transport !== undefined) {
-      data.push({ range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_TRANSPORT_CELL}`, values: [[parsed.transport]] });
+      data.push({ range: `'${MEISAISYO_SHEET_NAME}'!${transportCell}`, values: [[parsed.transport]] });
     }
     if (parsed.bance !== null && parsed.bance !== undefined) {
       data.push({ range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_BANCE_CELL}`, values: [[parsed.bance]] });
@@ -994,7 +1020,7 @@ async function processMeisaisyoAndPush(target, client, parsed, userId) {
       spreadsheetId,
       requestBody: { valueInputOption: 'USER_ENTERED', data },
     });
-    console.log(`[明細書] 残フィールド書込完了 transport=${parsed.transport} bance=${parsed.bance} otsuri=${parsed.otsuri}`);
+    console.log(`[明細書] 残フィールド書込完了 mode=${parsed.isClient ? 'client' : 'company'} transport=${parsed.transport}(${transportCell}) bance=${parsed.bance} otsuri=${parsed.otsuri}`);
 
     // [TRANSFER_DIRECT_2026-04-30] E48=trueをAPI経由で書いてもonEdit不発火→GAS転記が動かないため、
     //                              Node.js側で直接 給料UI/現金管理 へ転記する
