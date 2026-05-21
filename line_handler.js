@@ -1040,6 +1040,24 @@ async function processMeisaisyoAndPush(target, client, parsed, userId) {
       to: target,
       messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }],
     });
+
+    // [K-006 2026-05-21] クライアント仕様の明細書処理完了後、3秒待ってE40をクリア（次回明細書作成時の残値混入を防止）
+    // 注: スプシ上で人間が手動E48トグルしたケースはNode処理外。Apps Script onEdit側で別途対応予定
+    if (parsed.isClient) {
+      setTimeout(async () => {
+        try {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `'${MEISAISYO_SHEET_NAME}'!${MEISAISYO_TRANSPORT_CELL_CLIENT}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [['']] }
+          });
+          console.log(`[明細書][K-006] E40(交通費)を3秒後にクリア完了 ssid=${spreadsheetId}`);
+        } catch (e) {
+          console.error('[明細書][K-006] E40クリアエラー:', e.message);
+        }
+      }, 3000);
+    }
   } catch (err) {
     console.error('[明細書] エラー:', err.message);
     await client.pushMessage({
