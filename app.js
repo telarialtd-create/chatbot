@@ -1137,11 +1137,16 @@ async function notifyAuthError(source) {
 // ==========================================
 // 売上ダッシュボード A列ポーリング監視（5分ごと）
 // ==========================================
-const DASHBOARD_SHEETS = [
-  { id: '1L5a0SeqSckZARYq3rZBVpBwDBPL4GyliEqA-TIDzW7Y', name: 'CREA' },
-  { id: '1wYQ5YYU9zSbGZ7VDnPp89mTMX_JGIUdNNNFBVgBneQ4', name: 'ふわもこ' },
+// 監視対象店舗（sheetPrefix で当月の月報シートを 日報フォルダ配下から動的解決）
+// 命名規則: "{prefix}売上YYYY-M月"  例: "CREA売上2026-5月"
+// 実体は別Driveに置かれ、日報フォルダにショートカットが置かれている前提（v2運用）
+const DASHBOARD_NIPPO_FOLDER_ID = '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If';
+const DASHBOARD_STORES = [
+  { prefix: 'CREA',     name: 'CREA' },
+  { prefix: 'ふわもこ', name: 'ふわもこ' },
 ];
 const prevStaffMap = {}; // { sheetId: "名前1,名前2,..." }
+const dashboardMissingNotified = {}; // 同月内の「当月シート未作成」ログを1回だけに抑制
 
 async function checkDashboardChanges() {
   const { google: g } = require('googleapis');
@@ -1154,7 +1159,13 @@ async function checkDashboardChanges() {
   const keyPath = fs.existsSync(saKeyPath) ? saKeyPath : (fs.existsSync(localSaKeyPath) ? localSaKeyPath : null);
 
   if (keyPath) {
-    auth = new g.auth.GoogleAuth({ keyFile: keyPath, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
+    auth = new g.auth.GoogleAuth({
+      keyFile: keyPath,
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets.readonly',
+        'https://www.googleapis.com/auth/drive.readonly',
+      ],
+    });
   } else {
     const oauthKeys = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config/gcp-oauth.keys.json')));
     const creds = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config/gdrive-server-credentials.json')));
@@ -1164,8 +1175,45 @@ async function checkDashboardChanges() {
     auth = oauth2Client;
   }
   const sheets = g.sheets({ version: 'v4', auth });
+  const drive = g.drive({ version: 'v3', auth });
 
-  for (const sheet of DASHBOARD_SHEETS) {
+  // 当月の月報シートを Drive 全体検索で動的に解決
+  const jst = new Date(Date.now() + 9 * 3600 * 1000);
+  const year = jst.getUTCFullYear();
+  const month = jst.getUTCMonth() + 1;
+  const ymKey = `${year}-${month}`;
+
+  const dashboardSheets = [];
+  for (const store of DASHBOARD_STORES) {
+    const sheetName = `${store.prefix}売上${year}-${month}月`;
+    try {
+      const r = await drive.files.list({
+        q: `'${DASHBOARD_NIPPO_FOLDER_ID}' in parents and name='${sheetName}' and trashed=false`,
+        fields: 'files(id, name, mimeType, shortcutDetails)',
+        pageSize: 5,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      const files = r.data.files || [];
+      if (files.length === 0) {
+        const key = `${ymKey}_${store.prefix}`;
+        if (!dashboardMissingNotified[key]) {
+          console.log(`[Dashboard監視] ${sheetName} が見つかりません。当月分未作成のためスキップ。`);
+          dashboardMissingNotified[key] = true;
+        }
+        continue;
+      }
+      let targetId = files[0].id;
+      if (files[0].mimeType === 'application/vnd.google-apps.shortcut' && files[0].shortcutDetails) {
+        targetId = files[0].shortcutDetails.targetId;
+      }
+      dashboardSheets.push({ id: targetId, name: store.name, sheetName });
+    } catch (e) {
+      console.error(`[Dashboard監視] ${store.name} シート検索エラー:`, e.message);
+    }
+  }
+
+  for (const sheet of dashboardSheets) {
     try {
       const res = await sheets.spreadsheets.values.get({
         spreadsheetId: sheet.id, range: "'SB'!A9:A39", valueRenderOption: 'UNFORMATTED_VALUE',
