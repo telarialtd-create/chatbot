@@ -269,20 +269,36 @@ async function findSpreadsheetInFolder(folderId, dateStr) {
   console.log(`[日報入力] フォルダ ${folderId} で "${searchDate}" を検索`);
 
   const res = await drive.files.list({
-    q: `'${folderId}' in parents and name contains '${searchDate}' and mimeType='application/vnd.google-apps.spreadsheet'`,
+    q: `'${folderId}' in parents and name contains '${searchDate}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
     fields: 'files(id, name)',
     orderBy: 'createdTime desc',
-    pageSize: 5,
+    pageSize: 10,
   });
 
-  const files = res.data.files || [];
-  console.log(`[日報入力] 検索結果: ${files.length}件`, files.map(f => f.name).join(', '));
+  const all = res.data.files || [];
+  console.log(`[日報入力] 検索結果(全件): ${all.length}件`, all.map(f => f.name).join(', '));
+
+  // 🔒 コピー由来のファイルを除外（同名スプシ重複で「のコピー」を誤採用する事故防止 / K-004 5/21 検知）
+  const COPY_PATTERNS = /(のコピー|\(コピー\)|（コピー）|copy of)/i;
+  const removed = all.filter(f => COPY_PATTERNS.test(f.name));
+  const files   = all.filter(f => !COPY_PATTERNS.test(f.name));
+  if (removed.length) {
+    console.log(`[日報入力] ⚠️ コピー由来 ${removed.length}件を除外: ${removed.map(f => f.name).join(', ')}`);
+  }
 
   if (!files.length) throw new Error(`${searchDate} のスプレッドシートが見つかりません`);
 
+  // 🔒 完全一致優先：ファイル名が searchDate で末尾終了するもの（純粋な日報シート）を最優先
+  const endsWithDate = files.filter(f => f.name.endsWith(searchDate));
+  const orderedFiles = [
+    ...endsWithDate,
+    ...files.filter(f => !endsWithDate.includes(f)),
+  ];
+  console.log(`[日報入力] 採用優先順: ${orderedFiles.map(f => f.name).join(' > ')}`);
+
   // ダッシュボードシートが存在するファイルを優先
   const sheets = google.sheets({ version: 'v4', auth });
-  for (const file of files) {
+  for (const file of orderedFiles) {
     try {
       const meta = await sheets.spreadsheets.get({ spreadsheetId: file.id });
       const hasDashboard = meta.data.sheets.some(s => s.properties.title === DASHBOARD_SHEET);
