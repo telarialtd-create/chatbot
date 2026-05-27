@@ -6,6 +6,7 @@ on:
     paths:
       # 本番運用JSファイル（手動check/fix系は監視対象外）
       - 'app.js'
+      - 'invoice_sender.js'
       - 'line_handler.js'
       - 'line_nippo_input.js'
       - 'nippo_to_geppo.js'
@@ -43,7 +44,7 @@ jobs:
       - name: Deploy JS files to server
         run: |
           # 本番運用JSファイルをサーバーにコピー
-          for f in app.js line_handler.js line_nippo_input.js nippo_to_geppo.js \
+          for f in app.js invoice_sender.js line_handler.js line_nippo_input.js nippo_to_geppo.js \
                    nippo_to_geppo_v2.js create_sb_dashboard.js scheduleReader.js \
                    build_dashboard.js customer_search.js meisai_handler.js \
                    kokyaku_update.js geppo_update.js nippo_screenshot.js \

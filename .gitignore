@@ -47,3 +47,6 @@ context/
 skills/
 staff_setup/
 .claude/commands/
+
+# 支払ページのテンプレ（ローカル保管のみ・本番非露出）
+public/pay/template.html

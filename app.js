@@ -38,6 +38,10 @@ app.use(express.json());
 const { registerSignRoute } = require('./lib/sign_handler');
 registerSignRoute(app);
 
+// KIRAKU請求書一斉送信エンドポイント（C-025・2026-05-27追加）
+app.use(require('./invoice_sender'));
+console.log('Invoice sender 有効: POST /api/send-invoice');
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // 空き状況データを読みやすいテキストにまとめる
