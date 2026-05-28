@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>即セラ自動更新 ご利用ガイド | 導入店舗様向けマニュアル</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --black: #0a0a0a;
+      --white: #ffffff;
+      --gray-50: #fafafa;
+      --gray-100: #f5f5f5;
+      --gray-200: #e8e8e8;
+      --gray-400: #999999;
+      --gray-600: #555555;
+      --gray-700: #3a3a3a;
+      --gold: #c9a84c;
+      --gold-dark: #a8862f;
+      --pink: #e8688a;
+      --green: #06C755;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      color: var(--black);
+      background: var(--white);
+      line-height: 1.85;
+      font-size: 15.5px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Nav ─── */
+    .site-nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--gray-200);
+      z-index: 100;
+      padding: 0 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo { font-size: 16px; font-weight: 700; letter-spacing: 0.04em; }
+    .nav-logo span { color: var(--gold); }
+    .nav-cta {
+      background: var(--green); color: #fff;
+      padding: 9px 20px; border-radius: 100px;
+      font-size: 13px; text-decoration: none; letter-spacing: 0.04em;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    .nav-cta:hover { opacity: 0.88; }
+
+    /* ─── Hero ─── */
+    .hero {
+      background: var(--black); color: var(--white);
+      padding: 130px 24px 70px;
+      text-align: center;
+    }
+    .hero-tag {
+      display: inline-block;
+      border: 1px solid rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.7);
+      font-size: 11px; letter-spacing: 0.2em;
+      padding: 6px 16px; border-radius: 100px;
+      margin-bottom: 28px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 46px);
+      font-weight: 700; line-height: 1.3;
+      letter-spacing: -0.01em; margin-bottom: 18px;
+    }
+    .hero h1 span { color: var(--gold); }
+    .hero p {
+      font-size: 15px; color: rgba(255,255,255,0.65);
+      max-width: 560px; margin: 0 auto; line-height: 1.9;
+    }
+    .hero-meta {
+      margin-top: 28px; font-size: 12px; letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.4);
+    }
+
+    /* ─── Layout ─── */
+    .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+    /* ─── TOC ─── */
+    .toc {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 14px;
+      padding: 32px 30px;
+      margin: 56px auto 70px;
+      max-width: 880px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.06);
+    }
+    .toc h2 {
+      font-size: 13px; letter-spacing: 0.18em; color: var(--gray-400);
+      margin-bottom: 18px; text-transform: uppercase;
+    }
+    .toc ol {
+      list-style: none;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 28px;
+      counter-reset: toc;
+    }
+    .toc li { counter-increment: toc; }
+    .toc a {
+      display: flex; align-items: baseline; gap: 10px;
+      color: var(--gray-700); text-decoration: none;
+      font-size: 14.5px; padding: 6px 0;
+      transition: color 0.15s;
+    }
+    .toc a::before {
+      content: counter(toc, decimal-leading-zero);
+      color: var(--gold); font-weight: 700; font-size: 12px;
+      flex-shrink: 0;
+    }
+    .toc a:hover { color: var(--black); }
+
+    /* ─── Section ─── */
+    section.block { margin-bottom: 64px; scroll-margin-top: 80px; }
+    .sec-head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+    .sec-num {
+      font-size: 13px; font-weight: 700; color: var(--gold);
+      border: 1.5px solid var(--gold); border-radius: 100px;
+      width: 30px; height: 30px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sec-head h2 {
+      font-size: clamp(20px, 3vw, 26px); font-weight: 700;
+      letter-spacing: -0.01em; line-height: 1.4;
+    }
+    .block p { margin-bottom: 14px; color: var(--gray-700); }
+    .block strong { color: var(--black); font-weight: 700; }
+    .lead { font-size: 16px; }
+
+    /* ─── Callout boxes ─── */
+    .box {
+      border-radius: 12px; padding: 22px 24px; margin: 18px 0;
+      font-size: 14.5px; line-height: 1.85;
+    }
+    .box-gold { background: #fbf6e8; border: 1px solid #ecdcae; }
+    .box-gold .box-title { color: var(--gold-dark); }
+    .box-gray { background: var(--gray-50); border: 1px solid var(--gray-200); }
+    .box-pink { background: #fdeef2; border: 1px solid #f6cdd8; }
+    .box-pink .box-title { color: #c14066; }
+    .box-title { font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .box ul { margin: 6px 0 0 0; padding-left: 20px; }
+    .box li { margin-bottom: 6px; color: var(--gray-700); }
+
+    /* ─── Steps ─── */
+    .steps { display: grid; gap: 14px; margin-top: 8px; }
+    .step {
+      display: grid; grid-template-columns: 52px 1fr; gap: 20px;
+      align-items: start; background: var(--gray-50);
+      border: 1px solid var(--gray-200); border-radius: 12px;
+      padding: 22px 24px;
+    }
+    .step-num { font-size: 26px; font-weight: 700; color: var(--gold); line-height: 1; }
+    .step h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .step p { font-size: 13.5px; color: var(--gray-600); margin: 0; line-height: 1.8; }
+
+    /* ─── Operation cards ─── */
+    .ops { display: grid; gap: 16px; margin-top: 8px; }
+    .op {
+      border: 1px solid var(--gray-200); border-radius: 14px;
+      overflow: hidden;
+    }
+    .op-head {
+      background: var(--black); color: #fff;
+      padding: 16px 22px; font-weight: 700; font-size: 15.5px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .op-head .op-ico { font-size: 19px; }
+    .op-body { padding: 20px 24px; }
+    .op-body p { margin-bottom: 10px; }
+    .op-body .how { font-size: 13.5px; color: var(--gray-600); }
+    .tag-line {
+      display: inline-block; background: #e7f9ef; color: #0a7d3f;
+      border: 1px solid #b6e6cd; border-radius: 100px;
+      font-size: 12px; font-weight: 700; padding: 2px 12px; margin-right: 6px;
+    }
+    .tag-sheet {
+      display: inline-block; background: #eef3fc; color: #2b5dab;
+      border: 1px solid #cadcf5; border-radius: 100px;
+      font-size: 12px; font-weight: 700; padding: 2px 12px; margin-right: 6px;
+    }
+
+    /* ─── Table ─── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--gray-200); border-radius: 12px; }
+    table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px; }
+    th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--gray-200); }
+    th { background: var(--gray-100); font-weight: 700; font-size: 13px; letter-spacing: 0.03em; }
+    tr:last-child td { border-bottom: none; }
+    .who-you { color: #0a7d3f; font-weight: 700; }
+    .who-us { color: var(--gray-400); font-weight: 600; }
+
+    /* ─── FAQ ─── */
+    .faq-item { border-bottom: 1px solid var(--gray-200); padding: 20px 0; }
+    .faq-q { font-size: 15.5px; font-weight: 700; margin-bottom: 8px; display: flex; gap: 10px; }
+    .faq-q::before { content: 'Q.'; color: var(--gold); font-weight: 700; }
+    .faq-a { font-size: 14px; color: var(--gray-600); padding-left: 26px; line-height: 1.9; }
+    .faq-a::before { content: 'A. '; color: var(--gray-400); font-weight: 700; }
+
+    /* ─── Contact ─── */
+    #contact { background: var(--black); color: #fff; text-align: center; padding: 80px 24px; margin-top: 70px; }
+    #contact h2 { font-size: clamp(22px, 3.5vw, 30px); font-weight: 700; margin-bottom: 14px; }
+    #contact p { color: rgba(255,255,255,0.6); margin-bottom: 36px; font-size: 14.5px; }
+    .line-cta {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      background: var(--green); color: #fff;
+      padding: 18px 52px; border-radius: 999px;
+      font-size: 16px; font-weight: 700; letter-spacing: 0.04em;
+      text-decoration: none;
+      box-shadow: 0 8px 24px rgba(6,199,85,0.35);
+      transition: transform 0.15s, opacity 0.15s;
+    }
+    .line-cta:hover { transform: translateY(-2px); opacity: 0.95; }
+    .line-cta-icon {
+      width: 22px; height: 22px; background: #fff; color: var(--green);
+      border-radius: 6px; font-size: 13px; font-weight: 800; line-height: 22px;
+    }
+    .contact-note { margin-top: 18px; font-size: 13px; color: rgba(255,255,255,0.4); }
+
+    /* ─── Footer ─── */
+    footer {
+      background: var(--black); color: rgba(255,255,255,0.3);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 26px 32px;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 14px; font-size: 12px;
+    }
+    footer a { color: rgba(255,255,255,0.5); text-decoration: underline; }
+    footer a:hover { color: rgba(255,255,255,0.8); }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 640px) {
+      body { font-size: 15px; }
+      .toc ol { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 1fr; gap: 6px; }
+      .step-num { font-size: 22px; }
+      nav { padding: 0 18px; }
+      footer { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="site-nav">
+  <div class="nav-logo">即セラ<span>自動更新</span> ご利用ガイド</div>
+  <a href="#contact" class="nav-cta">LINEで相談</a>
+</nav>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="hero-tag">USER GUIDE</div>
+  <h1>即セラ自動更新<br><span>ご利用ガイド</span></h1>
+  <p>導入店舗様向けの操作マニュアルです。<br>日々の操作は「名前」と「ひとこと」の2つだけ。あとはすべて自動で動きます。</p>
+  <div class="hero-meta">魂セラピスト「即セラ」専用 ／ 月額 ¥9,900（税込）</div>
+</header>
+
+<!-- TOC -->
+<nav class="toc" aria-label="目次">
+  <h2>目次</h2>
+  <ol>
+    <li><a href="#about">このツールでできること</a></li>
+    <li><a href="#flow">導入の流れ</a></li>
+    <li><a href="#prepare">店舗様にご準備いただくもの</a></li>
+    <li><a href="#daily">日々の操作はこれだけ</a></li>
+    <li><a href="#sheet">専用シートの見方</a></li>
+    <li><a href="#howitworks">自動更新の仕組み</a></li>
+    <li><a href="#notes">ご利用上の注意</a></li>
+    <li><a href="#faq">よくあるご質問</a></li>
+    <li><a href="#price">料金・解約について</a></li>
+    <li><a href="#contact">困ったときは（お問い合わせ）</a></li>
+  </ol>
+</nav>
+
+<main class="wrap">
+
+  <!-- 1. About -->
+  <section class="block" id="about">
+    <div class="sec-head"><div class="sec-num">1</div><h2>このツールでできること</h2></div>
+    <p class="lead">「即セラ自動更新」は、魂セラピストの<strong>即セラを24時間ずっとON状態に保ち続ける</strong>自動ツールです。</p>
+    <p>即セラは <strong>60分でOFFになる仕様</strong> のため、出勤中でも気づかないうちにOFFになり、ランキング低下や当日予約の取りこぼしにつながります。本ツールが10分ごとに自動で見回り、OFFになったセラピストを即座にONへ戻します。</p>
+    <div class="box box-gold">
+      <div class="box-title">⭐ 3つのポイント</div>
+      <ul>
+        <li><strong>即セラの自動ON</strong> ── 10分ごとに巡回し、OFFのセラピストだけを自動でONに戻します。</li>
+        <li><strong>ひとこと（キャッチコピー）の自動反映</strong> ── 登録したひとことを、ON時に毎回そのまま掲載します。</li>
+        <li><strong>メアド作成・アカウント開設の代行</strong> ── 即セラ登録に必要な準備は当社がすべて代行。セラピスト本人の作業はゼロです。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 2. Flow -->
+  <section class="block" id="flow">
+    <div class="sec-head"><div class="sec-num">2</div><h2>導入の流れ</h2></div>
+    <p>お申し込みから稼働開始まで、<strong>最短3営業日</strong>です。難しい設定は必要ありません。</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div><h3>お申し込み・ご相談</h3><p>LINEから店舗名・即セラの運用状況・セラピスト人数をお送りください。</p></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div><h3>情報のご提供</h3><p>魂セラピストの管理用ログイン情報をご共有いただくだけです。セラピストのお名前は当社で取得します。</p></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div><h3>初期設定（当社で代行）</h3><p>即セラ用のメアド作成・アカウント開設・初期登録、専用シートのご用意まで、すべて当社で行います。</p></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div><h3>自動稼働スタート</h3><p>設定完了後、24時間365日の自動更新が始まります。以降、店舗様の操作はほとんど必要ありません。</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Prepare -->
+  <section class="block" id="prepare">
+    <div class="sec-head"><div class="sec-num">3</div><h2>店舗様にご準備いただくもの</h2></div>
+    <p>導入時にご用意いただくのは、<strong>魂セラピストの管理用ログイン情報</strong>だけです。</p>
+    <div class="box box-gray">
+      <ul>
+        <li><strong>魂セラピストの管理用ログイン情報</strong><br>店舗管理画面にログインするためのメールアドレスとパスワードです。自動ON処理に使用します。セラピストのお名前・即セラ用のメアド・アカウントはすべて当社で取得・作成しますので、本人への依頼は不要です。</li>
+      </ul>
+    </div>
+    <div class="box box-gold">
+      <div class="box-title">🔐 ログイン情報の取り扱いについて</div>
+      <p style="margin:0;">お預かりした管理用ログイン情報は当社サーバーで厳重に管理し、即セラの自動更新以外の目的には一切使用いたしません。</p>
+    </div>
+  </section>
+
+  <!-- 4. Daily -->
+  <section class="block" id="daily">
+    <div class="sec-head"><div class="sec-num">4</div><h2>日々の操作はこれだけ</h2></div>
+    <p>稼働開始後、店舗様にお願いする操作は<strong>「セラピストの追加」</strong>と<strong>「ひとことの変更」</strong>の2つだけです。どちらも専用シート上で完結します。</p>
+
+    <div class="ops">
+      <div class="op">
+        <div class="op-head"><span class="op-ico">➕</span>セラピストを追加したいとき</div>
+        <div class="op-body">
+          <p>新しいセラピストが入ったら、専用シートに<strong>「名前」と「ひとこと」を記入して、登録ボタンを押す</strong>だけです。即セラ用のメアド作成・アカウント開設・登録は自動で行われます（「状態」列が「登録済」になれば自動更新の対象になります）。</p>
+        </div>
+      </div>
+      <div class="op">
+        <div class="op-head"><span class="op-ico">💬</span>ひとこと（キャッチコピー）を変えたいとき</div>
+        <div class="op-body">
+          <p>専用シートの<strong>「ひとこと」列</strong>を書き換えてください。次の巡回（<strong>最長10分以内</strong>）で即セラに自動反映されます。</p>
+          <p class="how" style="color:#c14066;">※ ひとことは<strong>20文字以内</strong>です（即セラの仕様上の制限）。21文字目以降は反映されません。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="box box-gold" style="margin-top:22px;">
+      <div class="box-title">✅ ここがポイント</div>
+      <p style="margin:0;">即セラのON操作・ひとことの掲載・60分ごとのOFF対策は<strong>すべて自動</strong>です。店舗様が即セラ画面を開いて手動でONにする必要はありません。</p>
+    </div>
+  </section>
+
+  <!-- 5. Sheet -->
+  <section class="block" id="sheet">
+    <div class="sec-head"><div class="sec-num">5</div><h2>専用シートの見方</h2></div>
+    <p>店舗様ごとに、専用のスプレッドシート（<strong>即セラ_店舗名_セラピスト登録</strong>）をご用意します。列の意味は次のとおりです。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>列</th><th>内容</th><th>記入する人</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>店名</td><td>店舗名</td><td class="who-us">当社が設定</td></tr>
+          <tr><td>名前</td><td>セラピストのお名前</td><td class="who-you">店舗様</td></tr>
+          <tr><td>メアド</td><td>即セラ用メールアドレス</td><td class="who-us">当社が代行作成</td></tr>
+          <tr><td>暗証番号</td><td>即セラ用パスワード／PIN</td><td class="who-us">当社が代行作成</td></tr>
+          <tr><td>cast_id</td><td>魂セラピスト内の管理ID</td><td class="who-us">当社が設定</td></tr>
+          <tr><td>状態</td><td>「登録済」になると自動更新の対象になります</td><td class="who-us">当社が設定</td></tr>
+          <tr><td>ひとこと</td><td>即セラに掲載するキャッチコピー（20文字以内）</td><td class="who-you">店舗様</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box box-gray">
+      <div class="box-title">📋 店舗様が触る列は2つだけ</div>
+      <p style="margin:0;"><strong>「名前」</strong>と<strong>「ひとこと」</strong>のみです。メアド・暗証番号・cast_id・状態は当社が管理しますので、編集なさらないようお願いいたします（誤って変更すると自動更新が止まる場合があります）。</p>
+    </div>
+  </section>
+
+  <!-- 6. How it works -->
+  <section class="block" id="howitworks">
+    <div class="sec-head"><div class="sec-num">6</div><h2>自動更新の仕組み</h2></div>
+    <p>裏側ではこのように動いています（操作は不要ですが、安心してお任せいただくためにご説明します）。</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div><h3>10分ごとに巡回</h3><p>各セラピストの即セラON/OFF状態と、ご案内状況の「今すぐ」表示を同時に確認します。</p></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div><h3>ON対象だけを抽出</h3><p>「即セラOFF」または「今すぐ案内できるのにOFF」のセラピストだけを選び出します。直近55分以内にON済みの方は自動でスキップし、無駄な処理を行いません。</p></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div><h3>即セラON＋ひとこと反映</h3><p>登録された「ひとこと」を掲載しながら、即セラをONに戻します。</p></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div><h3>24時間365日、止まらない</h3><p>深夜も早朝も自動で稼働。即セラの「ON状態」を保ち続けます。</p></div>
+      </div>
+    </div>
+    <div class="box box-gold">
+      <div class="box-title">🎯 「今すぐ」案内中も見て判定</div>
+      <p style="margin:0;">即セラのON/OFFだけでなく、ご案内状況の「今すぐ」も確認します。出勤中で今すぐ案内できる状態なのに即セラがOFF、という矛盾も自動で解消するため、より現場感のある運用になります。</p>
+    </div>
+  </section>
+
+  <!-- 7. Notes -->
+  <section class="block" id="notes">
+    <div class="sec-head"><div class="sec-num">7</div><h2>ご利用上の注意</h2></div>
+    <div class="box box-pink">
+      <div class="box-title">⚠️ お願い・ご注意</div>
+      <ul>
+        <li>専用シートの<strong>「名前」「ひとこと」以外の列は編集しない</strong>でください。自動更新が止まる原因になります。</li>
+        <li>ひとことは<strong>20文字以内</strong>です。超えた分は掲載されません。</li>
+        <li>魂セラピストの<strong>管理用パスワードを変更された場合は、必ずご一報ください</strong>。古い情報のままだと自動ログインができず、更新が止まります。</li>
+        <li>シートのタブ名や列の並びは変更しないでください。</li>
+        <li>変更が反映されるまで<strong>最長10分</strong>かかります（次の巡回タイミングで反映）。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 8. FAQ -->
+  <section class="block" id="faq">
+    <div class="sec-head"><div class="sec-num">8</div><h2>よくあるご質問</h2></div>
+    <div class="faq-item"><div class="faq-q">セラピストにメアド登録をお願いする必要はありますか？</div><div class="faq-a">不要です。即セラ登録に必要なメアド作成・アカウント開設は当社で代行します。店舗様からは「お名前と必要情報」をお知らせいただくだけで結構です。</div></div>
+    <div class="faq-item"><div class="faq-q">セラピスト本人が、自分で即セラを操作したい場合はどうすればいいですか？</div><div class="faq-a">対応できます。登録時に当社が設定するメールアドレスは仮のものですので、当社が設定したパスワードをセラピスト様ご本人にお伝えいただき、即セラにログイン後、ご本人でお好きなメールアドレスに変更していただく形になります。</div></div>
+    <div class="faq-item"><div class="faq-q">セラピストの人数が増えても料金は変わりますか？</div><div class="faq-a">変わりません。月額¥9,900（税込）で人数無制限です。何名登録されても追加料金はかかりません。</div></div>
+    <div class="faq-item"><div class="faq-q">ひとことはどうやって変更しますか？</div><div class="faq-a">専用シートの「ひとこと」列を書き換えてください。次の巡回（最長10分以内）で自動反映されます。20文字以内でお願いします。</div></div>
+    <div class="faq-item"><div class="faq-q">「今すぐ」も見て判定するとはどういう意味ですか？</div><div class="faq-a">即セラのON/OFFに加えて、各セラピストのご案内状況（今すぐ案内可能か）も同時に確認して判定します。出勤中なのに即セラOFF、という取りこぼしを防ぎます。</div></div>
+    <div class="faq-item"><div class="faq-q">手動で即セラをONにする必要はありますか？</div><div class="faq-a">ありません。OFFになっても10分以内に自動でONへ戻ります。店舗様が即セラ画面を開く必要はありません。</div></div>
+    <div class="faq-item"><div class="faq-q">解約はいつでもできますか？</div><div class="faq-a">月単位の契約のため、いつでも解約可能です。違約金・最低利用期間はありません。</div></div>
+    <div class="faq-item"><div class="faq-q">他の媒体の自動更新もできますか？</div><div class="faq-a">本ツールは「魂セラピスト 即セラ」専用です。他媒体は別商品でご案内できますので、LINEでお気軽にご相談ください。</div></div>
+  </section>
+
+  <!-- 9. Price -->
+  <section class="block" id="price">
+    <div class="sec-head"><div class="sec-num">9</div><h2>料金・解約について</h2></div>
+    <div class="box box-gold">
+      <ul>
+        <li><strong>月額 ¥9,900（税込）</strong> ── セラピスト人数による追加料金なし</li>
+        <li><strong>初期費用なし</strong> ／ <strong>違約金なし</strong> ／ <strong>最低利用期間なし</strong></li>
+        <li>メアド作成・アカウント開設代行、10分ごとの自動ON、ひとこと自動反映、24時間稼働、稼働状況の月次レポート、不具合時の即時サポートを含みます</li>
+        <li>解約は月単位でいつでも可能です（LINEからお知らせください）</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<!-- Contact -->
+<section id="contact">
+  <h2>困ったときは、LINEへ。</h2>
+  <p>操作のご相談・セラピストの追加・ひとことの変更・不具合のご連絡など、<br>すべてLINEから承ります。お気軽にメッセージください。</p>
+  <a class="line-cta" href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener">
+    <span class="line-cta-icon">L</span>
+    LINEで相談する
+  </a>
+  <div class="contact-note">タップで友だち追加 → そのままメッセージを送ってください</div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.75);margin-bottom:4px;letter-spacing:0.06em;">KIRAKU System</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.4);">株式会社TeLARIA</div>
+  </div>
+  <div>
+    <a href="/tokushoho.html">特定商取引法に基づく表記</a>
+  </div>
+</footer>
+
+</body>
+</html>
