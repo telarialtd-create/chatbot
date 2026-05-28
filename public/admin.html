@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>申し込み管理 | KIRAKU Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black: #0a0a0a;
+      --white: #ffffff;
+      --gray-50:  #f9f9f9;
+      --gray-100: #f3f3f3;
+      --gray-200: #e5e5e5;
+      --gray-400: #9a9a9a;
+      --gray-600: #555555;
+      --gold:     #c9a84c;
+      --gold-bg:  rgba(201,168,76,0.08);
+      --red:      #ef4444;
+      --red-bg:   rgba(239,68,68,0.10);
+      --yellow:   #f59e0b;
+      --yellow-bg:rgba(245,158,11,0.10);
+      --green:    #22c55e;
+      --green-bg: rgba(34,197,94,0.10);
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: var(--gray-100);
+      color: var(--black);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── ログイン画面 ───────────────────────────── */
+    #login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--black);
+    }
+    .login-box {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+    .login-logo {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--black);
+      margin-bottom: 4px;
+    }
+    .login-sub {
+      font-size: 12px;
+      color: var(--gray-400);
+      letter-spacing: 0.1em;
+      margin-bottom: 36px;
+    }
+    .login-input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+    .login-input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+    }
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--black);
+      color: var(--white);
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.2s;
+    }
+    .login-btn:hover { opacity: 0.85; }
+    .login-err {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--red);
+      display: none;
+    }
+
+    /* ── ダッシュボード ──────────────────────────── */
+    #dashboard { display: none; min-height: 100vh; }
+
+    /* Header */
+    .header {
+      background: var(--black);
+      color: var(--white);
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-logo {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+    .header-logo span {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--gray-400);
+      margin-left: 10px;
+      letter-spacing: 0.05em;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .reload-btn {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.7);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .reload-btn:hover { background: rgba(255,255,255,0.14); }
+    .logout-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.5);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .logout-btn:hover {
+      border-color: rgba(255,255,255,0.4);
+      color: rgba(255,255,255,0.8);
+    }
+
+    /* Main */
+    .main { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .stat-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 18px 24px;
+      flex: 1;
+      min-width: 140px;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--gray-400);
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--black);
+    }
+    .stat-value.red    { color: var(--red); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.green  { color: var(--green); }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      padding: 7px 16px;
+      border-radius: 100px;
+      border: 1px solid var(--gray-200);
+      background: var(--white);
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      color: var(--gray-600);
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .filter-btn:hover { border-color: var(--gold); color: var(--black); }
+    .filter-btn.active {
+      background: var(--black);
+      border-color: var(--black);
+      color: var(--white);
+    }
+    .search-input {
+      margin-left: auto;
+      padding: 8px 14px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      width: 220px;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: var(--gold); }
+
+    /* Table */
+    .table-wrap {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .table-scroll { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+    }
+    thead { background: var(--gray-50); }
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--gray-600);
+      border-bottom: 1px solid var(--gray-200);
+      white-space: nowrap;
+    }
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--gray-200);
+      font-size: 13px;
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--gray-50); }
+
+    /* Status badge */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .badge-red    { background: var(--red-bg);    color: #dc2626; }
+    .badge-yellow { background: var(--yellow-bg); color: #d97706; }
+    .badge-green  { background: var(--green-bg);  color: #16a34a; }
+
+    /* Status select */
+    .status-select {
+      padding: 5px 8px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      outline: none;
+      background: var(--white);
+      transition: border-color 0.2s;
+    }
+    .status-select:focus { border-color: var(--gold); }
+
+    /* Detail button */
+    .detail-btn {
+      padding: 5px 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      background: var(--white);
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      color: var(--gray-600);
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .detail-btn:hover {
+      border-color: var(--gold);
+      color: var(--black);
+    }
+
+    /* Plan badge */
+    .plan-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--gold-bg);
+      color: #a07c20;
+      letter-spacing: 0.05em;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--gray-400);
+      font-size: 14px;
+    }
+
+    /* Loading */
+    .loading-row td {
+      text-align: center;
+      padding: 48px;
+      color: var(--gray-400);
+    }
+
+    /* ── モーダル ─────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--white);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      padding: 24px 28px 20px;
+      border-bottom: 1px solid var(--gray-200);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: var(--white);
+      z-index: 1;
+    }
+    .modal-header h3 { font-size: 16px; font-weight: 700; }
+    .modal-close {
+      width: 32px; height: 32px;
+      border: none;
+      background: var(--gray-100);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--gray-600);
+      transition: background 0.15s;
+    }
+    .modal-close:hover { background: var(--gray-200); }
+    .modal-body { padding: 24px 28px; }
+    .modal-row {
+      display: flex;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--gray-200);
+      gap: 16px;
+      font-size: 13px;
+    }
+    .modal-row:last-child { border-bottom: none; }
+    .modal-row .lbl {
+      width: 120px;
+      flex-shrink: 0;
+      color: var(--gray-600);
+      font-size: 12px;
+    }
+    .modal-row .val { font-weight: 500; word-break: break-all; }
+    .modal-status-section {
+      margin-top: 20px;
+      padding: 16px 20px;
+      background: var(--gray-50);
+      border-radius: 8px;
+    }
+    .modal-status-section label {
+      font-size: 12px;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 8px;
+      color: var(--gray-600);
+    }
+    .modal-status-btns {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .modal-status-btn {
+      padding: 7px 18px;
+      border-radius: 100px;
+      border: 2px solid var(--gray-200);
+      background: var(--white);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .modal-status-btn:hover { border-color: var(--gold); }
+    .modal-status-btn.active-red    { background: var(--red-bg);    border-color: #ef4444; color: #dc2626; }
+    .modal-status-btn.active-yellow { background: var(--yellow-bg); border-color: #f59e0b; color: #d97706; }
+    .modal-status-btn.active-green  { background: var(--green-bg);  border-color: #22c55e; color: #16a34a; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--black);
+      color: var(--white);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 300;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all 0.25s;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.error { background: #dc2626; }
+
+    @media (max-width: 640px) {
+      .main { padding: 20px 16px; }
+      .header { padding: 0 16px; }
+      .search-input { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── ログイン画面 ───────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">KIRAKU</div>
+    <div class="login-sub">ADMIN DASHBOARD</div>
+    <input type="password" id="pw-input" class="login-input" placeholder="パスワードを入力"
+      onkeydown="if(event.key==='Enter') doLogin()">
+    <button class="login-btn" onclick="doLogin()">ログイン</button>
+    <div class="login-err" id="login-err">パスワードが違います。</div>
+  </div>
+</div>
+
+<!-- ── ダッシュボード ──────────────────────────────── -->
+<div id="dashboard">
+
+  <header class="header">
+    <div class="header-logo">
+      KIRAKU <span>申し込み管理</span>
+    </div>
+    <div class="header-right">
+      <button class="reload-btn" onclick="loadApplications()">↺ 更新</button>
+      <button class="logout-btn" onclick="doLogout()">ログアウト</button>
+    </div>
+  </header>
+
+  <div class="main">
+
+    <!-- 統計 -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-label">TOTAL</div>
+        <div class="stat-value" id="stat-total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">未対応</div>
+        <div class="stat-value red" id="stat-new">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">対応中</div>
+        <div class="stat-value yellow" id="stat-inprogress">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">契約済み</div>
+        <div class="stat-value green" id="stat-contracted">—</div>
+      </div>
+    </div>
+
+    <!-- フィルター & 検索 -->
+    <div class="toolbar">
+      <button class="filter-btn active" onclick="setFilter('all', this)">すべて</button>
+      <button class="filter-btn" onclick="setFilter('未対応', this)">未対応</button>
+      <button class="filter-btn" onclick="setFilter('対応中', this)">対応中</button>
+      <button class="filter-btn" onclick="setFilter('契約済み', this)">契約済み</button>
+      <input type="text" class="search-input" id="search-input"
+        placeholder="会社名・担当者で検索..."
+        oninput="renderTable()">
+    </div>
+
+    <!-- テーブル -->
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>申込日時</th>
+              <th>会社名 / 店舗名</th>
+              <th>担当者</th>
+              <th>プラン</th>
+              <th>メール</th>
+              <th>ステータス</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <tr class="loading-row"><td colspan="7">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 詳細モーダル ───────────────────────────────── -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <h3>申し込み詳細</h3>
+      <button class="modal-close" onclick="closeModalDirect()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+  // ── データ管理 ──────────────────────────────────────
+  let allData = [];
+  let currentFilter = 'all';
+  let currentDetailRow = null;
+
+  // ── ログイン ────────────────────────────────────────
+  async function doLogin() {
+    const pw = document.getElementById('pw-input').value;
+    try {
+      const res = await fetch('/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.ok) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        loadApplications();
+      } else {
+        document.getElementById('login-err').style.display = 'block';
+      }
+    } catch {
+      document.getElementById('login-err').style.display = 'block';
+    }
+  }
+
+  // ── ログアウト ─────────────────────────────────────
+  async function doLogout() {
+    await fetch('/admin/logout', { method: 'POST', credentials: 'include' });
+    location.reload();
+  }
+
+  // ── 一覧取得 ───────────────────────────────────────
+  async function loadApplications() {
+    document.getElementById('table-body').innerHTML =
+      '<tr class="loading-row"><td colspan="7">読み込み中...</td></tr>';
+    try {
+      const res = await fetch('/admin/api/applications', { credentials: 'include' });
+      if (res.status === 401) { location.reload(); return; }
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      allData = data.data;
+      updateStats();
+      renderTable();
+    } catch (err) {
+      showToast('データ取得に失敗しました: ' + err.message, true);
+      document.getElementById('table-body').innerHTML =
+        '<tr class="loading-row"><td colspan="7">データを取得できませんでした。</td></tr>';
+    }
+  }
+
+  // ── 統計更新 ───────────────────────────────────────
+  function updateStats() {
+    document.getElementById('stat-total').textContent       = allData.length;
+    document.getElementById('stat-new').textContent         = allData.filter(r => r.status === '未対応').length;
+    document.getElementById('stat-inprogress').textContent  = allData.filter(r => r.status === '対応中').length;
+    document.getElementById('stat-contracted').textContent  = allData.filter(r => r.status === '契約済み').length;
+  }
+
+  // ── フィルター ─────────────────────────────────────
+  function setFilter(val, btn) {
+    currentFilter = val;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTable();
+  }
+
+  // ── テーブル描画 ────────────────────────────────────
+  function renderTable() {
+    const keyword = document.getElementById('search-input').value.trim().toLowerCase();
+
+    let rows = allData.filter(r => {
+      if (currentFilter !== 'all' && r.status !== currentFilter) return false;
+      if (keyword) {
+        const hay = (r.company + r.store + r.rep + r.email).toLowerCase();
+        if (!hay.includes(keyword)) return false;
+      }
+      return true;
+    });
+
+    if (!rows.length) {
+      document.getElementById('table-body').innerHTML =
+        '<tr><td colspan="7" style="text-align:center;padding:40px;color:#9a9a9a;">該当する申し込みはありません。</td></tr>';
+      return;
+    }
+
+    document.getElementById('table-body').innerHTML = rows.map(r => `
+      <tr>
+        <td style="white-space:nowrap;font-size:12px;color:#555;">${escHtml(r.timestamp)}</td>
+        <td>
+          <div style="font-weight:600;">${escHtml(r.company)}</div>
+          ${r.store ? `<div style="font-size:12px;color:#9a9a9a;">${escHtml(r.store)}</div>` : ''}
+        </td>
+        <td>${escHtml(r.rep)}${r.position ? `<br><span style="font-size:11px;color:#9a9a9a;">${escHtml(r.position)}</span>` : ''}</td>
+        <td><span class="plan-tag">${escHtml(planShort(r.plan))}</span></td>
+        <td style="font-size:12px;"><a href="mailto:${escHtml(r.email)}" style="color:#c9a84c;text-decoration:none;">${escHtml(r.email)}</a></td>
+        <td>
+          <select class="status-select" data-row="${r.rowIndex}"
+            onchange="updateStatus(${r.rowIndex}, this.value, this)">
+            <option value="未対応"  ${r.status==='未対応'  ? 'selected':''}>未対応</option>
+            <option value="対応中"  ${r.status==='対応中'  ? 'selected':''}>対応中</option>
+            <option value="契約済み"${r.status==='契約済み'? 'selected':''}>契約済み</option>
+          </select>
+        </td>
+        <td>
+          <button class="detail-btn" onclick="openModal(${r.rowIndex})">詳細</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // ── ステータス更新 ──────────────────────────────────
+  async function updateStatus(rowIndex, status, selectEl) {
+    try {
+      const res = await fetch(`/admin/api/applications/${rowIndex}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+        credentials: 'include',
+      });
+      if (res.status === 401) { location.reload(); return; }
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+
+      // ローカルデータ更新
+      const item = allData.find(r => r.rowIndex === rowIndex);
+      if (item) item.status = status;
+      updateStats();
+      showToast('ステータスを更新しました');
+
+      // モーダルが開いていれば更新
+      if (currentDetailRow && currentDetailRow.rowIndex === rowIndex) {
+        currentDetailRow.status = status;
+        renderModalStatus();
+      }
+    } catch (err) {
+      showToast('更新に失敗しました: ' + err.message, true);
+      // セレクトを元に戻す
+      const item = allData.find(r => r.rowIndex === rowIndex);
+      if (item && selectEl) selectEl.value = item.status;
+    }
+  }
+
+  // ── 詳細モーダル ────────────────────────────────────
+  function openModal(rowIndex) {
+    const item = allData.find(r => r.rowIndex === rowIndex);
+    if (!item) return;
+    currentDetailRow = item;
+
+    const body = document.getElementById('modal-body');
+    body.innerHTML = `
+      <div class="modal-row"><span class="lbl">申込日時</span><span class="val">${escHtml(item.timestamp)}</span></div>
+      <div class="modal-row"><span class="lbl">会社名・屋号</span><span class="val">${escHtml(item.company)}</span></div>
+      <div class="modal-row"><span class="lbl">店舗名</span><span class="val">${escHtml(item.store) || '―'}</span></div>
+      <div class="modal-row"><span class="lbl">担当者名</span><span class="val">${escHtml(item.rep)}</span></div>
+      <div class="modal-row"><span class="lbl">役職</span><span class="val">${escHtml(item.position) || '―'}</span></div>
+      <div class="modal-row"><span class="lbl">メール</span><span class="val"><a href="mailto:${escHtml(item.email)}" style="color:#c9a84c;">${escHtml(item.email)}</a></span></div>
+      <div class="modal-row"><span class="lbl">電話番号</span><span class="val">${escHtml(item.phone) || '―'}</span></div>
+      <div class="modal-row"><span class="lbl">住所</span><span class="val">${escHtml(item.address) || '―'}</span></div>
+      <div class="modal-row"><span class="lbl">プラン</span><span class="val"><span class="plan-tag">${escHtml(item.plan)}</span></span></div>
+      <div class="modal-row"><span class="lbl">電子署名</span><span class="val" style="font-style:italic;">${escHtml(item.signature)}</span></div>
+      <div class="modal-row"><span class="lbl">ご要望</span><span class="val">${escHtml(item.message) || '―'}</span></div>
+      <div class="modal-row"><span class="lbl">IPアドレス</span><span class="val" style="font-size:12px;color:#9a9a9a;">${escHtml(item.ip)}</span></div>
+      <div class="modal-status-section" id="modal-status-section"></div>
+    `;
+    renderModalStatus();
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+
+  function renderModalStatus() {
+    const item = currentDetailRow;
+    const statuses = ['未対応', '対応中', '契約済み'];
+    const colorMap = { '未対応': 'red', '対応中': 'yellow', '契約済み': 'green' };
+
+    document.getElementById('modal-status-section').innerHTML = `
+      <label>ステータス変更</label>
+      <div class="modal-status-btns">
+        ${statuses.map(s => `
+          <button class="modal-status-btn ${item.status === s ? 'active-' + colorMap[s] : ''}"
+            onclick="updateStatus(${item.rowIndex}, '${s}', null); closeModalDirect();">
+            ${s}
+          </button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function closeModal(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+  }
+  function closeModalDirect() {
+    document.getElementById('modal-overlay').classList.remove('open');
+    currentDetailRow = null;
+    renderTable(); // ステータス色を再描画
+  }
+
+  // ── ユーティリティ ─────────────────────────────────
+  function escHtml(str) {
+    return String(str || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+  }
+
+  function planShort(plan) {
+    if (!plan) return '―';
+    if (plan.includes('STARTER'))  return 'STARTER';
+    if (plan.includes('STANDARD')) return 'STANDARD';
+    if (plan.includes('PREMIUM'))  return 'PREMIUM';
+    if (plan.includes('CUSTOM'))   return 'CUSTOM';
+    return plan;
+  }
+
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show' + (isError ? ' error' : '');
+    setTimeout(() => { t.className = ''; }, 2800);
+  }
+
+  // ── Enterキーでログイン ─────────────────────────────
+  document.getElementById('pw-input').focus();
+</script>
+</body>
+</html>

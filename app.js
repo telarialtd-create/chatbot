@@ -38,6 +38,9 @@ app.use(express.json());
 const { registerSignRoute } = require('./lib/sign_handler');
 registerSignRoute(app);
 
+const { registerAdminRoutes } = require('./lib/admin_handler');
+registerAdminRoutes(app);
+
 // KIRAKU請求書一斉送信エンドポイント（C-025・2026-05-27追加）
 app.use(require('./invoice_sender'));
 console.log('Invoice sender 有効: POST /api/send-invoice');
