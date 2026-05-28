@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>エスタマ自動更新 | KIRAKU - 出勤・空き・求人を24時間自動更新</title>
+  <meta name="description" content="エスタマの空き状況・集客・求人を24時間自動更新。1日数十回の手作業から解放。地域独占5店枠制。月額¥7,700(税込)から。">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black: #0a0a0a;
+      --white: #ffffff;
+      --gray-100: #f5f5f5;
+      --gray-200: #e8e8e8;
+      --gray-400: #999999;
+      --gray-600: #555555;
+      --accent: #1a1a1a;
+      --gold: #c9a84c;
+      --line-green: #06c755;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      color: var(--black);
+      background: var(--white);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    /* ─── Nav ─── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--gray-200);
+      z-index: 100;
+      padding: 0 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav-logo { font-size: 18px; font-weight: 700; letter-spacing: 0.1em; display: flex; align-items: center; gap: 12px; }
+    .nav-logo img { height: 40px; width: auto; }
+    .nav-cta {
+      background: var(--black); color: var(--white);
+      padding: 10px 24px; border-radius: 4px;
+      font-size: 13px; text-decoration: none; letter-spacing: 0.05em;
+      transition: background 0.2s;
+    }
+    .nav-cta:hover { background: var(--gray-600); }
+
+    /* ─── Hero ─── */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      text-align: center;
+      padding: 120px 24px 80px;
+      background: var(--black);
+      color: var(--white);
+    }
+    .hero-tag {
+      display: inline-block;
+      border: 1px solid rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.7);
+      font-size: 11px; letter-spacing: 0.2em;
+      padding: 6px 16px; border-radius: 100px;
+      margin-bottom: 40px;
+    }
+    .hero h1 {
+      font-size: clamp(34px, 6vw, 68px);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 24px;
+    }
+    .hero h1 span { color: var(--gold); }
+    .hero-sub {
+      font-size: clamp(15px, 2vw, 18px);
+      color: rgba(255,255,255,0.65);
+      max-width: 600px;
+      margin: 0 auto 48px;
+      line-height: 1.9;
+    }
+    .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .btn-line {
+      background: var(--line-green); color: var(--white);
+      padding: 16px 40px; border-radius: 4px;
+      font-size: 14px; font-weight: 600; text-decoration: none;
+      letter-spacing: 0.05em;
+      transition: opacity 0.2s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-line:hover { opacity: 0.85; }
+    .btn-outline {
+      border: 1px solid rgba(255,255,255,0.4); color: rgba(255,255,255,0.85);
+      padding: 16px 40px; border-radius: 4px;
+      font-size: 14px; text-decoration: none;
+      letter-spacing: 0.05em;
+      transition: border-color 0.2s;
+    }
+    .btn-outline:hover { border-color: var(--white); }
+
+    /* ─── Section common ─── */
+    section { padding: 100px 24px; }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-tag {
+      display: inline-block;
+      font-size: 11px; letter-spacing: 0.2em;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 700;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .section-sub {
+      font-size: 15px; color: var(--gray-600);
+      text-align: center;
+      max-width: 640px; margin: 0 auto 60px;
+      line-height: 1.9;
+    }
+
+    /* ─── Pain ─── */
+    #pain { background: var(--gray-100); }
+    .pain-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-top: 40px;
+    }
+    .pain-card {
+      background: var(--white);
+      padding: 32px 28px;
+      border-radius: 8px;
+      border-left: 3px solid var(--gold);
+    }
+    .pain-card h3 {
+      font-size: 17px; font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .pain-card p {
+      font-size: 14px; color: var(--gray-600);
+      line-height: 1.8;
+    }
+    .pain-cost {
+      margin-top: 60px;
+      background: var(--black); color: var(--white);
+      padding: 48px 32px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .pain-cost .cost-label {
+      font-size: 12px; letter-spacing: 0.2em;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 12px;
+    }
+    .pain-cost .cost-num {
+      font-size: clamp(40px, 6vw, 64px);
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: -0.02em;
+    }
+    .pain-cost .cost-detail {
+      font-size: 14px; color: rgba(255,255,255,0.7);
+      margin-top: 12px;
+    }
+
+    /* ─── Features (3 update functions) ─── */
+    #features { background: var(--white); }
+    .feat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-top: 40px;
+    }
+    .feat-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 36px 28px;
+      transition: transform 0.25s, border-color 0.25s;
+    }
+    .feat-card:hover { transform: translateY(-4px); border-color: var(--gold); }
+    .feat-num {
+      font-size: 13px; letter-spacing: 0.2em;
+      color: var(--gold); font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .feat-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+    .feat-card p { font-size: 14px; color: var(--gray-600); line-height: 1.85; }
+    .feat-badge {
+      display: inline-block; margin-top: 16px;
+      font-size: 11px; background: var(--gray-100); color: var(--gray-600);
+      padding: 4px 12px; border-radius: 100px; letter-spacing: 0.05em;
+    }
+
+    /* ─── Pricing (single plan) ─── */
+    #pricing { background: var(--gray-100); }
+    .pricing-wrap {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 760px;
+      margin: 40px auto 0;
+    }
+    .plan-card.featured { border-color: var(--gold); }
+    .plan-tag {
+      display: inline-block;
+      align-self: flex-start;
+      font-size: 11px; font-weight: 700;
+      background: var(--gold); color: var(--black);
+      padding: 4px 14px; border-radius: 100px;
+      letter-spacing: 0.1em; margin-bottom: 14px;
+    }
+    .plan-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 40px 32px;
+      display: flex; flex-direction: column;
+    }
+    .plan-name { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .plan-desc { font-size: 13px; color: var(--gray-400); margin-bottom: 24px; }
+    .plan-price { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .plan-price-unit { font-size: 13px; color: var(--gray-400); margin-bottom: 24px; }
+    .plan-features { list-style: none; margin-bottom: 28px; }
+    .plan-features li {
+      font-size: 14px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--gray-200);
+      position: relative;
+      padding-left: 24px;
+    }
+    .plan-features li::before {
+      content: '✓';
+      position: absolute; left: 0; top: 10px;
+      color: var(--gold); font-weight: 700;
+    }
+    .plan-btn {
+      display: block; text-align: center;
+      padding: 16px; border-radius: 4px;
+      text-decoration: none;
+      font-size: 14px; font-weight: 600; letter-spacing: 0.05em;
+      background: var(--line-green); color: var(--white);
+      transition: opacity 0.2s;
+    }
+    .plan-btn:hover { opacity: 0.85; }
+    .plan-note {
+      font-size: 11px; color: var(--gray-400);
+      margin-top: 14px; text-align: center;
+    }
+
+    /* ─── Availability (region quota) ─── */
+    #availability {
+      background: var(--black); color: var(--white);
+    }
+    #availability .section-title { color: var(--white); }
+    #availability .section-sub { color: rgba(255,255,255,0.6); }
+    .area-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-top: 40px;
+    }
+    .area-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 24px 20px;
+      text-align: center;
+    }
+    .area-name {
+      font-size: 15px; font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .area-remain {
+      font-size: 32px; font-weight: 700;
+      color: var(--gold);
+      letter-spacing: -0.02em;
+    }
+    .area-remain-unit {
+      font-size: 12px; color: rgba(255,255,255,0.5);
+      margin-top: 4px;
+    }
+    .area-card.full .area-remain { color: rgba(255,255,255,0.3); }
+    .area-card.full .area-remain-unit::after { content: ' (満枠)'; }
+    .availability-note {
+      text-align: center;
+      margin-top: 32px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+    }
+
+    /* ─── Results ─── */
+    #results { background: var(--gray-100); }
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+      margin-top: 40px;
+    }
+    .result-card {
+      background: var(--white);
+      padding: 36px 28px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .result-num {
+      font-size: clamp(36px, 5vw, 52px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--black);
+    }
+    .result-num span { font-size: 0.5em; color: var(--gray-400); margin-left: 4px; }
+    .result-label {
+      font-size: 13px;
+      color: var(--gray-600);
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+    .voice-list {
+      margin-top: 56px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .voice-card {
+      background: var(--white);
+      padding: 28px;
+      border-radius: 8px;
+      border-top: 3px solid var(--gold);
+    }
+    .voice-text {
+      font-size: 14px; color: var(--black);
+      line-height: 1.9;
+      margin-bottom: 16px;
+    }
+    .voice-meta {
+      font-size: 12px; color: var(--gray-400);
+      letter-spacing: 0.05em;
+    }
+
+    /* ─── Referral ─── */
+    #referral { background: var(--white); }
+    .referral-box {
+      background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+      color: var(--white);
+      border-radius: 12px;
+      padding: 60px 40px;
+      margin-top: 40px;
+      text-align: center;
+      border: 1px solid var(--gold);
+    }
+    .referral-box h3 {
+      font-size: clamp(22px, 3vw, 30px);
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .referral-box h3 span { color: var(--gold); }
+    .referral-box p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.7);
+      max-width: 520px;
+      margin: 0 auto 32px;
+      line-height: 1.9;
+    }
+    .referral-flow {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-top: 32px;
+    }
+    .referral-step {
+      background: rgba(255,255,255,0.06);
+      padding: 16px 24px;
+      border-radius: 6px;
+      font-size: 13px;
+      min-width: 160px;
+    }
+    .referral-step strong {
+      display: block;
+      font-size: 22px;
+      color: var(--gold);
+      margin-bottom: 4px;
+    }
+    .referral-arrow {
+      color: var(--gold);
+      font-size: 18px;
+    }
+
+    /* ─── Flow ─── */
+    #flow { background: var(--gray-100); }
+    .flow-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+      margin-top: 40px;
+    }
+    .flow-step {
+      background: var(--white);
+      padding: 32px 24px;
+      border-radius: 8px;
+      position: relative;
+    }
+    .flow-num {
+      font-size: 13px;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .flow-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .flow-desc {
+      font-size: 13px;
+      color: var(--gray-600);
+      line-height: 1.8;
+    }
+
+    /* ─── Contact ─── */
+    #contact {
+      background: var(--black); color: var(--white);
+    }
+    #contact .section-title { color: var(--white); }
+    #contact .section-sub { color: rgba(255,255,255,0.6); }
+
+    /* ─── Footer ─── */
+    footer {
+      background: var(--black); color: rgba(255,255,255,0.5);
+      padding: 40px;
+      font-size: 12px;
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    footer a { color: rgba(255,255,255,0.6); text-decoration: underline; }
+
+    @media (max-width: 720px) {
+      nav { padding: 0 16px; }
+      section { padding: 70px 16px; }
+      .hero { padding: 100px 16px 60px; }
+      .pain-cost { padding: 32px 20px; }
+      .referral-box { padding: 40px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <img src="KIRAKU.png" alt="KIRAKU">
+    <span>KIRAKU</span>
+  </div>
+  <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="nav-cta">LINEで無料相談</a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <span class="hero-tag">ESTAMA AUTO UPDATE</span>
+  <h1>エスタマの更新作業、<br><span>丸ごと自動化</span>。</h1>
+  <p class="hero-sub">
+    空き枠・求人の更新を、24時間ぜんぶ自動で。<br>
+    1日に数十回手作業で更新する作業から、スタッフを解放しませんか。
+  </p>
+  <div class="hero-btns">
+    <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="btn-line">LINEで無料相談（即日対応）</a>
+    <a href="#features" class="btn-outline">機能を見る</a>
+  </div>
+</section>
+
+<!-- Pain -->
+<section id="pain">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag">なぜ自動化が必要か</span>
+    </div>
+    <h2 class="section-title">毎日の更新作業、こんな悩みありませんか。</h2>
+
+    <div class="pain-grid">
+      <div class="pain-card">
+        <h3>更新作業がスタッフの手を奪う</h3>
+        <p>出勤・空き枠・求人。掲載サイトを何度も開いて書き換える更新作業が、スタッフ本来の業務を圧迫している。</p>
+      </div>
+      <div class="pain-card">
+        <h3>空き枠の最新化が遅れて機会損失</h3>
+        <p>「掲載してる空き時間と実際が違う」「予約が入った直後に他のお客様にも案内してしまった」。</p>
+      </div>
+    </div>
+
+    <div class="pain-cost">
+      <div class="cost-label">毎月くり返している手作業更新</div>
+      <div class="cost-num">月数千回</div>
+      <div class="cost-detail">1日に数十回 × 全店舗で、月に数千回。<br>その膨大な更新作業を、エスタマが完全自動化します。</div>
+    </div>
+  </div>
+</section>
+
+<!-- Features (3 update functions) -->
+<section id="features">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag">FEATURES</span>
+    </div>
+    <h2 class="section-title">エスタマの更新を、まるごと自動で。</h2>
+    <p class="section-sub">ご案内状況、リアルタイム集客、求人、体験入店アピールまで。<br>店舗運営で毎日触る更新を、24時間ノンストップで自動化します。</p>
+
+    <div class="feat-grid">
+      <div class="feat-card">
+        <div class="feat-num">01</div>
+        <h3>ご案内状況更新</h3>
+        <p>一度「今すぐ」などのご案内状況に更新していただくと、あとはエスタマがずっと自動で更新し続けます。更新間隔は、地域独占の限定枠で2分ごと、限定枠なし（¥7,700タイプ）で10分ごとです。</p>
+        <span class="feat-badge">限定枠2分／非限定枠10分</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-num">02</div>
+        <h3>リアルタイム集客更新</h3>
+        <p>集客ページの最新化を24時間自動で。掲載情報の鮮度を保ち、上位表示・流入を維持します。更新間隔は最短11分から設定可能です。</p>
+        <span class="feat-badge">最短11分／地域縛りなし</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-num">03</div>
+        <h3>リアルタイム求人の更新</h3>
+        <p>求人ページの自動投稿・差し替え。放置されがちな求人情報を常に最新に保ち、応募の取りこぼしを防ぎます。更新間隔は最短11分から設定可能です。</p>
+        <span class="feat-badge">最短11分／地域縛りなし</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-num">04</div>
+        <h3>本日体験入店できるお店</h3>
+        <p>ポータルの「本日体験入店できるお店」を、1日に1回自動でクリック。体験入店の枠を、手間なく毎日アピールし続けます。</p>
+        <span class="feat-badge">1日1回 自動クリック</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing (single plan) -->
+<section id="pricing">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag">PRICING</span>
+    </div>
+    <h2 class="section-title">料金は、2タイプ。</h2>
+    <p class="section-sub">ご案内状況更新の速さと、地域独占の有無で選べます。<br>初期構築費・サポート費はいただきません。1店舗あたり月額のみ。いつでも停止できます。</p>
+
+    <div class="pricing-wrap">
+      <div class="plan-card featured">
+        <span class="plan-tag">地域独占</span>
+        <div class="plan-name">限定枠プラン</div>
+        <div class="plan-desc">ご案内状況を最速2分間隔で更新。地域独占5店枠制。</div>
+        <div class="plan-price">¥8,800<span style="font-size:14px;color:var(--gray-400);font-weight:400;">/月</span></div>
+        <div class="plan-price-unit">税込・1店舗あたり</div>
+        <ul class="plan-features">
+          <li><strong style="color:var(--gold);">ご案内状況更新 2分ごと（地域独占5店枠制）</strong></li>
+          <li>リアルタイム集客更新（最短11分・地域縛りなし）</li>
+          <li>リアルタイム求人の更新（最短11分・地域縛りなし）</li>
+          <li>本日体験入店できるお店 1日1回自動クリック</li>
+          <li>停止時間・更新間隔を店舗ごとに設定</li>
+          <li>初期構築・サポート費用なし</li>
+        </ul>
+        <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="plan-btn">LINEで無料相談</a>
+        <div class="plan-note">※ 地域独占5店枠制が適用されるのは「ご案内状況更新」機能のみ</div>
+      </div>
+
+      <div class="plan-card">
+        <div class="plan-name">非限定枠プラン</div>
+        <div class="plan-desc">ご案内状況を10分間隔で更新。地域枠の制限なし。</div>
+        <div class="plan-price">¥7,700<span style="font-size:14px;color:var(--gray-400);font-weight:400;">/月</span></div>
+        <div class="plan-price-unit">税込・1店舗あたり</div>
+        <ul class="plan-features">
+          <li><strong style="color:var(--gold);">ご案内状況更新 10分ごと（地域枠なし）</strong></li>
+          <li>リアルタイム集客更新（最短11分・地域縛りなし）</li>
+          <li>リアルタイム求人の更新（最短11分・地域縛りなし）</li>
+          <li>本日体験入店できるお店 1日1回自動クリック</li>
+          <li>停止時間・更新間隔を店舗ごとに設定</li>
+          <li>初期構築・サポート費用なし</li>
+        </ul>
+        <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="plan-btn">LINEで無料相談</a>
+        <div class="plan-note">※ 地域独占枠をご希望の場合は限定枠プランをご利用ください</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Availability (region quota) -->
+<section id="availability">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag" style="color:rgba(255,255,255,0.5);">REGION QUOTA</span>
+    </div>
+    <h2 class="section-title">ご案内状況更新は、<br>地域独占5店枠制。</h2>
+    <p class="section-sub">エスタマ自動更新の中でも、お客様への影響が最も大きい「ご案内状況更新」機能は、<br>同一地域での導入店舗数を5店までに制限しています。近隣競合への流出を抑え、ご契約店舗の優位性を維持します。<br><span style="color:rgba(255,255,255,0.4);font-size:13px;">※ リアルタイム集客更新・求人更新は、地域縛りなしで全国どこでも導入可能です。</span></p>
+
+    <div class="area-grid">
+      <div class="area-card">
+        <div class="area-name">東京</div>
+        <div class="area-remain">3</div>
+        <div class="area-remain-unit">残り枠</div>
+      </div>
+      <div class="area-card">
+        <div class="area-name">大阪</div>
+        <div class="area-remain">5</div>
+        <div class="area-remain-unit">残り枠</div>
+      </div>
+      <div class="area-card">
+        <div class="area-name">名古屋</div>
+        <div class="area-remain">5</div>
+        <div class="area-remain-unit">残り枠</div>
+      </div>
+      <div class="area-card">
+        <div class="area-name">福岡</div>
+        <div class="area-remain">5</div>
+        <div class="area-remain-unit">残り枠</div>
+      </div>
+      <div class="area-card">
+        <div class="area-name">広島</div>
+        <div class="area-remain">2</div>
+        <div class="area-remain-unit">残り枠</div>
+      </div>
+      <div class="area-card">
+        <div class="area-name">その他地域</div>
+        <div class="area-remain">−</div>
+        <div class="area-remain-unit">ご相談</div>
+      </div>
+    </div>
+    <div class="availability-note">※ 残り枠数は手動更新。リアルタイムでない場合があります。最新枠数はお問い合わせください。</div>
+  </div>
+</section>
+
+<!-- Results -->
+<section id="results">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag">RESULTS</span>
+    </div>
+    <h2 class="section-title">導入実績と効果。</h2>
+    <p class="section-sub">具体的な数字で、自動化のインパクトをご覧ください。</p>
+
+    <div class="results-grid">
+      <div class="result-card">
+        <div class="result-num">5<span>店</span></div>
+        <div class="result-label">稼働中の導入店舗数<br>（広島・関東エリア）</div>
+      </div>
+      <div class="result-card">
+        <div class="result-num">15<span>時間/月</span></div>
+        <div class="result-label">削減できた手動更新時間<br>（1店舗平均）</div>
+      </div>
+      <div class="result-card">
+        <div class="result-num">24<span>時間</span></div>
+        <div class="result-label">完全無人稼働<br>（深夜・早朝も自動）</div>
+      </div>
+      <div class="result-card">
+        <div class="result-num">100<span>%</span></div>
+        <div class="result-label">出勤反映漏れの解消<br>（2026年実績）</div>
+      </div>
+    </div>
+
+    <div class="voice-list">
+      <div class="voice-card">
+        <p class="voice-text">「毎朝1時間以上やっていた出勤更新が完全に消えた。気づいたら勝手に最新になっている、という感覚。」</p>
+        <p class="voice-meta">— 広島市内店舗 オーナー</p>
+      </div>
+      <div class="voice-card">
+        <p class="voice-text">「掲載している空き状況がいつ見ても正確なので、お客様をご案内するときの行き違いが減りました。スタッフの確認作業もかなり楽になっています。」</p>
+        <p class="voice-meta">— 関東エリア店舗 店長</p>
+      </div>
+      <div class="voice-card">
+        <p class="voice-text">「営業時間外でも自動で最新になっているのが安心です。更新のために時間に縛られることがなくなりました。」</p>
+        <p class="voice-meta">— 既存導入店舗 マネージャー</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Referral -->
+<section id="referral">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag">REFERRAL</span>
+    </div>
+    <h2 class="section-title">紹介プログラム。</h2>
+    <p class="section-sub">同業の店舗オーナー様をご紹介いただくと、両店舗ともに月額割引が3ヶ月適用されます。</p>
+
+    <div class="referral-box">
+      <h3>紹介者・被紹介者ともに<br><span>月¥3,000 × 3ヶ月割引</span></h3>
+      <p>ご契約中の店舗様から、新規ご契約予定の店舗様をご紹介いただいた場合、<br>双方の月額料金から¥3,000を3ヶ月間割引いたします（合計¥9,000相当）。</p>
+
+      <div class="referral-flow">
+        <div class="referral-step">
+          <strong>STEP 1</strong>
+          ご契約店舗様から<br>ご紹介
+        </div>
+        <span class="referral-arrow">→</span>
+        <div class="referral-step">
+          <strong>STEP 2</strong>
+          被紹介店舗様が<br>ご契約
+        </div>
+        <span class="referral-arrow">→</span>
+        <div class="referral-step">
+          <strong>STEP 3</strong>
+          両店舗に3ヶ月<br>割引適用
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Flow -->
+<section id="flow">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag">FLOW</span>
+    </div>
+    <h2 class="section-title">お申込みから運用開始まで。</h2>
+    <p class="section-sub">最短当日ヒアリング、こちらで初期構築、翌日から自動運用開始。</p>
+
+    <div class="flow-list">
+      <div class="flow-step">
+        <div class="flow-num">STEP 01</div>
+        <div class="flow-title">お問い合わせ</div>
+        <div class="flow-desc">LINEからご連絡ください。エリア・店舗情報をお知らせいただきます。</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">STEP 02</div>
+        <div class="flow-title">ヒアリング</div>
+        <div class="flow-desc">掲載中のページ・運用ルールを30分程度でヒアリング。地域枠も確認します。</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">STEP 03</div>
+        <div class="flow-title">構築・接続</div>
+        <div class="flow-desc">初期構築はこちらで実施。アカウント・店舗設定を接続し、内容をオーナー様にご共有。</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">STEP 04</div>
+        <div class="flow-title">運用開始</div>
+        <div class="flow-desc">翌日から自動稼働。設定変更・停止時間調整もLINE経由で即対応。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Contact -->
+<section id="contact">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag" style="color:rgba(255,255,255,0.5);">CONTACT</span>
+    </div>
+    <h2 class="section-title">まずは、LINEで無料相談。</h2>
+    <p class="section-sub">登録から相談までLINEで完結。即日対応、しつこい営業は一切ありません。<br>地域枠の最新状況・お見積もり・無料デモのご予約も、その場で承ります。</p>
+
+    <div style="text-align:center;margin-top:48px;">
+      <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="btn-line" style="font-size:16px;padding:20px 56px;">
+        LINEで無料相談（即日対応）
+      </a>
+      <p style="margin-top:20px;font-size:12px;color:rgba(255,255,255,0.4);">
+        タップでLINE公式アカウントが開きます。<br>
+        メッセージひとつでヒアリング・お見積もりまでご案内します。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:6px;">株式会社TeLARIA</div>
+    <div>© 2026 TeLARIA Inc. All rights reserved.</div>
+    <div style="margin-top:10px;">
+      <a href="/tokushoho.html">特定商取引法に基づく表記</a>
+    </div>
+  </div>
+  <div style="text-align:right;line-height:1.8;">
+    <div><a href="https://telarialtd.wixsite.com" style="color:rgba(255,255,255,0.4);text-decoration:none;">telarialtd.wixsite.com</a></div>
+  </div>
+</footer>
+
+</body>
+</html>
