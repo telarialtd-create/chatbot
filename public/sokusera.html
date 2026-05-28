@@ -574,7 +574,27 @@
       .pricing-card { padding: 40px 28px; }
       .pricing-price { font-size: 44px; }
       footer { flex-direction: column; text-align: center; }
+      .referral-box { padding: 40px 24px; }
     }
+
+    /* ─── Referral ─── */
+    #referral { background: var(--white); padding: 110px 24px; }
+    .referral-box {
+      background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+      color: var(--white);
+      border-radius: 12px;
+      padding: 60px 40px;
+      margin-top: 40px;
+      text-align: center;
+      border: 1px solid var(--gold);
+    }
+    .referral-box h3 { font-size: clamp(22px, 3vw, 30px); font-weight: 700; margin-bottom: 16px; }
+    .referral-box h3 span { color: var(--gold); }
+    .referral-box p { font-size: 14px; color: rgba(255,255,255,0.7); max-width: 520px; margin: 0 auto 32px; line-height: 1.9; }
+    .referral-flow { display: flex; justify-content: center; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 32px; }
+    .referral-step { background: rgba(255,255,255,0.06); padding: 16px 24px; border-radius: 6px; font-size: 13px; min-width: 160px; }
+    .referral-step strong { display: block; font-size: 22px; color: var(--gold); margin-bottom: 4px; }
+    .referral-arrow { color: var(--gold); font-size: 18px; }
   </style>
 </head>
 <body>
@@ -810,6 +830,39 @@
         <li>不具合時の即時サポート</li>
       </ul>
       <a href="#contact" class="pricing-btn">このプランで相談する</a>
+    </div>
+  </div>
+</section>
+
+<!-- Referral -->
+<section id="referral">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag">REFERRAL</span>
+    </div>
+    <h2 class="section-title">紹介プログラム。</h2>
+    <p class="section-sub">同業の店舗オーナー様をご紹介いただくと、両店舗ともに月額割引が3ヶ月適用されます。</p>
+
+    <div class="referral-box">
+      <h3>紹介者・被紹介者ともに<br><span>月¥3,000 × 3ヶ月割引</span></h3>
+      <p>ご契約中の店舗様から、新規ご契約予定の店舗様をご紹介いただいた場合、<br>双方の月額料金から¥3,000を3ヶ月間割引いたします（合計¥9,000相当）。</p>
+
+      <div class="referral-flow">
+        <div class="referral-step">
+          <strong>STEP 1</strong>
+          ご契約店舗様から<br>ご紹介
+        </div>
+        <span class="referral-arrow">→</span>
+        <div class="referral-step">
+          <strong>STEP 2</strong>
+          被紹介店舗様が<br>ご契約
+        </div>
+        <span class="referral-arrow">→</span>
+        <div class="referral-step">
+          <strong>STEP 3</strong>
+          両店舗に3ヶ月<br>割引適用
+        </div>
+      </div>
     </div>
   </div>
 </section>
