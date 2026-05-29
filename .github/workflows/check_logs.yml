@@ -1,0 +1,20 @@
+name: Check chatbot logs (one-time)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 46.225.82.240 >> ~/.ssh/known_hosts
+
+      - name: Get pm2 error logs (sign関連)
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@46.225.82.240 \
+            "pm2 logs chatbot --lines 80 --nostream 2>&1 | grep -A5 -B2 'sign\|Error\|error\|SIGN\|sheet\|Sheet' | tail -100"
