@@ -18,7 +18,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@46.225.82.240 << 'SSHEOF'
           node -e "
-          require('dotenv').config({ path: '/app/chatbot/.env' });
+          require('/app/chatbot/node_modules/dotenv').config({ path: '/app/chatbot/.env' });
           const { google } = require('/app/chatbot/node_modules/googleapis');
 
           const oauth2 = new google.auth.OAuth2(
