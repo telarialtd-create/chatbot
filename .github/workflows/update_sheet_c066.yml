@@ -1,0 +1,69 @@
+name: Update sheet C-066 (one-time)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 46.225.82.240 >> ~/.ssh/known_hosts
+
+      - name: Update C-066 row in shared sheet
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@46.225.82.240 << 'SSHEOF'
+          node -e "
+          require('dotenv').config({ path: '/app/chatbot/.env' });
+          const { google } = require('/app/chatbot/node_modules/googleapis');
+
+          const oauth2 = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET
+          );
+          oauth2.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+
+          const sheets = google.sheets({ version: 'v4', auth: oauth2 });
+          const SHEET_ID = '1-ITHWZsvH9Z6iNTNtEUp4LTM5pWN2VwT6A41SeTBy_c';
+          const TAB = '記憶ログ';
+
+          (async () => {
+            // C-066の行を検索
+            const res = await sheets.spreadsheets.values.get({
+              spreadsheetId: SHEET_ID,
+              range: TAB + '!A:A',
+            });
+            const rows = res.data.values || [];
+            let targetRow = -1;
+            for (let i = 0; i < rows.length; i++) {
+              if (rows[i][0] === 'C-066') { targetRow = i + 1; break; }
+            }
+            if (targetRow < 0) { console.log('C-066 not found'); return; }
+
+            const values = [[
+              'C-066',
+              '拓馬',
+              '🟥 事業/計画',
+              'KIRAKU 利用規約・電子サイン仕組み構築',
+              '',
+              '2026-05-29',
+              '⚠️ 管理画面デプロイ済み・認証エラー修正待ち（かず対応）',
+              'C-066 2026-05-29版。管理ダッシュボード(admin.html)・管理API(admin_handler.js)を新規作成しデプロイ済み。sign.html店舗名プレースホルダー変更・sign_handler.jsにM列ステータス追加済み。ADMIN_PASSWORD=0000、電子サイン台帳シート作成・SIGN_SHEET_ID/TAB設定済み。ただしsign_handler.js・admin_handler.jsの認証方式がサービスアカウント方式のままでVPSはOAuth2のため「client_email field not found」エラー発生中。getAuth()をOAuth2方式(GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN)に修正してgit pushすれば解消する。',
+              '【現状】⚠️ 申し込み送信時にサーバーエラー発生。【原因】sign_handler.js/admin_handler.jsがサービスアカウント認証を使っているがVPS .envにはOAuth2しか存在しない。【次にやること】lib/sign_handler.jsとlib/admin_handler.jsのgetAuth()をOAuth2方式(GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN)に変更してgit push。【URL】管理画面:https://kiraku.telaria.tech/admin(PW:0000) / フォーム:https://kiraku.telaria.tech/sign.html / 電子サイン台帳:https://docs.google.com/spreadsheets/d/1r3vXwm3I6VZEGOckt9EdRJX_85VOR5lKiXHkbu9iVjU。【Claudeへの指示例】「C-066 sign_handlerとadmin_handlerの認証をOAuth2に修正してデプロイして」',
+              'https://docs.google.com/document/d/1p9w-ZPOi04F0OaV_UE0DLlKtiKf1wUgq9o174X07I5Y'
+            ]];
+
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: SHEET_ID,
+              range: TAB + '!A' + targetRow + ':J' + targetRow,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values }
+            });
+            console.log('C-066 row ' + targetRow + ' updated successfully');
+          })().catch(e => console.error(e.message));
+          "
+          SSHEOF
