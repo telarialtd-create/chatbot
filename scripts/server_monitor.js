@@ -32,6 +32,32 @@ function fetchHealthz() {
   });
 }
 
+// 経路の一過性揺らぎ（GitHub Actions runner⇔Hetzner欧州VPS間で発生）を
+// 「VPSダウン」と誤判定しないよう、1回目失敗時は30秒待ってリトライ。
+// 2回連続失敗で初めて異常とみなす。2026-06-06 凪追加（C-060改善）。
+async function fetchHealthzWithRetry() {
+  const first = await fetchHealthz();
+  if (first.status === 200) return first;
+
+  console.log(
+    `[monitor] 1回目失敗 status=${first.status} error=${first.error || ''} → 30秒後リトライ`
+  );
+  await new Promise((r) => setTimeout(r, 30000));
+  const second = await fetchHealthz();
+
+  if (second.status === 200) {
+    console.log('[monitor] 2回目成功 → 1回目は一過性揺らぎ判定で通知抑制');
+    return second;
+  }
+
+  return {
+    status: second.status,
+    error: second.error,
+    body: second.body,
+    first_attempt: { status: first.status, error: first.error || null },
+  };
+}
+
 function sendLine(text) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
@@ -88,15 +114,18 @@ function detectIssues(h) {
     process.exit(2);
   }
 
-  const r = await fetchHealthz();
+  const r = await fetchHealthzWithRetry();
   const ts = new Date().toISOString();
 
   if (r.status !== 200) {
+    const firstLine = r.first_attempt
+      ? `1回目: status=${r.first_attempt.status} error=${r.first_attempt.error || ''}\n` +
+        `2回目: status=${r.status} error=${r.error || ''}`
+      : `status: ${r.status}\nerror: ${r.error || String(r.body).slice(0, 200)}`;
     const msg =
-      `🚨 [KIRAKU] /healthz 到達不能\n` +
+      `🚨 [KIRAKU] /healthz 到達不能（2回連続失敗）\n` +
       `時刻: ${ts}\n` +
-      `status: ${r.status}\n` +
-      `error: ${r.error || String(r.body).slice(0, 200)}\n` +
+      `${firstLine}\n` +
       `推測: KIRAKU VPS自体ダウン or chatbot停止\n` +
       `対処: Hetzner Console確認 / ssh root@46.225.82.240`;
     console.log(msg);
