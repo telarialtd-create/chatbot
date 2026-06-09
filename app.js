@@ -1222,22 +1222,34 @@ async function checkDashboardChanges() {
 
   for (const sheet of dashboardSheets) {
     try {
-      const res = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheet.id, range: "'SB'!A9:A39", valueRenderOption: 'UNFORMATTED_VALUE',
-      });
-      const names = (res.data.values || []).flat().map(v => String(v || '').trim()).filter(Boolean).sort().join(',');
+      // C-018 案A: 名前リストに加えて「売上合計>0」状態も検知キーに含める。
+      // 初回時に売上が全0で生成された分析タブが、その後データ流入しても再生成されないバグの対策。
+      const [namesRes, salesRes] = await Promise.all([
+        sheets.spreadsheets.values.get({
+          spreadsheetId: sheet.id, range: "'SB'!A9:A39", valueRenderOption: 'UNFORMATTED_VALUE',
+        }),
+        sheets.spreadsheets.values.get({
+          spreadsheetId: sheet.id, range: "'SB'!B9:B39", valueRenderOption: 'UNFORMATTED_VALUE',
+        }),
+      ]);
+      const names = (namesRes.data.values || []).flat().map(v => String(v || '').trim()).filter(Boolean).sort().join(',');
+      const salesSum = (salesRes.data.values || []).flat().map(v => Number(v) || 0).reduce((a, b) => a + b, 0);
+      const dataState = salesSum > 0 ? 'has-data' : 'empty';
+      const key = `${names}|${dataState}`;
 
       if (prevStaffMap[sheet.id] === undefined) {
         // 初回: 記録のみ（再生成しない）
-        prevStaffMap[sheet.id] = names;
-        console.log(`[Dashboard監視] ${sheet.name} 初回記録: ${names.split(',').length}名`);
-      } else if (prevStaffMap[sheet.id] !== names) {
-        const prev = prevStaffMap[sheet.id].split(',').filter(Boolean);
+        prevStaffMap[sheet.id] = key;
+        console.log(`[Dashboard監視] ${sheet.name} 初回記録: ${names.split(',').length}名 (${dataState})`);
+      } else if (prevStaffMap[sheet.id] !== key) {
+        const [prevNames, prevState] = prevStaffMap[sheet.id].split('|');
+        const prev = prevNames.split(',').filter(Boolean);
         const curr = names.split(',').filter(Boolean);
         const added = curr.filter(n => !prev.includes(n));
         const removed = prev.filter(n => !curr.includes(n));
-        console.log(`[Dashboard監視] ${sheet.name} A列変更検知! 追加: [${added.join(',')}] 削除: [${removed.join(',')}]`);
-        prevStaffMap[sheet.id] = names;
+        const stateNote = prevState !== dataState ? ` / 状態遷移: ${prevState}→${dataState}` : '';
+        console.log(`[Dashboard監視] ${sheet.name} 変更検知! 追加: [${added.join(',')}] 削除: [${removed.join(',')}]${stateNote}`);
+        prevStaffMap[sheet.id] = key;
 
         // ダッシュボード再生成
         if (!dashboardRunning[sheet.id]) {
