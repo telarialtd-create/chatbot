@@ -1192,31 +1192,63 @@ async function checkDashboardChanges() {
 
   const dashboardSheets = [];
   for (const store of DASHBOARD_STORES) {
-    const sheetName = `${store.prefix}売上${year}-${month}月`;
-    try {
-      const r = await drive.files.list({
-        q: `'${DASHBOARD_NIPPO_FOLDER_ID}' in parents and name='${sheetName}' and trashed=false`,
-        fields: 'files(id, name, mimeType, shortcutDetails)',
-        pageSize: 5,
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      });
-      const files = r.data.files || [];
-      if (files.length === 0) {
-        const key = `${ymKey}_${store.prefix}`;
-        if (!dashboardMissingNotified[key]) {
-          console.log(`[Dashboard監視] ${sheetName} が見つかりません。当月分未作成のためスキップ。`);
-          dashboardMissingNotified[key] = true;
+    // 6月以降「CREA 売上2026-6月」（半角スペース有）と「CREA売上2026-6月」（スペース無）両対応
+    const sheetNameVariants = [
+      `${store.prefix}売上${year}-${month}月`,    // スペース無（5月以前命名）
+      `${store.prefix} 売上${year}-${month}月`,   // スペース有（6月以降命名）
+    ];
+    let foundFile = null;
+    let foundName = null;
+    for (const sheetName of sheetNameVariants) {
+      try {
+        const r = await drive.files.list({
+          q: `'${DASHBOARD_NIPPO_FOLDER_ID}' in parents and name='${sheetName}' and trashed=false`,
+          fields: 'files(id, name, mimeType, shortcutDetails)',
+          pageSize: 5,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        });
+        const files = r.data.files || [];
+        if (files.length > 0) {
+          foundFile = files[0];
+          foundName = sheetName;
+          break;
         }
-        continue;
+      } catch (e) {
+        console.error(`[Dashboard監視] ${store.name} (${sheetName}) シート検索エラー:`, e.message);
       }
-      let targetId = files[0].id;
-      if (files[0].mimeType === 'application/vnd.google-apps.shortcut' && files[0].shortcutDetails) {
-        targetId = files[0].shortcutDetails.targetId;
+    }
+    if (!foundFile) {
+      const key = `${ymKey}_${store.prefix}`;
+      if (!dashboardMissingNotified[key]) {
+        console.log(`[Dashboard監視] ${store.prefix} ${year}-${month}月シート（スペース有無両方試行）が見つかりません。スキップ。`);
+        dashboardMissingNotified[key] = true;
       }
-      dashboardSheets.push({ id: targetId, name: store.name, sheetName });
-    } catch (e) {
-      console.error(`[Dashboard監視] ${store.name} シート検索エラー:`, e.message);
+      continue;
+    }
+    let targetId = foundFile.id;
+    if (foundFile.mimeType === 'application/vnd.google-apps.shortcut' && foundFile.shortcutDetails) {
+      targetId = foundFile.shortcutDetails.targetId;
+    }
+    dashboardSheets.push({ id: targetId, name: store.name, sheetName: foundName });
+  }
+
+  // C-018 quota自衛: quota exceeded時のリトライ付きbatchGet
+  async function batchGetWithRetry(spreadsheetId, ranges) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await sheets.spreadsheets.values.batchGet({
+          spreadsheetId, ranges, valueRenderOption: 'UNFORMATTED_VALUE',
+        });
+      } catch (e) {
+        const isQuota = /Quota exceeded|429/i.test(e.message || '');
+        if (isQuota && attempt === 1) {
+          console.warn(`[Dashboard監視] quota exceeded → 30秒待機して再試行 (${spreadsheetId})`);
+          await new Promise(r => setTimeout(r, 30000));
+          continue;
+        }
+        throw e;
+      }
     }
   }
 
@@ -1224,16 +1256,13 @@ async function checkDashboardChanges() {
     try {
       // C-018 案A: 名前リストに加えて「売上合計>0」状態も検知キーに含める。
       // 初回時に売上が全0で生成された分析タブが、その後データ流入しても再生成されないバグの対策。
-      const [namesRes, salesRes] = await Promise.all([
-        sheets.spreadsheets.values.get({
-          spreadsheetId: sheet.id, range: "'SB'!A9:A39", valueRenderOption: 'UNFORMATTED_VALUE',
-        }),
-        sheets.spreadsheets.values.get({
-          spreadsheetId: sheet.id, range: "'SB'!B9:B39", valueRenderOption: 'UNFORMATTED_VALUE',
-        }),
-      ]);
-      const names = (namesRes.data.values || []).flat().map(v => String(v || '').trim()).filter(Boolean).sort().join(',');
-      const salesSum = (salesRes.data.values || []).flat().map(v => Number(v) || 0).reduce((a, b) => a + b, 0);
+      // C-018 quota削減: A列とB列を batchGet で1リクエストにまとめる（2 reads → 1 read）
+      const batch = await batchGetWithRetry(sheet.id, ["'SB'!A9:A39", "'SB'!B9:B39"]);
+      const vrs = batch.data.valueRanges || [];
+      const namesRows = (vrs[0] && vrs[0].values) || [];
+      const salesRows = (vrs[1] && vrs[1].values) || [];
+      const names = namesRows.flat().map(v => String(v || '').trim()).filter(Boolean).sort().join(',');
+      const salesSum = salesRows.flat().map(v => Number(v) || 0).reduce((a, b) => a + b, 0);
       const dataState = salesSum > 0 ? 'has-data' : 'empty';
       const key = `${names}|${dataState}`;
 
