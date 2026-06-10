@@ -507,12 +507,19 @@ function resolveDates(entries, baseDate) {
 
 // ── Sheets/Drive ───────────────────────────────────────
 
-async function findShiftSS(year, month) {
+// [C-063 Phase2 2026-06-10] folderId 追加でマルチテナント化
+// folderId=null: 既存通り Drive 全体検索（CREA運用温存）
+// folderId 指定: その親フォルダ配下のシフト表のみマッチ（店舗別反映）
+async function findShiftSS(year, month, folderId = null) {
   const auth = createAuth();
   const drive = google.drive({ version: 'v3', auth });
   const titlePart = `${year}年${month}月`;
+  let q = `name contains '${titlePart}' and name contains 'シフト表' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+  if (folderId) {
+    q = `'${folderId}' in parents and ${q}`;
+  }
   const res = await drive.files.list({
-    q: `name contains '${titlePart}' and name contains 'シフト表' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+    q,
     fields: 'files(id, name, modifiedTime)',
     orderBy: 'modifiedTime desc',
     pageSize: 5,
@@ -829,9 +836,10 @@ function computeColumn(ssYear, ssMonth, targetYear, targetMonth, day) {
 /**
  * シフトメッセージを解析→SSに反映
  * @param {string} text  LINEメッセージ本文
+ * @param {string|null} folderId  [C-063 Phase2] 店舗別フォルダID。null時はDrive全体検索（既存挙動）
  * @returns {Promise<{type:'ignore'|'success'|'error', message?:string, store?:string, staffName?:string, writtenCount?:number, warnings?:string[], successes?:string[]}>}
  */
-async function reflectShiftMessage(text) {
+async function reflectShiftMessage(text, folderId = null) {
   const parsed = parseShiftMessage(text);
   if (!parsed) return { type: 'ignore' };
 
@@ -843,7 +851,8 @@ async function reflectShiftMessage(text) {
   async function getSS(y, m) {
     const key = `${y}-${m}`;
     if (ssCache.has(key)) return ssCache.get(key);
-    const ss = await findShiftSS(y, m);
+    // [C-063 Phase2] folderId 指定時は店舗別フォルダ配下を検索
+    const ss = await findShiftSS(y, m, folderId);
     ssCache.set(key, ss);
     return ss;
   }

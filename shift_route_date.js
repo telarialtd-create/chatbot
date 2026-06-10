@@ -165,7 +165,9 @@ async function handle(event, text, client) {
           }).catch(() => {});
           return;
         }
-        // [C-063 Phase2 で実装] storeId → 店舗別 MONTHLY_SHEETS 動的取得
+        // [C-063 Phase2.1 で実装予定] storeId → 店舗別 MONTHLY_SHEETS 動的取得
+        // 現状: MONTHLY_SHEETS が CREA系列ハードコードのため、T-XXX指定でも CREA の MONTHLY_SHEETS を参照。
+        // Phase 2.1 で getStaffOnDate を folderId ベースの動的シフトSS解決に改修予定。
       }
 
       const result = await getStaffOnDate(month, day);

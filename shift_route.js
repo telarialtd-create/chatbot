@@ -57,12 +57,15 @@ async function handle(event, text, client) {
   setImmediate(async () => {
     try {
       // [C-063 Phase1] T-XXX 指定の場合は権限チェック（許可LINE userId検証）
+      // [C-063 Phase2] storeId から folderId を取得して shift_reflect に渡す
+      let folderId = null;
       if (storeId) {
         try {
           const { getFolderByStoreId } = require('./line_nippo_input');
           const userId = event.source?.userId;
-          await getFolderByStoreId(storeId, userId);
-          console.log(`[Shift] [C-063] ${storeId} 権限OK userId=${userId}`);
+          const folderInfo = await getFolderByStoreId(storeId, userId);
+          folderId = folderInfo.folderId;
+          console.log(`[Shift] [C-063] ${storeId} 権限OK userId=${userId} folderId=${folderId}`);
         } catch (err) {
           console.error('[Shift] [C-063] 権限エラー:', err.message);
           await client.pushMessage({
@@ -71,14 +74,12 @@ async function handle(event, text, client) {
           }).catch(() => {});
           return;
         }
-        // [C-063 Phase2 で実装] storeId → 店舗別シフトSS の選択ロジック
-        // 現状（Phase1）は shift_reflect.reflectShiftMessage が CREA+ふわもこ前提のため、
-        // T-001 以外の店舗指定でも CREA+ふわもこのシフトSSにマッチを試みる。
-        // T-001 以外で運用するなら Phase2 完了まで待つこと。
+        // [C-063 Phase2] folderId 指定で findShiftSS が店舗別フォルダ内のシフト表のみマッチ
+        // 注: roster/master は CREA・ふわもこタブのハードコード（Phase 2.1 で動的化予定）
       }
 
       const shiftReflect = require('./shift_reflect');
-      const result = await shiftReflect.reflectShiftMessage(body);
+      const result = await shiftReflect.reflectShiftMessage(body, folderId);
       if (result.type === 'ignore') {
         console.log('[Shift] 非シフトメッセージ→スルー');
       } else if (result.type === 'success') {
