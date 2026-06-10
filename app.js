@@ -19,8 +19,13 @@ const T001_AUTO_FOLDER_INFO = {
 const app = express();
 app.use(express.static('public'));
 
-// LINE webhook（署名検証なし・シンプル版でデバッグ）
-app.post('/webhook/line', express.json(), (req, res) => {
+// [C-062 2026-06-10] LINE webhook 署名検証ON
+// @line/bot-sdk の middleware が x-line-signature をHMAC-SHA256検証する。
+// 検証失敗は401返却。検証OKならraw bodyをJSON parseしてreq.bodyに格納。
+if (!process.env.LINE_CHANNEL_SECRET) {
+  console.error('[FATAL C-062] LINE_CHANNEL_SECRET 未設定。webhook署名検証が無効化されます');
+}
+app.post('/webhook/line', lineMiddleware(lineConfig), (req, res) => {
   const events = req.body?.events || [];
   console.log('[LINE webhook] 受信 events:', events.length, JSON.stringify(events).slice(0, 300));
   events.forEach(ev => {
@@ -31,7 +36,7 @@ app.post('/webhook/line', express.json(), (req, res) => {
   res.status(200).end();
   Promise.all(events.map(handleLineEvent)).catch(err => console.error('[LINE webhook] エラー:', err.message));
 });
-console.log('LINE webhook 有効: POST /webhook/line');
+console.log('LINE webhook 有効: POST /webhook/line（C-062署名検証ON）');
 
 app.use(express.json());
 

@@ -1060,9 +1060,10 @@ async function processMeisaisyoAndPush(target, client, parsed, userId) {
     }
   } catch (err) {
     console.error('[明細書] エラー:', err.message);
+    // [C-062] 内部エラー固定文言化
     await client.pushMessage({
       to: target,
-      messages: [{ type: 'text', text: `明細書エラー: ${err.message}` }],
+      messages: [{ type: 'text', text: '❌ 明細書エラー: 内部エラーが発生しました（管理者にご連絡ください）' }],
     }).catch(() => {});
   }
 }
@@ -1096,9 +1097,10 @@ async function processMeisaiAndPush(target, client, dateStr, name, transportType
     });
   } catch (err) {
     console.error('[明細] エラー:', err.message);
+    // [C-062] 内部エラー固定文言化
     await client.pushMessage({
       to: target,
-      messages: [{ type: 'text', text: `明細エラー: ${err.message}` }],
+      messages: [{ type: 'text', text: '❌ 明細エラー: 内部エラーが発生しました（管理者にご連絡ください）' }],
     }).catch(() => {});
   }
 }
@@ -1135,9 +1137,10 @@ async function processAndPush(target, client, folderIdOverride) {
 
   } catch (err) {
     console.error('[LINE] Push エラー:', err.message);
+    // [C-062] 内部エラー固定文言化
     await client.pushMessage({
       to: target,
-      messages: [{ type: 'text', text: `エラー: ${err.message}` }],
+      messages: [{ type: 'text', text: '❌ エラー: 内部エラーが発生しました（管理者にご連絡ください）' }],
     }).catch(() => {});
   }
 }
@@ -1699,9 +1702,10 @@ async function handleLineEvent(event) {
             } catch (err) {
               console.error('[シフト更新] エラー:', err.message);
               const dateLabel = cmd.dateInfo ? `${cmd.dateInfo.month}/${cmd.dateInfo.day}` : '?';
+              // [C-062] 内部エラー固定文言化（日付情報は残す）
               await client.pushMessage({
                 to: target,
-                messages: [{ type: 'text', text: `❌ シフト更新エラー (${dateLabel}): ${err.message}` }]
+                messages: [{ type: 'text', text: `❌ シフト更新エラー (${dateLabel}): 内部エラーが発生しました（管理者にご連絡ください）` }]
               }).catch(() => {});
             }
           });
@@ -1732,9 +1736,10 @@ async function handleLineEvent(event) {
             } catch (err) {
               console.error('[入力反映] エラー:', err.message);
               const dateLabel = cmd.dateInfo ? `${cmd.dateInfo.month}/${cmd.dateInfo.day}` : '?';
+              // [C-062] 内部エラー固定文言化（日付情報は残す）
               await client.pushMessage({
                 to: target,
-                messages: [{ type: 'text', text: `❌ 入力反映エラー (${dateLabel}): ${err.message}` }]
+                messages: [{ type: 'text', text: `❌ 入力反映エラー (${dateLabel}): 内部エラーが発生しました（管理者にご連絡ください）` }]
               }).catch(() => {});
             }
           });
@@ -1766,9 +1771,10 @@ async function handleLineEvent(event) {
             }
           } catch (err) {
             console.error('[顧客更新] エラー:', err.message);
+            // [C-062] 内部エラー固定文言化
             await client.pushMessage({
               to: target,
-              messages: [{ type: 'text', text: `顧客更新エラー: ${err.message}` }],
+              messages: [{ type: 'text', text: '❌ 顧客更新エラー: 内部エラーが発生しました（管理者にご連絡ください）' }],
             }).catch(() => {});
           }
         });
@@ -1885,6 +1891,10 @@ async function handleLineEvent(event) {
               throw new Error('スタッフ名が指定されていません\n例: 「#T001 ベンリー再配信 岡本さえ」');
             }
             const staffName = staffMatch[1].trim();
+            // [C-062] staffName 文字種ホワイトリスト（execFile二次防御）
+            if (!/^[ぁ-んァ-ヶー一-龯a-zA-Z0-9]{1,30}$/.test(staffName)) {
+              throw new Error('スタッフ名が不正です（日本語・英数字のみ、30文字以内）');
+            }
 
             const { execFile } = require('child_process');
             execFile('/root/venrey_dispatch_specific.sh', [staffName], { timeout: 60000 }, (err, stdout, stderr) => {
@@ -1892,7 +1902,7 @@ async function handleLineEvent(event) {
                 console.error('[ベンリー再配信] dispatch失敗:', err.message, stderr);
                 client.pushMessage({
                   to: target,
-                  messages: [{ type: 'text', text: `❌ ベンリー再配信エラー: ${err.message}` }],
+                  messages: [{ type: 'text', text: '❌ ベンリー再配信エラー: 内部エラーが発生しました（管理者にご連絡ください）' }],
                 }).catch(() => {});
                 return;
               }
@@ -2181,6 +2191,10 @@ async function handleLineEvent(event) {
           throw new Error('スタッフ名が指定されていません\n例: 「#T001 ベンリー再配信 岡本さえ」');
         }
         const staffName = staffMatch[1].trim();
+        // [C-062] staffName 文字種ホワイトリスト（execFile二次防御）
+        if (!/^[ぁ-んァ-ヶー一-龯a-zA-Z0-9]{1,30}$/.test(staffName)) {
+          throw new Error('スタッフ名が不正です（日本語・英数字のみ、30文字以内）');
+        }
 
         const { execFile } = require('child_process');
         execFile('/root/venrey_dispatch_specific.sh', [staffName], { timeout: 60000 }, (err, stdout, stderr) => {
@@ -2188,7 +2202,7 @@ async function handleLineEvent(event) {
             console.error('[ベンリー再配信グループ] dispatch失敗:', err.message, stderr);
             client.pushMessage({
               to: target,
-              messages: [{ type: 'text', text: `❌ ベンリー再配信エラー: ${err.message}` }],
+              messages: [{ type: 'text', text: '❌ ベンリー再配信エラー: 内部エラーが発生しました（管理者にご連絡ください）' }],
             }).catch(() => {});
             return;
           }
