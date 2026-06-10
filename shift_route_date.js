@@ -1,5 +1,6 @@
 // shift_route_date.js - C-040 LINE「(M/D)の出勤更新して」コマンドルーター
 // 作成: 2026-04-30 すい(Claude代行) v1.0
+// 更新: 2026-05-13 すい(凪設計) v1.2 [C-063 Phase1] - #T-XXX 経路追加（既存温存）
 // 目的: 月またぎ等で漏れた日付シフトをLINEから手動で再発射可能にする
 //
 // 動作: シフトグループ内で「5/6の出勤更新して」のような投稿を検知
@@ -112,10 +113,31 @@ async function getStaffOnDate(month, day) {
 }
 
 async function handle(event, text, client) {
-  if (event?.source?.type !== 'group' || event?.source?.groupId !== SHIFT_GROUP_ID) {
+  if (event?.source?.type !== 'group') return false;
+
+  const groupId = event.source.groupId;
+  const rawText = String(text || '').trim();
+
+  // [C-063 Phase1] 先頭行から #T-XXX を抽出（あれば本文から除外）
+  const lines = rawText.split(/\r?\n/);
+  let storeId = null;
+  let body = rawText;
+
+  if (lines.length > 0) {
+    const firstLine = lines[0].trim();
+    const m = firstLine.match(/^#?\s*T[\-]?(\d{3,})\s*$/i);
+    if (m) {
+      storeId = `T-${m[1]}`;
+      body = lines.slice(1).join('\n').trim();
+    }
+  }
+
+  // [C-063 Phase1] 既存パス（SHIFT_GROUP_ID）と新パス（T-XXX指定）の共存
+  if (!storeId && groupId !== SHIFT_GROUP_ID) {
     return false;
   }
-  const t = String(text || '').trim();
+
+  const t = body;
   // パターン: "5/6の出勤更新して" "5/6 出勤あげて" "5月6日の出勤更新" 等
   const m = t.match(/^(\d{1,2})[\/／月](\d{1,2})日?[\sのを　]*出勤[\sのを　]*(更新|あげ|挙げ|上げ|反映|送信)/);
   if (!m) return false;
@@ -124,14 +146,32 @@ async function handle(event, text, client) {
   const day = parseInt(m[2], 10);
   if (month < 1 || month > 12 || day < 1 || day > 31) return false;
 
-  console.log(`[ShiftDate] 受信: ${month}/${day} 出勤更新指示`);
+  console.log(`[ShiftDate] 受信: ${month}/${day} 出勤更新指示${storeId ? ` storeId=${storeId}` : ''}`);
 
   setImmediate(async () => {
     try {
+      // [C-063 Phase1] T-XXX 指定の場合は権限チェック
+      if (storeId) {
+        try {
+          const { getFolderByStoreId } = require('./line_nippo_input');
+          const userId = event.source?.userId;
+          await getFolderByStoreId(storeId, userId);
+          console.log(`[ShiftDate] [C-063] ${storeId} 権限OK userId=${userId}`);
+        } catch (err) {
+          console.error('[ShiftDate] [C-063] 権限エラー:', err.message);
+          await client.pushMessage({
+            to: groupId,
+            messages: [{ type: 'text', text: `❌ ${err.message}` }],
+          }).catch(() => {});
+          return;
+        }
+        // [C-063 Phase2 で実装] storeId → 店舗別 MONTHLY_SHEETS 動的取得
+      }
+
       const result = await getStaffOnDate(month, day);
       if (result.error) {
         await client.pushMessage({
-          to: SHIFT_GROUP_ID,
+          to: groupId,
           messages: [{ type: 'text', text: `❌ エラー: ${result.error}` }],
         }).catch(e => console.error('[ShiftDate] push err:', e.message));
         return;
@@ -156,7 +196,7 @@ async function handle(event, text, client) {
 
       if (allNames.length === 0) {
         await client.pushMessage({
-          to: SHIFT_GROUP_ID,
+          to: groupId,
           messages: [{ type: 'text', text: `⚠️ ${month}/${day} の出勤者が見つかりません\n\n${summaryLines.join('\n\n')}` }],
         }).catch(e => console.error('[ShiftDate] push err:', e.message));
         return;
@@ -169,7 +209,7 @@ async function handle(event, text, client) {
         if (err) {
           console.error(`[ShiftDate] dispatch error: ${err.message}`);
           client.pushMessage({
-            to: SHIFT_GROUP_ID,
+            to: groupId,
             messages: [{ type: 'text', text: `❌ ベンリー発射エラー: ${err.message}` }],
           }).catch(() => {});
         } else {
@@ -179,14 +219,14 @@ async function handle(event, text, client) {
 
       const replyText = `✅ ${month}/${day} の出勤を更新します（合計 ${allNames.length}名）\n\n${summaryLines.join('\n\n')}\n\nベンリー反映まで5〜10分かかります。`;
       await client.pushMessage({
-        to: SHIFT_GROUP_ID,
+        to: groupId,
         messages: [{ type: 'text', text: replyText }],
       }).catch(e => console.error('[ShiftDate] push err:', e.message));
     } catch (e) {
       console.error('[ShiftDate] handle error:', e.message, e.stack);
       try {
         await client.pushMessage({
-          to: SHIFT_GROUP_ID,
+          to: groupId,
           messages: [{ type: 'text', text: `❌ 内部エラー: ${e.message}` }],
         });
       } catch (_) {}
@@ -200,7 +240,9 @@ async function handle(event, text, client) {
 // 1パーツの「(M/D)の出勤更新して」コマンドを line_handler.js の isBotCommand で許可するため
 function isShiftDateCommand(text) {
   if (!text) return false;
-  return /^\s*\d{1,2}[\/／月]\d{1,2}日?[\sのを　]*出勤[\sのを　]*(更新|あげ|挙げ|上げ|反映|送信)/.test(String(text).trim());
+  // [C-063 Phase1] 先頭の #T-XXX 行は無視して判定
+  const t = String(text).trim().replace(/^#?\s*T[\-]?\d{3,}\s*\n+/i, '').trim();
+  return /^\s*\d{1,2}[\/／月]\d{1,2}日?[\sのを　]*出勤[\sのを　]*(更新|あげ|挙げ|上げ|反映|送信)/.test(t);
 }
 
 module.exports = { handle, SHIFT_GROUP_ID, getStaffOnDate, isShiftDateCommand };
