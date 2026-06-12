@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow">
-  <title>エスタマ自動更新 | KIRAKU - 出勤・空き・求人を24時間自動更新</title>
-  <meta name="description" content="エスタマの空き状況・集客・求人を24時間自動更新。1日数十回の手作業から解放。地域独占5店枠制。月額¥7,700(税込)から。">
+  <title>エスタマ自動更新 ＆ 即セラ自動更新 | KIRAKU</title>
+  <meta name="description" content="エスタマの空き・集客・求人更新と、魂セラピストの即セラ自動ON・ひとこと反映を24時間自動化。1日数十回の手作業から解放。エスタマ月額¥7,700〜／即セラ月額¥9,900（税込）。">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -71,7 +71,7 @@
       margin-bottom: 40px;
     }
     .hero h1 {
-      font-size: clamp(34px, 6vw, 68px);
+      font-size: clamp(34px, 6vw, 64px);
       font-weight: 700;
       line-height: 1.15;
       letter-spacing: -0.02em;
@@ -81,7 +81,7 @@
     .hero-sub {
       font-size: clamp(15px, 2vw, 18px);
       color: rgba(255,255,255,0.65);
-      max-width: 600px;
+      max-width: 640px;
       margin: 0 auto 48px;
       line-height: 1.9;
     }
@@ -128,6 +128,16 @@
       max-width: 640px; margin: 0 auto 60px;
       line-height: 1.9;
     }
+    /* 商材ラベル（エスタマ / 即セラ の見出し） */
+    .product-label {
+      display: inline-block;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+      background: var(--gold); color: var(--black);
+      padding: 6px 18px; border-radius: 100px;
+      margin-bottom: 18px;
+    }
+    .product-block { margin-top: 24px; }
+    .product-block + .product-block { margin-top: 90px; }
 
     /* ─── Pain ─── */
     #pain { background: var(--gray-100); }
@@ -174,8 +184,9 @@
       margin-top: 12px;
     }
 
-    /* ─── Features (3 update functions) ─── */
-    #features { background: var(--white); }
+    /* ─── Features ─── */
+    #features, #features-sokusera { background: var(--white); }
+    #features-sokusera { background: var(--gray-100); }
     .feat-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -202,16 +213,30 @@
       font-size: 11px; background: var(--gray-100); color: var(--gray-600);
       padding: 4px 12px; border-radius: 100px; letter-spacing: 0.05em;
     }
+    #features-sokusera .feat-card { background: var(--white); }
+    #features-sokusera .feat-badge { background: var(--gray-200); }
 
-    /* ─── Pricing (single plan) ─── */
+    /* ─── Pricing ─── */
     #pricing { background: var(--gray-100); }
+    .pricing-group-title {
+      text-align: center;
+      font-size: 20px; font-weight: 700;
+      letter-spacing: 0.04em;
+      margin: 64px 0 4px;
+    }
+    .pricing-group-title:first-of-type { margin-top: 24px; }
+    .pricing-group-sub {
+      text-align: center; font-size: 13px; color: var(--gray-400);
+      margin-bottom: 24px;
+    }
     .pricing-wrap {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 24px;
       max-width: 760px;
-      margin: 40px auto 0;
+      margin: 0 auto;
     }
+    .pricing-wrap.single { max-width: 420px; }
     .plan-card.featured { border-color: var(--gold); }
     .plan-tag {
       display: inline-block;
@@ -252,6 +277,7 @@
       font-size: 14px; font-weight: 600; letter-spacing: 0.05em;
       background: var(--line-green); color: var(--white);
       transition: opacity 0.2s;
+      margin-top: auto;
     }
     .plan-btn:hover { opacity: 0.85; }
     .plan-note {
@@ -399,8 +425,22 @@
       font-size: 18px;
     }
 
+    /* ─── FAQ ─── */
+    #faq { background: var(--gray-100); }
+    .faq-list { max-width: 800px; margin: 40px auto 0; }
+    .faq-item {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 24px 28px;
+      margin-bottom: 16px;
+    }
+    .faq-q { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+    .faq-q::before { content: 'Q. '; color: var(--gold); }
+    .faq-a { font-size: 14px; color: var(--gray-600); line-height: 1.85; }
+
     /* ─── Flow ─── */
-    #flow { background: var(--gray-100); }
+    #flow { background: var(--white); }
     .flow-list {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -408,7 +448,7 @@
       margin-top: 40px;
     }
     .flow-step {
-      background: var(--white);
+      background: var(--gray-100);
       padding: 32px 24px;
       border-radius: 8px;
       position: relative;
@@ -468,11 +508,11 @@
 
 <!-- Hero -->
 <section class="hero">
-  <span class="hero-tag">ESTAMA AUTO UPDATE</span>
-  <h1>エスタマの更新作業、<br><span>丸ごと自動化</span>。</h1>
+  <span class="hero-tag">ESTAMA ＆ SOKUSERA AUTO UPDATE</span>
+  <h1>エスタマも即セラも、<br><span>更新作業まるごと自動化</span>。</h1>
   <p class="hero-sub">
-    空き枠・求人の更新を、24時間ぜんぶ自動で。<br>
-    1日に数十回手作業で更新する作業から、スタッフを解放しませんか。
+    出勤・空き枠・求人の更新も、魂セラピストの即セラON・ひとこと反映も。<br>
+    1日に何十回もの手作業を、24時間ノンストップで自動化します。
   </p>
   <div class="hero-btns">
     <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="btn-line">LINEで無料相談（即日対応）</a>
@@ -497,21 +537,25 @@
         <h3>空き枠の最新化が遅れて機会損失</h3>
         <p>「掲載してる空き時間と実際が違う」「予約が入った直後に他のお客様にも案内してしまった」。</p>
       </div>
+      <div class="pain-card">
+        <h3>即セラのON漏れで露出ダウン</h3>
+        <p>即セラは60分でOFFになる仕様。出勤中なのにOFFのまま放置され、ランキング落ち・当日予約の取りこぼしが発生する。</p>
+      </div>
     </div>
 
     <div class="pain-cost">
       <div class="cost-label">毎月くり返している手作業更新</div>
       <div class="cost-num">月数千回</div>
-      <div class="cost-detail">1日に数十回 × 全店舗で、月に数千回。<br>その膨大な更新作業を、エスタマが完全自動化します。</div>
+      <div class="cost-detail">案内状況・求人の更新、即セラのON戻し。1日に数十回 × 全店舗で、月に数千回。<br>その膨大な更新作業を、まるごと自動化します。</div>
     </div>
   </div>
 </section>
 
-<!-- Features (3 update functions) -->
+<!-- Features ① エスタマ自動更新 -->
 <section id="features">
   <div class="section-inner">
     <div style="text-align:center;">
-      <span class="section-tag">FEATURES</span>
+      <span class="product-label">① エスタマ自動更新</span>
     </div>
     <h2 class="section-title">エスタマの更新を、まるごと自動で。</h2>
     <p class="section-sub">ご案内状況、リアルタイム集客、求人、体験入店アピールまで。<br>店舗運営で毎日触る更新を、24時間ノンストップで自動化します。</p>
@@ -520,7 +564,7 @@
       <div class="feat-card">
         <div class="feat-num">01</div>
         <h3>ご案内状況更新</h3>
-        <p>一度「今すぐ」などのご案内状況に更新していただくと、あとはエスタマがずっと自動で更新し続けます。更新間隔は、地域独占の限定枠で2分ごと、限定枠なし（¥7,700タイプ）で10分ごとです。</p>
+        <p>一度「今すぐ」などのご案内状況に更新していただくと、あとはずっと自動で更新し続けます。更新間隔は、地域独占の限定枠で2分ごと、限定枠なし（¥7,700タイプ）で10分ごとです。</p>
         <span class="feat-badge">限定枠2分／非限定枠10分</span>
       </div>
       <div class="feat-card">
@@ -545,15 +589,68 @@
   </div>
 </section>
 
-<!-- Pricing (single plan) -->
+<!-- Features ② 即セラ自動更新 -->
+<section id="features-sokusera">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="product-label">② 即セラ自動更新</span>
+    </div>
+    <h2 class="section-title">即セラの「ON漏れ」を、10分ごとに自動修復。</h2>
+    <p class="section-sub">魂セラピストの即セラとご案内状況「今すぐ」を24時間監視。OFFや矛盾状態のセラピストだけを自動でONに戻し、ひとこともそのまま掲載します。<br><strong style="color:var(--black);">3店舗90名で本番稼働中。</strong></p>
+
+    <div class="feat-grid">
+      <div class="feat-card">
+        <div class="feat-num">01</div>
+        <h3>10分ごとに自動ON</h3>
+        <p>即セラの状態を10分間隔で巡回。OFFになっているセラピストだけを抽出し、即座にON処理します。</p>
+        <span class="feat-badge">10分間隔で巡回</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-num">02</div>
+        <h3>メアド作成・アカウント開設 代行</h3>
+        <p>即セラ用のメアド作成・アカウント開設・初期設定まで、全工程をこちらで代行。セラピスト本人の作業はゼロ。店舗から送るのは「名前と情報」だけです。</p>
+        <span class="feat-badge">初期登録まるごと代行</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-num">03</div>
+        <h3>ひとことを自動掲載</h3>
+        <p>あらかじめスプレッドシートに登録したキャッチコピーを、即セラON時に毎回そのまま反映します。</p>
+        <span class="feat-badge">キャッチコピー自動反映</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-num">04</div>
+        <h3>「今すぐ」案内中も連動</h3>
+        <p>即セラのON/OFFだけでなく、ご案内状況の「今すぐ」も同時にチェック。今すぐ案内可能なのに即セラOFFという矛盾を自動で解消します。</p>
+        <span class="feat-badge">二重判定で高精度</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-num">05</div>
+        <h3>安全側に倒す判定</h3>
+        <p>判定に少しでも迷いがあれば必ずON処理を実行。「出勤中なのに即セラOFF放置」を構造的に防ぎます。</p>
+        <span class="feat-badge">ON漏れを構造的に防止</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-num">06</div>
+        <h3>人数無制限・追加もシートだけ</h3>
+        <p>セラピスト人数による追加料金なし。新人さんが入っても、シートに名前とひとことを追記するだけ。24時間365日、深夜・早朝も止まりません。</p>
+        <span class="feat-badge">人数無制限／24時間稼働</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing（2商材を別プランとして併記） -->
 <section id="pricing">
   <div class="section-inner">
     <div style="text-align:center;">
       <span class="section-tag">PRICING</span>
     </div>
-    <h2 class="section-title">料金は、2タイプ。</h2>
-    <p class="section-sub">ご案内状況更新の速さと、地域独占の有無で選べます。<br>初期構築費・サポート費はいただきません。1店舗あたり月額のみ。いつでも停止できます。</p>
+    <h2 class="section-title">料金は、商材ごとに選べます。</h2>
+    <p class="section-sub">エスタマ自動更新・即セラ自動更新、それぞれ単体でご利用いただけます。併用も可能です。<br>初期構築費・サポート費はいただきません。1店舗あたり月額のみ。いつでも停止できます。</p>
 
+    <!-- エスタマ -->
+    <div class="pricing-group-title">エスタマ自動更新</div>
+    <div class="pricing-group-sub">出勤・空き・求人・体験入店の自動更新（2タイプ）</div>
     <div class="pricing-wrap">
       <div class="plan-card featured">
         <span class="plan-tag">地域独占</span>
@@ -590,6 +687,30 @@
         <div class="plan-note">※ 地域独占枠をご希望の場合は限定枠プランをご利用ください</div>
       </div>
     </div>
+
+    <!-- 即セラ -->
+    <div class="pricing-group-title">即セラ自動更新</div>
+    <div class="pricing-group-sub">魂セラピストの即セラ自動ON・ひとこと反映（シンプル1プラン）</div>
+    <div class="pricing-wrap single">
+      <div class="plan-card featured">
+        <span class="plan-tag">人数無制限</span>
+        <div class="plan-name">即セラ自動更新プラン</div>
+        <div class="plan-desc">セラピスト人数による追加料金なし。</div>
+        <div class="plan-price">¥9,900<span style="font-size:14px;color:var(--gray-400);font-weight:400;">/月</span></div>
+        <div class="plan-price-unit">税込・1店舗あたり</div>
+        <ul class="plan-features">
+          <li><strong style="color:var(--gold);">メアド作成・アカウント開設 代行</strong></li>
+          <li>10分ごとの自動ON</li>
+          <li>ひとこと（キャッチコピー）自動反映</li>
+          <li>「今すぐ」案内状況との連動判定</li>
+          <li>セラピスト人数 無制限</li>
+          <li>24時間 365日 稼働・月次レポート</li>
+          <li>初期構築・サポート費用なし</li>
+        </ul>
+        <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="plan-btn">LINEで無料相談</a>
+        <div class="plan-note">※ 「魂セラピスト 即セラ」専用です</div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -599,8 +720,8 @@
     <div style="text-align:center;">
       <span class="section-tag" style="color:rgba(255,255,255,0.5);">REGION QUOTA</span>
     </div>
-    <h2 class="section-title">ご案内状況更新は、<br>地域独占5店枠制。</h2>
-    <p class="section-sub">エスタマ自動更新の中でも、お客様への影響が最も大きい「ご案内状況更新」機能は、<br>同一地域での導入店舗数を5店までに制限しています。近隣競合への流出を抑え、ご契約店舗の優位性を維持します。<br><span style="color:rgba(255,255,255,0.4);font-size:13px;">※ リアルタイム集客更新・求人更新は、地域縛りなしで全国どこでも導入可能です。</span></p>
+    <h2 class="section-title">エスタマのご案内状況更新は、<br>地域独占5店枠制。</h2>
+    <p class="section-sub">エスタマ自動更新の中でも、お客様への影響が最も大きい「ご案内状況更新」機能は、<br>同一地域での導入店舗数を5店までに制限しています。近隣競合への流出を抑え、ご契約店舗の優位性を維持します。<br><span style="color:rgba(255,255,255,0.4);font-size:13px;">※ リアルタイム集客更新・求人更新・即セラ自動更新は、地域縛りなしで全国どこでも導入可能です。</span></p>
 
     <div class="area-grid">
       <div class="area-card">
@@ -650,19 +771,19 @@
     <div class="results-grid">
       <div class="result-card">
         <div class="result-num">5<span>店</span></div>
-        <div class="result-label">稼働中の導入店舗数<br>（広島・関東エリア）</div>
+        <div class="result-label">エスタマ自動更新<br>稼働中の導入店舗数</div>
       </div>
       <div class="result-card">
         <div class="result-num">60<span>時間/月</span></div>
         <div class="result-label">削減できた手動更新時間<br>（1店舗平均）</div>
       </div>
       <div class="result-card">
-        <div class="result-num">24<span>時間</span></div>
-        <div class="result-label">完全無人稼働<br>（深夜・早朝も自動）</div>
+        <div class="result-num">90<span>名</span></div>
+        <div class="result-label">即セラ自動更新<br>本番稼働中のセラピスト数（3店舗）</div>
       </div>
       <div class="result-card">
-        <div class="result-num">100<span>%</span></div>
-        <div class="result-label">出勤反映漏れの解消<br>（2026年実績）</div>
+        <div class="result-num">24<span>時間</span></div>
+        <div class="result-label">完全無人稼働<br>（深夜・早朝も自動）</div>
       </div>
     </div>
 
@@ -676,21 +797,21 @@
         <p class="voice-meta">— 関東エリア店舗 店長</p>
       </div>
       <div class="voice-card">
-        <p class="voice-text">「営業時間外でも自動で最新になっているのが安心です。更新のために時間に縛られることがなくなりました。」</p>
+        <p class="voice-text">「即セラのON戻しに追われなくなったのが大きい。出勤中の子が勝手にONで保たれるので、ランキングが安定しました。」</p>
         <p class="voice-meta">— 既存導入店舗 マネージャー</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Referral -->
+<!-- Referral（共通） -->
 <section id="referral">
   <div class="section-inner">
     <div style="text-align:center;">
       <span class="section-tag">REFERRAL</span>
     </div>
     <h2 class="section-title">紹介プログラム。</h2>
-    <p class="section-sub">同業の店舗オーナー様をご紹介いただくと、両店舗ともに月額割引が3ヶ月適用されます。</p>
+    <p class="section-sub">同業の店舗オーナー様をご紹介いただくと、両店舗ともに月額割引が3ヶ月適用されます。（エスタマ・即セラ どちらのご契約にも適用）</p>
 
     <div class="referral-box">
       <h3>紹介者・被紹介者ともに<br><span>月¥3,000 × 3ヶ月割引</span></h3>
@@ -729,22 +850,59 @@
       <div class="flow-step">
         <div class="flow-num">STEP 01</div>
         <div class="flow-title">お問い合わせ</div>
-        <div class="flow-desc">LINEからご連絡ください。エリア・店舗情報をお知らせいただきます。</div>
+        <div class="flow-desc">LINEからご連絡ください。エリア・店舗情報・ご希望の商材をお知らせいただきます。</div>
       </div>
       <div class="flow-step">
         <div class="flow-num">STEP 02</div>
         <div class="flow-title">ヒアリング</div>
-        <div class="flow-desc">掲載中のページ・運用ルールを30分程度でヒアリング。地域枠も確認します。</div>
+        <div class="flow-desc">掲載中のページ・運用ルール・セラピスト一覧を30分程度でヒアリング。地域枠も確認します。</div>
       </div>
       <div class="flow-step">
         <div class="flow-num">STEP 03</div>
         <div class="flow-title">構築・接続</div>
-        <div class="flow-desc">初期構築はこちらで実施。アカウント・店舗設定を接続し、内容をオーナー様にご共有。</div>
+        <div class="flow-desc">初期構築はこちらで実施。即セラのメアド作成・アカウント開設も代行し、内容をオーナー様にご共有。</div>
       </div>
       <div class="flow-step">
         <div class="flow-num">STEP 04</div>
         <div class="flow-title">運用開始</div>
-        <div class="flow-desc">翌日から自動稼働。設定変更・停止時間調整もLINE経由で即対応。</div>
+        <div class="flow-desc">翌日（即セラは最短3営業日）から自動稼働。設定変更・停止時間調整もLINE経由で即対応。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ（即セラ関連） -->
+<section id="faq">
+  <div class="section-inner">
+    <div style="text-align:center;">
+      <span class="section-tag">FAQ</span>
+    </div>
+    <h2 class="section-title">よくあるご質問</h2>
+
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q">即セラのメアド登録をセラピスト本人にお願いしないといけませんか？</div>
+        <div class="faq-a"><strong>不要です。</strong>即セラ登録に必要なメアド作成・アカウント開設はこちらで代行します。本人にスマホを開いてもらう必要すらありません。店舗から送っていただくのは「セラピストの名前と必要情報」だけです。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">即セラはセラピストの人数が多くても料金は変わりませんか？</div>
+        <div class="faq-a">はい、人数による追加料金はありません。月額¥9,900（税込）の中で、登録セラピスト全員分を自動ON・ひとこと反映・初期登録代行まで対応します。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">エスタマと即セラ、両方まとめて契約できますか？</div>
+        <div class="faq-a">はい。エスタマ自動更新・即セラ自動更新は併用いただけます。どちらか単体でのご契約も可能です。紹介プログラムの割引はどちらのご契約にも適用されます。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">解約はいつでもできますか？</div>
+        <div class="faq-a">月単位の契約のため、いつでも解約可能です。違約金・最低利用期間はありません。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">ログイン情報は預ける必要がありますか？</div>
+        <div class="faq-a">はい、ご契約時に管理用ログイン情報をお預かりします。当方サーバーで厳重に管理し、目的外利用は一切いたしません。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">導入までどのくらいかかりますか？</div>
+        <div class="faq-a">エスタマは最短翌日、即セラは最短3営業日で稼働開始できます。ログイン情報と必要情報をご提供いただいたあと、こちらで初期設定を行います。</div>
       </div>
     </div>
   </div>
