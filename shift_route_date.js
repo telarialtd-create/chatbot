@@ -1,6 +1,7 @@
 // shift_route_date.js - C-040 LINE「(M/D)の出勤更新して」コマンドルーター
 // 作成: 2026-04-30 すい(Claude代行) v1.0
 // 更新: 2026-05-13 すい(凪設計) v1.2 [C-063 Phase1] - #T-XXX 経路追加（既存温存）
+// 更新: 2026-06-13 すい(凪設計) v1.3 [C-052 quota対策] - batchGet一括取得+30秒タイムアウト+ログ強化（キャッシュなし）
 // 目的: 月またぎ等で漏れた日付シフトをLINEから手動で再発射可能にする
 //
 // 動作: シフトグループ内で「5/6の出勤更新して」のような投稿を検知
@@ -10,6 +11,12 @@
 //
 // ★編集権限: すいさん専属管轄 ★
 // MONTHLY_SHEETS は main_test.py の同名辞書と同期させること。
+//
+// v1.3 改修内容 (2026-06-13):
+// - getStaffOnDate: 個別 values.get ループを spreadsheets.values.batchGet 1回呼び出しに統合 (API ~50%削減)
+// - withTimeout(): Sheets API呼び出しに30秒タイムアウト導入 (silent hang防止)
+// - 各分岐に詳細ログ出力 (沈黙死を撲滅)
+// - キャッシュは導入しない (当日シフト変更直後の即時反映を保証)
 
 const { exec } = require('child_process');
 const { google } = require('googleapis');
@@ -36,6 +43,16 @@ function getAuth() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   return _auth;
+}
+
+// v1.3: Sheets API ハング防止のためのタイムアウトラッパー
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout ${ms}ms: ${label}`)), ms)
+    ),
+  ]);
 }
 
 function isShiftValue(v) {
@@ -66,21 +83,49 @@ async function getStaffOnDate(month, day) {
   }
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: ssId });
+
+  // v1.3: meta取得に30秒タイムアウト
+  console.log(`[ShiftDate] meta取得開始 ssId=${ssId}`);
+  const meta = await withTimeout(
+    sheets.spreadsheets.get({ spreadsheetId: ssId }),
+    30000,
+    'spreadsheets.get'
+  );
+
+  // v1.3: スタッフ管理シート以外の全シートを対象に
+  const targetTitles = meta.data.sheets
+    .map(s => s.properties.title)
+    .filter(t => !t.includes('スタッフ管理'));
+
+  if (targetTitles.length === 0) {
+    return { error: '対象シートが見つかりません' };
+  }
+
+  // v1.3: batchGet で全シートを1回のAPI呼び出しで取得
+  const ranges = targetTitles.map(t => `'${t}'!A1:AZ80`);
+  console.log(`[ShiftDate] batchGet開始 ${targetTitles.length}シート: ${targetTitles.join(', ')}`);
+  const batchResp = await withTimeout(
+    sheets.spreadsheets.values.batchGet({
+      spreadsheetId: ssId,
+      ranges,
+    }),
+    30000,
+    'values.batchGet'
+  );
+  console.log(`[ShiftDate] batchGet完了 ${targetTitles.length}シート (API 1回)`);
+  const valueRanges = batchResp.data.valueRanges || [];
 
   const dayStr = String(day);
   const result = { ssId, year, month, day, byStore: {}, totalCount: 0 };
 
-  for (const sheet of meta.data.sheets) {
-    const title = sheet.properties.title;
-    if (title.includes('スタッフ管理')) continue;
+  for (let idx = 0; idx < targetTitles.length; idx++) {
+    const title = targetTitles[idx];
+    const rows = (valueRanges[idx] && valueRanges[idx].values) || [];
 
-    const r = await sheets.spreadsheets.values.get({
-      spreadsheetId: ssId,
-      range: `'${title}'!A1:AZ80`,
-    });
-    const rows = r.data.values || [];
-    if (rows.length === 0) continue;
+    if (rows.length === 0) {
+      result.byStore[title] = { error: 'データなし' };
+      continue;
+    }
 
     let headerRow = -1, targetCol = -1;
     for (let i = 0; i < Math.min(rows.length, 6); i++) {
@@ -109,6 +154,7 @@ async function getStaffOnDate(month, day) {
     result.byStore[title] = { list };
     result.totalCount += list.length;
   }
+  console.log(`[ShiftDate] 抽出完了 totalCount=${result.totalCount}`);
   return result;
 }
 
@@ -172,6 +218,7 @@ async function handle(event, text, client) {
 
       const result = await getStaffOnDate(month, day);
       if (result.error) {
+        console.error(`[ShiftDate] getStaffOnDate error: ${result.error}`);
         await client.pushMessage({
           to: groupId,
           messages: [{ type: 'text', text: `❌ エラー: ${result.error}` }],
@@ -197,6 +244,7 @@ async function handle(event, text, client) {
       }
 
       if (allNames.length === 0) {
+        console.log(`[ShiftDate] 出勤者ゼロ ${month}/${day}`);
         await client.pushMessage({
           to: groupId,
           messages: [{ type: 'text', text: `⚠️ ${month}/${day} の出勤者が見つかりません\n\n${summaryLines.join('\n\n')}` }],

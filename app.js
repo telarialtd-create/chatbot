@@ -1156,6 +1156,9 @@ const DASHBOARD_NIPPO_FOLDER_ID = '16R1BK5NnvYkH4Eqh6t51OGQl0tXVJ3If';
 const DASHBOARD_STORES = [
   { prefix: 'CREA',     name: 'CREA' },
   { prefix: 'ふわもこ', name: 'ふわもこ' },
+  // C-018 (2026-06-14 かず): Angel Spa(K-002/T-1043)を自動監視に追加。
+  //   月次シートは自社の日報フォルダ外「T-1043　Angel Spa」フォルダにあるため folderId を個別指定。
+  { prefix: 'Angel Spa', name: 'Angel Spa', folderId: '1DmP0s4OmSepDUx_Sk54h5HctYniXWDJX' },
 ];
 const prevStaffMap = {}; // { sheetId: "名前1,名前2,..." }
 const dashboardMissingNotified = {}; // 同月内の「当月シート未作成」ログを1回だけに抑制
@@ -1207,7 +1210,7 @@ async function checkDashboardChanges() {
     for (const sheetName of sheetNameVariants) {
       try {
         const r = await drive.files.list({
-          q: `'${DASHBOARD_NIPPO_FOLDER_ID}' in parents and name='${sheetName}' and trashed=false`,
+          q: `'${store.folderId || DASHBOARD_NIPPO_FOLDER_ID}' in parents and name='${sheetName}' and trashed=false`,
           fields: 'files(id, name, mimeType, shortcutDetails)',
           pageSize: 5,
           supportsAllDrives: true,
@@ -1257,6 +1260,23 @@ async function checkDashboardChanges() {
     }
   }
 
+  // C-018 (2026-06-14 かず): 単一の再生成実行ヘルパ（変更検知・前月残存の両方から呼ぶ）
+  async function regenerateDashboard(sheet, reason) {
+    if (dashboardRunning[sheet.id]) return;
+    dashboardRunning[sheet.id] = true;
+    try {
+      console.log(`[Dashboard監視] ${sheet.name} 再生成開始... (理由: ${reason})`);
+      await runDashboard(sheet.id);
+      console.log(`[Dashboard監視] ${sheet.name} 再生成完了 ✅`);
+    } catch (err) {
+      console.error(`[Dashboard監視] ${sheet.name} 再生成エラー:`, err.message);
+    } finally {
+      dashboardRunning[sheet.id] = false;
+    }
+  }
+  // C-018 (2026-06-14 かず): 当月の月ラベル（📈分析タブA1との照合用）
+  const expectedMonthLabel = `${year}年${month}月`;
+
   for (const sheet of dashboardSheets) {
     try {
       // C-018 案A: 名前リストに加えて「売上合計>0」状態も検知キーに含める。
@@ -1271,10 +1291,26 @@ async function checkDashboardChanges() {
       const dataState = salesSum > 0 ? 'has-data' : 'empty';
       const key = `${names}|${dataState}`;
 
+      // C-018 (2026-06-14 かず): 前月シートのコピーで当月シートを作る運用（Angel Spa等）だと、
+      //   コピー直後から📈分析タブに前月データ(has-data)＋前月とほぼ同じ名前が残り、
+      //   ${names}|${dataState} キーが変化せず再生成が発火しない。
+      //   そこで📈分析タブA1の月ラベルが当月と違えば（売上データ有のとき）強制再生成する。
+      //   ※📈分析タブ未作成の新規シートでは values.get が例外になるため SB判定とは別の guarded read にする
+      //     （未作成時は dataState=empty→has-data 遷移の既存ロジックで生成される）。
+      let dashTitle = '';
+      try {
+        const tr = await sheets.spreadsheets.values.get({
+          spreadsheetId: sheet.id, range: "'📈 分析'!A1", valueRenderOption: 'UNFORMATTED_VALUE',
+        });
+        dashTitle = String((((tr.data.values || [])[0]) || [])[0] || '');
+      } catch (e) { /* 📈分析タブ未作成等。stale判定せず空のまま */ }
+      const isStale = salesSum > 0 && !!dashTitle && !dashTitle.includes(expectedMonthLabel);
+
       if (prevStaffMap[sheet.id] === undefined) {
-        // 初回: 記録のみ（再生成しない）
+        // 初回: 記録のみ（再生成しない）。ただし前月残存(stale)なら当月へ強制更新。
         prevStaffMap[sheet.id] = key;
-        console.log(`[Dashboard監視] ${sheet.name} 初回記録: ${names.split(',').length}名 (${dataState})`);
+        console.log(`[Dashboard監視] ${sheet.name} 初回記録: ${names.split(',').length}名 (${dataState})${isStale ? ` / 前月残存検知: "${dashTitle}"` : ''}`);
+        if (isStale) await regenerateDashboard(sheet, `前月残存→${expectedMonthLabel}へ更新`);
       } else if (prevStaffMap[sheet.id] !== key) {
         const [prevNames, prevState] = prevStaffMap[sheet.id].split('|');
         const prev = prevNames.split(',').filter(Boolean);
@@ -1284,20 +1320,11 @@ async function checkDashboardChanges() {
         const stateNote = prevState !== dataState ? ` / 状態遷移: ${prevState}→${dataState}` : '';
         console.log(`[Dashboard監視] ${sheet.name} 変更検知! 追加: [${added.join(',')}] 削除: [${removed.join(',')}]${stateNote}`);
         prevStaffMap[sheet.id] = key;
-
-        // ダッシュボード再生成
-        if (!dashboardRunning[sheet.id]) {
-          dashboardRunning[sheet.id] = true;
-          try {
-            console.log(`[Dashboard監視] ${sheet.name} 再生成開始...`);
-            await runDashboard(sheet.id);
-            console.log(`[Dashboard監視] ${sheet.name} 再生成完了 ✅`);
-          } catch (err) {
-            console.error(`[Dashboard監視] ${sheet.name} 再生成エラー:`, err.message);
-          } finally {
-            dashboardRunning[sheet.id] = false;
-          }
-        }
+        await regenerateDashboard(sheet, '名前/売上状態の変更検知');
+      } else if (isStale) {
+        // キー不変でも前月ラベル残存なら当月へ更新
+        console.log(`[Dashboard監視] ${sheet.name} 前月残存検知: "${dashTitle}" → ${expectedMonthLabel}へ再生成`);
+        await regenerateDashboard(sheet, `前月残存→${expectedMonthLabel}へ更新`);
       }
     } catch (err) {
       console.error(`[Dashboard監視] ${sheet.name} チェックエラー:`, err.message);

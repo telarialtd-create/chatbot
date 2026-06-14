@@ -399,7 +399,7 @@ async function writeToDashboard(spreadsheetId, fields) {
   return res.data.totalUpdatedCells;
 }
 
-// ── キャンセル処理: ダッシュボードA20:R100から該当行のC/D/Eをクリア + G列を備考で上書き ─
+// ── キャンセル処理: ダッシュボードA2:R200から該当行のC/D/Eをクリア + G列を備考で上書き ─
 // ダッシュボードの列構成（A20起点）:
 // A=# B=店名 C=名前 D=指名 E=コース F=オプション G=備考 H=部屋 I=媒体 J=電話番号 K=予約者
 async function cancelEntry(spreadsheetId, fields) {
@@ -414,10 +414,10 @@ async function cancelEntry(spreadsheetId, fields) {
     throw new Error(`キャンセルには名前と番号の両方が必要です（名前: "${name}", 番号: "${phone}"）`);
   }
 
-  // ダッシュボード A20:R100 を取得
+  // ダッシュボード A2:R200 を取得
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${DASHBOARD_SHEET}'!A20:R100`,
+    range: `'${DASHBOARD_SHEET}'!A2:R200`,
     valueRenderOption: 'FORMATTED_VALUE',
   });
   const rows = res.data.values || [];
@@ -437,7 +437,7 @@ async function cancelEntry(spreadsheetId, fields) {
     throw new Error(`キャンセル対象が見つかりません（名前: ${name}、番号: ${phone}）`);
   }
 
-  const targetRow = targetIdx + 20;
+  const targetRow = targetIdx + 2;
 
   // C/D/E をクリア + G を備考で上書き
   const batchData = [
@@ -453,7 +453,7 @@ async function cancelEntry(spreadsheetId, fields) {
   return targetRow;
 }
 
-// ── 変更処理: ダッシュボードA20:R100から検索して上書き ───────
+// ── 変更処理: ダッシュボードA2:R200から検索して上書き ───────
 // ダッシュボードの列構成（A20起点）:
 // A=# B=店名 C=名前 D=指名 E=コース F=オプション G=備考 H=部屋 I=媒体 J=電話番号 K=予約者
 const MODIFY_COL_MAP = {
@@ -480,10 +480,10 @@ async function modifyEntry(spreadsheetId, fields) {
     throw new Error(`変更には名前と番号の両方が必要です（名前: "${name}", 番号: "${phone}"）`);
   }
 
-  // ダッシュボード A20:R100 を取得
+  // ダッシュボード A2:R200 を取得
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${DASHBOARD_SHEET}'!A20:R100`,
+    range: `'${DASHBOARD_SHEET}'!A2:R200`,
     valueRenderOption: 'FORMATTED_VALUE',
   });
   const rows = res.data.values || [];
@@ -503,7 +503,7 @@ async function modifyEntry(spreadsheetId, fields) {
     throw new Error(`変更対象が見つかりません（名前: ${name}、番号: ${phone}）`);
   }
 
-  const targetRow = targetIdx + 20; // シートの行番号（20行目起点）
+  const targetRow = targetIdx + 2; // シートの行番号（2行目起点）
 
   // MODIFY_COL_MAP の全項目を空欄含めて上書き（送信メッセージ通りに完全置換）
   const batchData = [];
