@@ -99,8 +99,13 @@ async function main(overrideId) {
     dailyData.push({ day: parseInt(label), salary, sb, total: salary + sb });
   }
 
+  // SB列構成: A名前 B売計 C給料計 D交通費総額 E指 F指バック G指バック H特 I合計
+  // J総コスト K利益 L利益率 M総時間 N利益/h ... 等
+  // 実シート(2026-05時点): A名前 B売計 C給料計 D交通費総額 E指 F指バック G指バック
+  // H特 I合計 J利益 K利益率 L総時間 M利益/h
+  // ※2026-05-21 SBレイアウト変更でD列に「交通費総額」が追加された
   const staffRes = await sheets.spreadsheets.values.get({
-    spreadsheetId, range: "'SB'!A8:R39", valueRenderOption: 'UNFORMATTED_VALUE',
+    spreadsheetId, range: "'SB'!A8:S100", valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const staffRows = staffRes.data.values || [];
 
@@ -111,32 +116,78 @@ async function main(overrideId) {
     if (!name || name.includes('SB1000')) continue;
     const sales = parseMoney(row[1]);
     if (sales === 0) continue;
-    const ripiRate = typeof row[7] === 'number' ? Math.round(row[7] * 100) : 0;
+    // 列インデックス（D列に「交通費総額」追加に伴い+1シフト）
+    // row[0]A=名前 [1]B=売計 [2]C=給料計 [3]D=交通費 [4]E=指 [5]F=ﾌﾘｰ [6]G=リピ
+    // [7]H=X [8]I=リピ率 [9]J=本 [10]K=SB [11]L=SB [12]M=特 [13]N=計
+    // [14]O=総コスト [15]P=利益 [16]Q=利益率 [17]R=all時間/h [18]S=利益/h
+    const ripiRate = typeof row[8] === 'number' ? Math.round(row[8] * 100) : 0;
     staffData.push({
       name, sales,
       salary: parseMoney(row[2]),
-      shimeibk: parseMoney(row[3]),
-      free: parseMoney(row[4]),
-      ripi: parseMoney(row[5]),
+      shimeibk: parseMoney(row[4]),
+      free: parseMoney(row[5]),
+      ripi: parseMoney(row[6]),
       ripiRate,
-      honsu: parseMoney(row[8]),
-      totalCost: parseMoney(row[13]),
-      profit: parseMoney(row[14]),
-      allHours: parseMoney(row[16]),
-      profitPerH: parseMoney(row[17]),
+      honsu: parseMoney(row[9]),
+      totalCost: parseMoney(row[14]),
+      profit: parseMoney(row[15]),
+      allHours: parseMoney(row[17]),
+      profitPerH: parseMoney(row[18]),
     });
   }
   staffData.sort((a, b) => b.sales - a.sales);
   const N = staffData.length;
   console.log(`  日別: ${dailyData.length}日 / スタッフ: ${N}名`);
 
-  // ── 2. シート再作成 ──
+  // ── 2. シート確保（既存があれば中身クリアして再利用、なければ新規作成）──
+  // gid(sheetId)を固定するため、毎回deleteSheetせず既存タブを再利用する設計。
+  // オーナーのブックマークURLが切れないように2026-05-25改修。
   const existing = metaInfo.data.sheets.find(s => s.properties.title === '📈 分析');
-  const requests = [];
-  if (existing) requests.push({ deleteSheet: { sheetId: existing.properties.sheetId } });
-  requests.push({ addSheet: { properties: { title: '📈 分析', index: 1, gridProperties: { rowCount: 700, columnCount: 25 } } } });
-  const batchRes = await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
-  const SID = batchRes.data.replies.find(r => r.addSheet)?.addSheet.properties.sheetId;
+  let SID;
+  if (existing) {
+    SID = existing.properties.sheetId;
+    // 値を全クリア
+    await sheets.spreadsheets.values.batchClear({
+      spreadsheetId,
+      requestBody: { ranges: [`'📈 分析'!A1:Z700`] },
+    });
+    // 書式・グラフ・条件付き書式・フィルタービュー・マージを削除
+    const clearReqs = [];
+    for (const c of existing.charts || []) {
+      clearReqs.push({ deleteEmbeddedObject: { objectId: c.chartId } });
+    }
+    const cfCount = (existing.conditionalFormats || []).length;
+    for (let i = cfCount - 1; i >= 0; i--) {
+      clearReqs.push({ deleteConditionalFormatRule: { sheetId: SID, index: i } });
+    }
+    for (const fv of existing.filterViews || []) {
+      clearReqs.push({ deleteFilterView: { filterId: fv.filterViewId } });
+    }
+    if (existing.basicFilter) {
+      clearReqs.push({ clearBasicFilter: { sheetId: SID } });
+    }
+    for (const br of existing.bandedRanges || []) {
+      clearReqs.push({ deleteBanding: { bandedRangeId: br.bandedRangeId } });
+    }
+    const rowCount = existing.properties.gridProperties?.rowCount || 700;
+    const colCount = existing.properties.gridProperties?.columnCount || 25;
+    const fullRange = { sheetId: SID, startRowIndex: 0, endRowIndex: rowCount, startColumnIndex: 0, endColumnIndex: colCount };
+    clearReqs.push({ unmergeCells: { range: fullRange } });
+    clearReqs.push({ repeatCell: { range: fullRange, cell: {}, fields: 'userEnteredFormat,note' } });
+    if (clearReqs.length > 0) {
+      await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: clearReqs } });
+    }
+    console.log(`  既存タブを再利用 (gid=${SID})`);
+  } else {
+    const batchRes = await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: '📈 分析', index: 1, gridProperties: { rowCount: 700, columnCount: 25 } } } }],
+      },
+    });
+    SID = batchRes.data.replies.find(r => r.addSheet)?.addSheet.properties.sheetId;
+    console.log(`  新規タブ作成 (gid=${SID})`);
+  }
 
   // ── 3. データ構築 ──
   // チャートサイズ
