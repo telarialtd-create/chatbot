@@ -1187,7 +1187,10 @@ function toSlashDate(nenGappiStr) {
 }
 
 // 日報全件シートから利用履歴シートへコピー
-const KOKYAKU_VERSION = 'v4-2026-04-30';
+// [K-008/C-038 2026-06-15] v6(顧客管理シート部分一致)+v7(成功時返信)を再適用しGitHubソースにも反映。
+//   真因: v6/v7はVPSへ直接commit(0cb2484)しただけでGitHub未反映 → 5/26 deploy.ymlの全JS上書きで消失。
+//   今回ローカル(GitHub源)に確定させ、以後のデプロイで再発しないようにした。
+const KOKYAKU_VERSION = 'v8-2026-06-15';
 async function processKokyakuUpdate(dateStr, storeId, userId) {
   const auth = createAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
@@ -1278,7 +1281,26 @@ async function processKokyakuUpdate(dateStr, storeId, userId) {
   const targetEntry = rirekiCacheMap.get(targetSsid);
   if (targetEntry) targetEntry.expiresAt = 0;
 
-  return { count: srcRows.length, dateLabel: slashDate, storeId: folderInfo.storeId, storeName: folderInfo.storeName };
+  // K-008 reply-feat: 内訳カウント（B3:J 読み込み時の列インデックス）
+  //   index 1 = C列(名前) / index 5 = G列(備考) / index 8 = J列(電話番号)
+  //   キャンセル定義: C列空白 かつ G列に値あり かつ J列に値あり（オーナー指定 2026-05-24）
+  let cancelCount = 0;
+  for (const r of srcRows) {
+    const name  = String(r[1] || '').trim();
+    const memo  = String(r[5] || '').trim();
+    const phone = String(r[8] || '').trim();
+    if (name === '' && memo !== '' && phone !== '') cancelCount++;
+  }
+  const bookingCount = srcRows.length - cancelCount;
+
+  return {
+    count: srcRows.length,
+    bookingCount,
+    cancelCount,
+    dateLabel: slashDate,
+    storeId: folderInfo.storeId,
+    storeName: folderInfo.storeName,
+  };
 }
 
 // ── 利用履歴シート ────────────────────────────────────────
@@ -1523,9 +1545,10 @@ function parseStorePhoneCommand(text) {
   return { storeId, ...phoneCmd };
 }
 
-// 店舗フォルダ内から「■1.顧客管理」スプレッドシートを検索（IDキャッシュ付き）
+// 店舗フォルダ内から「顧客管理」を含むスプレッドシートを検索（IDキャッシュ付き）
+// C-038 v6-2026-05-19 かず: クライアント T-1043 等は「■1.」プレフィックスがないため、文言「顧客管理」だけで判定
 const kokyakuKanriIdCache = new Map(); // storeId → spreadsheetId（24時間）
-const KOKYAKU_KANRI_NAME = '■1.顧客管理';
+const KOKYAKU_KANRI_NAME = '顧客管理';
 const KOKYAKU_KANRI_ID_TTL = 24 * 60 * 60 * 1000;
 
 async function findKokyakuKanriSpreadsheetId(storeId, folderId) {
@@ -1762,11 +1785,23 @@ async function handleLineEvent(event) {
         setImmediate(async () => {
           try {
             const result = await processKokyakuUpdate(kokyaku.dateStr, kokyaku.storeId, userId);
-            console.log(`[顧客更新] 完了: ${result.storeId}/${result.storeName} ${result.dateLabel} ${result.count}件`);
+            console.log(`[顧客更新] 完了: ${result.storeId}/${result.storeName} ${result.dateLabel} ${result.count}件（予約${result.bookingCount}/キャンセル${result.cancelCount}）`);
             if (result.count === 0) {
               await client.pushMessage({
                 to: target,
                 messages: [{ type: 'text', text: `【顧客更新】${result.storeId || ''} ${result.dateLabel}：該当する利用履歴が見つかりませんでした。日付やT-XXX、日報の内容をご確認ください。` }],
+              }).catch(() => {});
+            } else {
+              const replyText =
+                `✅ 顧客更新 完了\n` +
+                `${result.storeId} ${result.storeName}\n` +
+                `${result.dateLabel}\n\n` +
+                `予約: ${result.bookingCount}本\n` +
+                `キャンセル: ${result.cancelCount}本\n` +
+                `利用履歴に ${result.count}行 追加しました`;
+              await client.pushMessage({
+                to: target,
+                messages: [{ type: 'text', text: replyText }],
               }).catch(() => {});
             }
           } catch (err) {
@@ -2084,11 +2119,23 @@ async function handleLineEvent(event) {
     setImmediate(async () => {
       try {
         const result = await processKokyakuUpdate(kokyakuG.dateStr, kokyakuG.storeId, userId);
-        console.log(`[顧客更新] グループ完了: ${result.storeId}/${result.storeName} ${result.dateLabel} ${result.count}件`);
+        console.log(`[顧客更新] グループ完了: ${result.storeId}/${result.storeName} ${result.dateLabel} ${result.count}件（予約${result.bookingCount}/キャンセル${result.cancelCount}）`);
         if (result.count === 0) {
           await client.pushMessage({
             to: target,
             messages: [{ type: 'text', text: `【顧客更新】${result.storeId || ''} ${result.dateLabel}：該当する利用履歴が見つかりませんでした。日付やT-XXX、日報の内容をご確認ください。` }],
+          }).catch(() => {});
+        } else {
+          const replyText =
+            `✅ 顧客更新 完了\n` +
+            `${result.storeId} ${result.storeName}\n` +
+            `${result.dateLabel}\n\n` +
+            `予約: ${result.bookingCount}本\n` +
+            `キャンセル: ${result.cancelCount}本\n` +
+            `利用履歴に ${result.count}行 追加しました`;
+          await client.pushMessage({
+            to: target,
+            messages: [{ type: 'text', text: replyText }],
           }).catch(() => {});
         }
       } catch (err) {
