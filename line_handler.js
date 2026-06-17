@@ -23,6 +23,7 @@ function buildGeppoResultMessage(result) {
     `💰 総売上: ${result.totalSales.toLocaleString()}円`,
     `📊 本数: ${result.total_hon}本（朝${result.am_hon}/昼${result.pm_hon}/夜${result.night_hon}）`,
     `👥 出勤: ${result.total_count}人（朝${result.am_count}/昼${result.pm_count}/夜${result.night_count}）`,
+    `💵 現金残り: ${(result.genkinNokori || 0).toLocaleString()}円`,
   ];
   const fw = result.fuwamoko;
   if (fw) {
@@ -32,11 +33,13 @@ function buildGeppoResultMessage(result) {
       `💰 総売上: ${fw.totalSales.toLocaleString()}円`,
       `📊 本数: ${fw.total_hon}本（朝${fw.am_hon}/昼${fw.pm_hon}/夜${fw.night_hon}）`,
       `👥 出勤: ${fw.total_count}人（朝${fw.am_count}/昼${fw.pm_count}/夜${fw.night_count}）`,
+      `💵 現金残り: ${(fw.genkinNokori || 0).toLocaleString()}円`,
       ``,
       `━━ 2店舗合算 ━━`,
       `💰 総売上: ${(result.totalSales + fw.totalSales).toLocaleString()}円`,
       `📊 本数: ${result.total_hon + fw.total_hon}本`,
       `👥 出勤: ${result.total_count + fw.total_count}人`,
+      `💵 現金残り: ${((result.genkinNokori || 0) + (fw.genkinNokori || 0)).toLocaleString()}円`,
     );
   }
   return lines.join('\n');

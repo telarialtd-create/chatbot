@@ -816,6 +816,33 @@ async function syncNippoToGeppo(opts) {
 
   console.log(`[v2] ${label} 完了`);
 
+  // ── 現金残り読み取り（月報「売上」タブ F列ラベル「現金残り」行・当日列） ──
+  // C-029 2026-06-17: LINE返信メッセージに現金残りを追記（全店舗汎用・行番号非依存のラベル検索）
+  const readGenkin = async (geppoId) => {
+    if (!geppoId) return 0;
+    try {
+      const gr = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: geppoId,
+        ranges: ["'売上'!F1:F60", `'売上'!${col}1:${col}60`],
+        valueRenderOption: 'UNFORMATTED_VALUE',
+      });
+      const labels = gr.data.valueRanges[0].values || [];
+      const vals   = gr.data.valueRanges[1].values || [];
+      for (let i = 0; i < labels.length; i++) {
+        if ((labels[i]?.[0] || '').toString().trim() === '現金残り') {
+          return Number(vals[i]?.[0]) || 0;
+        }
+      }
+      console.log('[v2/現金残り] ラベル「現金残り」が見つかりませんでした (geppoId=' + geppoId + ')');
+      return 0;
+    } catch (e) {
+      console.log('[v2/現金残り] 読み取り失敗: ' + e.message);
+      return 0;
+    }
+  };
+  const creaGenkin = await readGenkin(creaGeppoId);
+  const fuwaGenkin = hasFuwa ? await readGenkin(fuwaGeppoId) : 0;
+
   // line_handler.js 互換の返り値
   return {
     label,
@@ -830,6 +857,7 @@ async function syncNippoToGeppo(opts) {
     am_count:   creaU.am,
     pm_count:   creaU.pm,
     night_count: creaU.night,
+    genkinNokori: creaGenkin,
     // ふわもこ系列：無い店舗では null を返す（LINE返信側で省略判定）
     fuwamoko: hasFuwa ? {
       storeLabel: fuwaCfg.label,
@@ -842,6 +870,7 @@ async function syncNippoToGeppo(opts) {
       am_count:   fuwaU.am,
       pm_count:   fuwaU.pm,
       night_count: fuwaU.night,
+      genkinNokori: fuwaGenkin,
     } : null,
   };
 }
