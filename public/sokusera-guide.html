@@ -282,12 +282,12 @@
   <!-- 1. About -->
   <section class="block" id="about">
     <div class="sec-head"><div class="sec-num">1</div><h2>このツールでできること</h2></div>
-    <p class="lead">「即セラ自動更新」は、魂セラピストの<strong>即セラを24時間ずっとON状態に保ち続ける</strong>自動ツールです。</p>
-    <p>即セラは <strong>60分でOFFになる仕様</strong> のため、出勤中でも気づかないうちにOFFになり、ランキング低下や当日予約の取りこぼしにつながります。本ツールが10分ごとに自動で見回り、OFFになったセラピストを即座にONへ戻します。</p>
+    <p class="lead">「即セラ自動更新」は、<strong>出勤中（今すぐ案内中）のセラピストの即セラをOFFにさせず、自動でON状態に保ち続ける</strong>自動ツールです。</p>
+    <p>即セラは <strong>60分でOFFになる仕様</strong> のため、出勤中でも気づかないうちにOFFになり、ランキング低下や当日予約の取りこぼしにつながります。本ツールが10分ごとに自動で見回り、<strong>出勤中（今すぐ案内中）なのに即セラがOFF</strong>になっているセラピストを即座にONへ戻します。</p>
     <div class="box box-gold">
       <div class="box-title">⭐ 3つのポイント</div>
       <ul>
-        <li><strong>即セラの自動ON</strong> ── 10分ごとに巡回し、OFFのセラピストだけを自動でONに戻します。</li>
+        <li><strong>即セラの自動ON</strong> ── 10分ごとに巡回し、出勤中（今すぐ案内中）でOFFになっているセラピストを自動でONに戻します。</li>
         <li><strong>ひとこと（キャッチコピー）の自動反映</strong> ── 登録したひとことを、ON時に毎回そのまま掲載します。</li>
         <li><strong>メアド作成・アカウント開設の代行</strong> ── 即セラ登録に必要な準備は当社がすべて代行。セラピスト本人の作業はゼロです。</li>
       </ul>
@@ -342,7 +342,8 @@
       <div class="op">
         <div class="op-head"><span class="op-ico">➕</span>セラピストを追加したいとき</div>
         <div class="op-body">
-          <p>新しいセラピストが入ったら、専用シートに<strong>「名前」と「ひとこと」を記入して、登録ボタンを押す</strong>だけです。即セラ用のメアド作成・アカウント開設・登録は自動で行われます（「状態」列が「登録済」になれば自動更新の対象になります）。</p>
+          <p><strong>基本は何もしなくてOKです。</strong>出勤中（今すぐ案内中）のセラピストがまだ未登録でも、本ツールが<strong>自動で登録</strong>します（即セラ用メアド作成・アカウント開設まで自動）。次の巡回で登録され、そのまま自動更新の対象になります。</p>
+          <p class="how">すぐに登録したいときや、出勤前に登録しておきたいときは、専用シートに<strong>「名前」と「ひとこと」を記入</strong>し、メニューの<strong>「🆕 即セラ登録 → 選択行を登録」</strong>ボタンを押せば、その場で登録できます。どちらの場合も<strong>「状態」列が「登録済」</strong>になれば自動更新の対象です。</p>
         </div>
       </div>
       <div class="op">
@@ -372,7 +373,7 @@
         <tbody>
           <tr><td>店名</td><td>店舗名</td><td class="who-us">当社が設定</td></tr>
           <tr><td>名前</td><td>セラピストのお名前</td><td class="who-you">店舗様</td></tr>
-          <tr><td>メアド</td><td>即セラ用メールアドレス</td><td class="who-us">当社が代行作成</td></tr>
+          <tr><td>アドレス</td><td>即セラ用メールアドレス</td><td class="who-us">当社が代行作成</td></tr>
           <tr><td>暗証番号</td><td>即セラ用パスワード／PIN</td><td class="who-us">当社が代行作成</td></tr>
           <tr><td>cast_id</td><td>魂セラピスト内の管理ID</td><td class="who-us">当社が設定</td></tr>
           <tr><td>状態</td><td>「登録済」になると自動更新の対象になります</td><td class="who-us">当社が設定</td></tr>
@@ -382,7 +383,7 @@
     </div>
     <div class="box box-gray">
       <div class="box-title">📋 店舗様が触る列は2つだけ</div>
-      <p style="margin:0;"><strong>「名前」</strong>と<strong>「ひとこと」</strong>のみです。メアド・暗証番号・cast_id・状態は当社が管理しますので、編集なさらないようお願いいたします（誤って変更すると自動更新が止まる場合があります）。</p>
+      <p style="margin:0;"><strong>「名前」</strong>と<strong>「ひとこと」</strong>のみです。アドレス・暗証番号・cast_id・状態は当社が管理しますので、編集なさらないようお願いいたします（誤って変更すると自動更新が止まる場合があります）。</p>
     </div>
   </section>
 
@@ -397,7 +398,7 @@
       </div>
       <div class="step">
         <div class="step-num">2</div>
-        <div><h3>ON対象だけを抽出</h3><p>「即セラOFF」または「今すぐ案内できるのにOFF」のセラピストだけを選び出します。直近55分以内にON済みの方は自動でスキップし、無駄な処理を行いません。</p></div>
+        <div><h3>ON対象だけを抽出</h3><p>出勤中（今すぐ案内中）で即セラがOFFになっているセラピストだけを選び出します。直近55分以内にON済みの方は自動でスキップし、無駄な処理を行いません。</p></div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
@@ -433,6 +434,7 @@
   <section class="block" id="faq">
     <div class="sec-head"><div class="sec-num">8</div><h2>よくあるご質問</h2></div>
     <div class="faq-item"><div class="faq-q">セラピストにメアド登録をお願いする必要はありますか？</div><div class="faq-a">不要です。即セラ登録に必要なメアド作成・アカウント開設は当社で代行します。店舗様からは「お名前と必要情報」をお知らせいただくだけで結構です。</div></div>
+    <div class="faq-item"><div class="faq-q">新しいセラピストは、毎回シートに手入力して登録ボタンを押す必要がありますか？</div><div class="faq-a">いいえ。出勤中（今すぐ案内中）のセラピストは未登録でも自動で登録されますので、基本は何もしなくて大丈夫です。出勤前にあらかじめ登録しておきたい場合だけ、シートに名前を記入して「🆕 即セラ登録 → 選択行を登録」ボタンを押してください。</div></div>
     <div class="faq-item"><div class="faq-q">セラピスト本人が、自分で即セラを操作したい場合はどうすればいいですか？</div><div class="faq-a">対応できます。登録時に当社が設定するメールアドレスは仮のものですので、当社が設定したパスワードをセラピスト様ご本人にお伝えいただき、即セラにログイン後、ご本人でお好きなメールアドレスに変更していただく形になります。</div></div>
     <div class="faq-item"><div class="faq-q">セラピストの人数が増えても料金は変わりますか？</div><div class="faq-a">変わりません。月額¥9,900（税込）で人数無制限です。何名登録されても追加料金はかかりません。</div></div>
     <div class="faq-item"><div class="faq-q">ひとことはどうやって変更しますか？</div><div class="faq-a">専用シートの「ひとこと」列を書き換えてください。次の巡回（最長10分以内）で自動反映されます。20文字以内でお願いします。</div></div>
