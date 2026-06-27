@@ -255,6 +255,58 @@
     }
     #product-suguru .feat-card { background: var(--white); }
 
+    /* ─── Pricing ─── */
+    #pricing { background: var(--gray-100); }
+    .pricing-wrap {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 760px;
+      margin: 40px auto 0;
+    }
+    .plan-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 40px 32px;
+      display: flex; flex-direction: column;
+    }
+    .plan-card.featured { border-color: var(--gold); }
+    .plan-tag {
+      display: inline-block; align-self: flex-start;
+      font-size: 11px; font-weight: 700;
+      background: var(--gold); color: var(--black);
+      padding: 4px 14px; border-radius: 100px;
+      letter-spacing: 0.1em; margin-bottom: 14px;
+    }
+    .plan-name { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .plan-desc { font-size: 13px; color: var(--gray-400); margin-bottom: 24px; }
+    .plan-price { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .plan-price-unit { font-size: 13px; color: var(--gray-400); margin-bottom: 24px; }
+    .plan-features { list-style: none; margin-bottom: 28px; }
+    .plan-features li {
+      font-size: 14px; padding: 10px 0;
+      border-bottom: 1px solid var(--gray-200);
+      position: relative; padding-left: 24px;
+    }
+    .plan-features li::before {
+      content: '✓'; position: absolute; left: 0; top: 10px;
+      color: var(--gold); font-weight: 700;
+    }
+    .plan-btn {
+      display: block; text-align: center;
+      padding: 16px; border-radius: 4px; text-decoration: none;
+      font-size: 14px; font-weight: 600; letter-spacing: 0.05em;
+      background: var(--line-green); color: var(--white);
+      transition: opacity 0.2s; margin-top: auto;
+    }
+    .plan-btn:hover { opacity: 0.85; }
+    .plan-note { font-size: 11px; color: var(--gray-400); margin-top: 14px; text-align: center; }
+    .pricing-foot {
+      text-align: center; margin-top: 32px;
+      font-size: 12px; color: var(--gray-400);
+    }
+
     /* ─── Safety ─── */
     #safety { background: var(--black); color: var(--white); }
     #safety .section-title { color: var(--white); }
@@ -579,6 +631,53 @@
         <span class="feat-badge">画像も自動</span>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section id="pricing">
+  <div class="section-inner">
+    <div style="text-align:center;"><span class="section-tag">PRICING</span></div>
+    <h2 class="section-title">料金は、媒体ごとに。</h2>
+    <p class="section-sub">1店舗あたりの月額のみ。初期構築・サポート費はいただきません。<br>すぐるくん・自社HPは、それぞれ単体でも併用でもご利用いただけます。いつでも停止できます。</p>
+
+    <div class="pricing-wrap">
+      <div class="plan-card">
+        <span class="plan-tag">対応媒体 ①</span>
+        <div class="plan-name">すぐるくん同期</div>
+        <div class="plan-desc">セラピスト管理画面へ自動同期</div>
+        <div class="plan-price">¥4,950<span style="font-size:14px;color:var(--gray-400);font-weight:400;">/月</span></div>
+        <div class="plan-price-unit">税込・1店舗あたり（税抜 ¥4,500）</div>
+        <ul class="plan-features">
+          <li>出勤・並び順の自動同期（30分ごと）</li>
+          <li>新人の自動フル登録</li>
+          <li>プロフィール・写真の毎日追従</li>
+          <li>店名取り違えガード／差分のみ更新</li>
+          <li>初期構築・サポート費なし</li>
+        </ul>
+        <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="plan-btn">LINEでお問い合わせ</a>
+        <div class="plan-note">※ ベンリー → すぐるくん の同期</div>
+      </div>
+
+      <div class="plan-card featured">
+        <span class="plan-tag">対応媒体 ②</span>
+        <div class="plan-name">自社ホームページ同期</div>
+        <div class="plan-desc">店舗の公式サイトへ直接反映</div>
+        <div class="plan-price">¥7,700<span style="font-size:14px;color:var(--gray-400);font-weight:400;">/月</span></div>
+        <div class="plan-price-unit">税込・1店舗あたり（税抜 ¥7,000）</div>
+        <ul class="plan-features">
+          <li>プロフィール・出勤・並び順の同期</li>
+          <li>写真の自動アップロード</li>
+          <li>自社CMSへ直接反映</li>
+          <li>店名取り違えガード／差分のみ更新</li>
+          <li>初期構築・サポート費なし</li>
+        </ul>
+        <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener" class="plan-btn">LINEでお問い合わせ</a>
+        <div class="plan-note">※ ベンリー → 自社ホームページ の同期</div>
+      </div>
+    </div>
+
+    <div class="pricing-foot">※ 表示は店舗様向けの月額です。代理店様の取扱条件（卸価格・マージン等）は個別にご相談ください。<br>※ その他の媒体への同期をご希望の場合は、別途お見積りいたします。</div>
   </div>
 </section>
 
