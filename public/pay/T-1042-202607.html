@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ご請求書 | KIRAKU - 株式会社TeLARIA</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black: #0a0a0a;
+      --white: #ffffff;
+      --gray-50: #fafafa;
+      --gray-100: #f5f5f5;
+      --gray-200: #e8e8e8;
+      --gray-300: #d4d4d4;
+      --gray-400: #999999;
+      --gray-600: #555555;
+      --gray-800: #2a2a2a;
+      --gold: #c9a84c;
+      --gold-light: #e0c878;
+      --green: #2d8659;
+      --red: #c44545;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      color: var(--black);
+      background: var(--gray-50);
+      line-height: 1.7;
+      font-size: 15px;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--black);
+      color: var(--white);
+      padding: 20px 24px;
+      text-align: center;
+    }
+    header .logo { font-size: 22px; font-weight: 700; letter-spacing: 0.2em; color: var(--white); }
+    header .logo span { color: var(--gold); }
+    header .sub { margin-top: 6px; font-size: 11px; color: rgba(255,255,255,0.6); letter-spacing: 0.15em; }
+
+    .container { max-width: 560px; margin: 40px auto; padding: 0 16px; }
+    .card { background: var(--white); border-radius: 12px; box-shadow: 0 4px 32px rgba(0,0,0,0.06); overflow: hidden; }
+    .card-head {
+      padding: 32px 28px 24px;
+      border-bottom: 1px solid var(--gray-200);
+      background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+    }
+    .label-id {
+      display: inline-block; background: var(--black); color: var(--gold);
+      font-size: 11px; letter-spacing: 0.15em; padding: 4px 10px; border-radius: 100px;
+      margin-bottom: 12px; font-weight: 600;
+    }
+    .card-head h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.4; color: var(--black); }
+    .card-head .store-name { font-size: 16px; color: var(--gray-600); margin-top: 6px; }
+
+    .section { padding: 24px 28px; border-bottom: 1px solid var(--gray-200); }
+    .section:last-of-type { border-bottom: none; }
+    .section-title {
+      font-size: 11px; letter-spacing: 0.2em; color: var(--gray-400);
+      font-weight: 600; margin-bottom: 14px; text-transform: uppercase;
+    }
+    .store-group { font-weight: 700; font-size: 14px; color: var(--black); margin: 16px 0 4px; padding-bottom: 4px; border-bottom: 2px solid var(--gold-light); }
+    .store-group:first-of-type { margin-top: 0; }
+    .detail-row {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 8px 0; font-size: 14px; gap: 16px;
+    }
+    .detail-row + .detail-row { border-top: 1px dashed var(--gray-200); }
+    .detail-label { color: var(--gray-600); flex-shrink: 0; min-width: 100px; }
+    .detail-value { color: var(--black); text-align: right; font-weight: 500; word-break: break-word; }
+    .subtotal-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; color: var(--gray-600); border-top: 1px solid var(--gray-200); margin-top: 2px; }
+    .subtotal-row .v { font-weight: 600; color: var(--black); }
+    .meta-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; gap: 16px; }
+    .meta-row + .meta-row { border-top: 1px dashed var(--gray-200); }
+    .meta-label { color: var(--gray-600); flex-shrink: 0; min-width: 100px; }
+    .meta-value { color: var(--black); text-align: right; font-weight: 500; }
+
+    .amount-block { background: var(--black); color: var(--white); padding: 28px; text-align: center; }
+    .amount-label { font-size: 11px; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); margin-bottom: 8px; }
+    .amount-value { font-size: 38px; font-weight: 700; color: var(--gold); letter-spacing: 0.02em; }
+    .amount-value .yen { font-size: 24px; margin-right: 4px; }
+    .amount-tax { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+
+    .pay-method-label {
+      display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+      color: var(--gray-600); margin-bottom: 14px; letter-spacing: 0.05em;
+    }
+    .bank-block { padding: 24px 28px 28px; background: var(--white); }
+    .bank-info { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px; padding: 16px 18px; }
+    .bank-row { display: flex; padding: 8px 0; font-size: 13px; gap: 16px; }
+    .bank-row + .bank-row { border-top: 1px dashed var(--gray-200); }
+    .bank-label { color: var(--gray-600); flex-shrink: 0; min-width: 80px; font-size: 12px; }
+    .bank-value { color: var(--black); font-weight: 500; text-align: right; flex: 1; word-break: break-word; }
+    .bank-sub { color: var(--gray-400); font-size: 11px; font-weight: 400; }
+    .bank-note {
+      margin-top: 14px; padding: 14px 16px; background: #fff8e1; border-left: 3px solid var(--gold);
+      border-radius: 4px; font-size: 12px; color: var(--gray-800); line-height: 1.8;
+    }
+    .bank-note code {
+      background: var(--white); padding: 2px 6px; border-radius: 3px;
+      font-family: 'Courier New', monospace; font-size: 11px; color: var(--black); border: 1px solid var(--gray-200);
+    }
+
+    .steps { list-style: none; counter-reset: step; }
+    .steps li { position: relative; padding: 10px 0 10px 36px; font-size: 13px; color: var(--gray-600); counter-increment: step; }
+    .steps li::before {
+      content: counter(step); position: absolute; left: 0; top: 10px; width: 24px; height: 24px;
+      background: var(--gold); color: var(--black); border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+    }
+
+    .contact-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 13px; color: var(--gray-600); }
+    .contact-row .ico {
+      width: 28px; height: 28px; background: var(--gray-100); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0;
+    }
+    .contact-row a { color: var(--black); text-decoration: none; border-bottom: 1px solid var(--gray-300); }
+    .contact-row a:hover { border-bottom-color: var(--gold); }
+
+    footer { text-align: center; padding: 32px 16px; font-size: 11px; color: var(--gray-400); line-height: 1.8; }
+    footer a { color: var(--gray-600); text-decoration: none; margin: 0 8px; }
+
+    @media (max-width: 480px) {
+      .container { margin: 16px auto; }
+      .card-head { padding: 24px 20px 20px; }
+      .card-head h1 { font-size: 18px; }
+      .section { padding: 20px; }
+      .amount-block { padding: 24px 20px; }
+      .amount-value { font-size: 32px; }
+      .bank-block { padding: 20px; }
+      .bank-info { padding: 14px; }
+      .bank-row { flex-direction: column; gap: 4px; }
+      .bank-label { min-width: auto; }
+      .bank-value { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">KIRAKU<span>.</span></div>
+    <div class="sub">INVOICE</div>
+  </header>
+
+  <div class="container">
+    <div class="card">
+
+      <!-- ── 顧客情報 ── -->
+      <div class="card-head">
+        <span class="label-id">T-1042 ・ T-1048（系列）</span>
+        <h1>Lavie&amp;spa / Roa【ロア】Grand 様 専用<br>ご請求書</h1>
+        <div class="store-name">2026年7月分 ご請求（系列2店舗まとめ）</div>
+      </div>
+
+      <!-- ── ご請求情報 ── -->
+      <div class="section">
+        <div class="section-title">ご請求情報</div>
+        <div class="meta-row">
+          <span class="meta-label">請求書番号</span>
+          <span class="meta-value">INV-202606-T-1042</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">ご利用期間</span>
+          <span class="meta-value">2026年7月1日〜2026年7月31日</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">お支払期限</span>
+          <span class="meta-value">2026年6月30日</span>
+        </div>
+      </div>
+
+      <!-- ── ご利用内容（明細） ── -->
+      <div class="section">
+        <div class="section-title">ご利用内容（2026年7月分）</div>
+
+        <div class="store-group">■ Lavie&amp;spa</div>
+        <div class="detail-row"><span class="detail-label">ご案内状況更新ツール【限定枠】+ブログ</span><span class="detail-value">¥9,900</span></div>
+        <div class="detail-row"><span class="detail-label">ビマシー→ベンリー反映システム</span><span class="detail-value">¥8,800</span></div>
+        <div class="detail-row"><span class="detail-label">自社ホームページ更新システム</span><span class="detail-value">¥7,700</span></div>
+        <div class="detail-row"><span class="detail-label">エステ魂 即セラ更新ツール</span><span class="detail-value">¥9,900</span></div>
+        <div class="subtotal-row"><span>Lavie&amp;spa 小計</span><span class="v">¥36,300</span></div>
+
+        <div class="store-group">■ Roa【ロア】Grand</div>
+        <div class="detail-row"><span class="detail-label">ご案内状況更新ツール【限定枠】+ブログ</span><span class="detail-value">¥9,900</span></div>
+        <div class="detail-row"><span class="detail-label">自社ホームページ更新システム【すぐるくん】</span><span class="detail-value">¥4,950</span></div>
+        <div class="detail-row"><span class="detail-label">エステ魂 即セラ更新ツール</span><span class="detail-value">¥9,900</span></div>
+        <div class="subtotal-row"><span>Roa【ロア】Grand 小計</span><span class="v">¥24,750</span></div>
+      </div>
+
+      <!-- ── 請求書ダウンロード ── -->
+      <div class="section">
+        <div class="section-title">請求書</div>
+        <div style="text-align:center;padding:8px 0;">
+          <a href="https://drive.google.com/file/d/1h7303K3_omaSgegSvFptYDcH0h4t3CWy/view" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:var(--gray-100);color:var(--black);border:1px solid var(--gray-300);border-radius:8px;text-decoration:none;font-size:14px;font-weight:500;">
+            <span style="font-size:18px;">📄</span>
+            <span>請求書PDFをダウンロード</span>
+          </a>
+          <div style="margin-top:8px;font-size:12px;color:var(--gray-400);">控えとしてご保存ください</div>
+        </div>
+      </div>
+
+      <!-- ── 金額 ── -->
+      <div class="amount-block">
+        <div class="amount-label">ご請求金額（2026年7月分・系列2店舗合計）</div>
+        <div class="amount-value"><span class="yen">¥</span>61,050</div>
+        <div class="amount-tax">（税込・内消費税 ¥5,550）</div>
+      </div>
+
+      <!-- ── 銀行振込 ── -->
+      <div class="bank-block">
+        <div class="pay-method-label">銀行振込にてお支払いください</div>
+        <div class="bank-info">
+          <div class="bank-row">
+            <span class="bank-label">銀行名</span>
+            <span class="bank-value">GMOあおぞらネット銀行<br><span class="bank-sub">（金融機関コード：0310）</span></span>
+          </div>
+          <div class="bank-row">
+            <span class="bank-label">支店名</span>
+            <span class="bank-value">法人第二営業部<br><span class="bank-sub">（支店コード：102）</span></span>
+          </div>
+          <div class="bank-row">
+            <span class="bank-label">預金種類</span>
+            <span class="bank-value">普通</span>
+          </div>
+          <div class="bank-row">
+            <span class="bank-label">口座番号</span>
+            <span class="bank-value">1655001</span>
+          </div>
+          <div class="bank-row">
+            <span class="bank-label">口座名義</span>
+            <span class="bank-value">カ)テラリア<br><span class="bank-sub">（株式会社テラリア）</span></span>
+          </div>
+        </div>
+        <div class="bank-note">
+          <strong>⚠️ お振込時のお願い</strong><br>
+          ・振込人名義の前に <strong>「T-1042」</strong>（系列代表ID）をお入れください<br>
+          　例：<code>T-1042 Lavie&amp;spa</code><br>
+          ・系列2店舗（Lavie&amp;spa・Roa【ロア】Grand）の7月分をまとめてのご請求です<br>
+          ・振込手数料はお客様にてご負担をお願いいたします
+        </div>
+      </div>
+
+      <!-- ── お支払いの流れ ── -->
+      <div class="section">
+        <div class="section-title">お支払いの流れ</div>
+        <ol class="steps">
+          <li>上記口座へ¥61,050（税込）をお振込みください</li>
+          <li>入金確認まで1〜2営業日いただきます</li>
+          <li>お支払い確認後、当社よりご連絡いたします</li>
+        </ol>
+      </div>
+
+      <!-- ── お問い合わせ ── -->
+      <div class="section">
+        <div class="section-title">お問い合わせ</div>
+        <div class="contact-row">
+          <span class="ico" style="background:#06C755;color:#fff;">L</span>
+          <span><a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener">LINE 公式アカウントを友だち追加</a><br><span style="font-size:11px;color:#999;">トークでお気軽にご相談ください</span></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    株式会社TeLARIA<br>
+    〒730-0024 広島県広島市中区西平塚町3番17号 サニーブライトビル1F<br>
+    適格請求書発行事業者登録番号：T2240001062220<br>
+    <a href="https://kiraku.telaria.tech/tokushoho.html" target="_blank" rel="noopener">特定商取引法に基づく表記</a>
+    ｜
+    <a href="https://kiraku.telaria.tech/riyoukiyaku.html" target="_blank" rel="noopener">利用規約</a>
+    <br><br>
+    © 2026 TeLARIA Inc. All Rights Reserved.
+  </footer>
+
+</body>
+</html>
