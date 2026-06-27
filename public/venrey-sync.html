@@ -104,7 +104,7 @@
     .btn-outline:hover { border-color: var(--white); }
 
     /* ─── Section common ─── */
-    section { padding: 100px 24px; }
+    section { padding: 100px 24px; scroll-margin-top: 64px; }
     .section-inner { max-width: 1100px; margin: 0 auto; }
     .section-tag {
       display: inline-block;
@@ -459,13 +459,53 @@
       .scale-wrap { grid-template-columns: 1fr; }
     }
     @media (max-width: 720px) {
-      nav { padding: 0 16px; }
-      section { padding: 70px 16px; }
-      .hero { padding: 100px 16px 60px; }
-      .pain-cost { padding: 32px 20px; }
-      .partner-box { padding: 40px 24px; }
-      .diagram { gap: 24px; }
+      body { font-size: 14.5px; }
+      nav { padding: 0 14px; height: 56px; }
+      .nav-logo { font-size: 16px; }
+      .nav-cta { padding: 8px 16px; font-size: 12px; }
+      section { padding: 54px 18px; }
+      .section-title { margin-bottom: 12px; }
+      .section-sub { margin-bottom: 30px; }
+
+      /* ヒーローをコンパクトに */
+      .hero { min-height: auto; padding: 88px 18px 52px; }
+      .hero-tag { margin-bottom: 24px; }
+      .hero h1 { margin-bottom: 18px; }
+      .hero-sub { margin-bottom: 30px; }
+      .hero-btns { width: 100%; gap: 12px; }
+      .hero-btns a { width: 100%; justify-content: center; }
+      .btn-line, .btn-outline { padding: 15px 24px; }
+
+      /* グリッドの隙間と上余白を圧縮 */
+      .pain-grid, .feat-grid, .safety-grid, .results-grid,
+      .concept-points, .flow-list, .partner-grid { gap: 14px; margin-top: 28px; }
+      .pricing-wrap { gap: 14px; margin-top: 28px; }
+      .faq-list { margin-top: 28px; }
+
+      /* カードの内側余白を圧縮 */
+      .pain-card { padding: 26px 22px; }
+      .feat-card { padding: 26px 22px; }
+      .plan-card { padding: 30px 24px; }
+      .safety-card { padding: 24px 22px; }
+      .concept-point { padding: 24px 20px; }
+      .flow-step { padding: 26px 22px; }
+      .faq-item { padding: 20px 22px; }
+      .result-card { padding: 28px 20px; }
+
+      /* 個別ブロック */
+      .pain-cost { padding: 32px 20px; margin-top: 36px; }
+      .case-box { padding: 30px 22px; margin-top: 36px; }
+      .partner-box { padding: 34px 20px; }
+      .partner-box > p { margin-bottom: 24px; }
+
+      /* コンセプト図解を縦積みで全幅に */
+      .diagram { gap: 16px; margin-top: 32px; }
       .diagram-arrows { flex-direction: row; }
+      .diagram-master, .diagram-targets, .diagram-target { width: 100%; min-width: 0; }
+
+      /* CTAボタンを全幅で押しやすく */
+      .plan-btn { padding: 16px; }
+      #contact .btn-line { width: 100%; padding: 18px 24px !important; font-size: 15px !important; }
     }
   </style>
 </head>
@@ -803,7 +843,7 @@
       <div class="flow-step">
         <div class="flow-num">STEP 04</div>
         <div class="flow-title">自動運用・横展開</div>
-        <div class="flow-desc">以降は自動稼働。店舗の追加は1行追加するだけで、クライアントへ次々に展開できます。</div>
+        <div class="flow-desc">以降は自動稼働。店舗の追加もスムーズに行え、クライアントへ次々に展開できます。</div>
       </div>
     </div>
   </div>
