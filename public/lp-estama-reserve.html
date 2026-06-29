@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>エステ魂 ネット予約自動化｜順位が上がったぶんだけ払う、成果報酬モデル ｜ KIRAKU</title>
+<meta name="description" content="エステ魂のネット予約をツールが自動で入れ、セラピストのランキングを押し上げる。料金は上がった順位ぶんだけ——日割り・セラピスト1人ごと・圏外は0円。手間は増やさず、成果が出たぶんだけお支払い。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap" rel="stylesheet">
+<noscript><style>.reveal{opacity:1!important;transform:none!important}</style></noscript>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --canvas:#F4F7F9;
+  --panel:#FFFFFF;
+  --ink:#0C2030;
+  --muted:#5A7184;
+  --teal:#0CA5A0;
+  --teal-deep:#0A857F;
+  --navy:#103A5C;
+  --coral:#FF6A4D;
+  --hair:#DCE6EC;
+  --hair-soft:#EAF1F5;
+  --line:#06C755;
+  --maxw:1120px;
+}
+
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  font-family:'IBM Plex Sans JP',system-ui,sans-serif;
+  color:var(--ink);
+  background:var(--canvas);
+  line-height:1.8;
+  font-weight:400;
+  letter-spacing:.01em;
+  overflow-x:hidden;
+}
+
+.jp-head{font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;line-height:1.32;letter-spacing:.005em}
+.num{font-family:'Bricolage Grotesque',sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.mono{font-family:'IBM Plex Mono',monospace}
+
+a{color:inherit;text-decoration:none}
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 24px}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;gap:10px;font-weight:700;border-radius:999px;
+  padding:15px 30px;font-size:15px;transition:transform .18s ease,box-shadow .18s ease;border:0;cursor:pointer}
+.btn-line{background:var(--line);color:#fff;box-shadow:0 10px 24px -10px rgba(6,199,85,.7)}
+.btn-line:hover{transform:translateY(-2px);box-shadow:0 16px 30px -10px rgba(6,199,85,.75)}
+.btn-line .ico{width:20px;height:20px;display:inline-block}
+.btn-ghost{background:transparent;color:var(--navy);border:1.5px solid var(--hair);padding:13px 26px}
+.btn-ghost:hover{border-color:var(--teal);color:var(--teal-deep)}
+
+/* ---------- header ---------- */
+header{position:sticky;top:0;z-index:50;background:rgba(244,247,249,.82);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--hair-soft)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:66px}
+.brand{display:flex;align-items:baseline;gap:9px}
+.brand b{font-family:'Bricolage Grotesque';font-weight:800;font-size:18px;letter-spacing:-.01em;color:var(--navy)}
+.brand span{font-size:11px;color:var(--muted);letter-spacing:.16em}
+.nav .btn{padding:11px 22px;font-size:14px}
+.nav-cta-min{display:none}
+
+/* ---------- eyebrow ---------- */
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:700;letter-spacing:.14em;
+  color:var(--teal-deep);text-transform:uppercase}
+.eyebrow::before{content:"";width:26px;height:2px;background:var(--teal);display:inline-block}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 76px}
+.hero-grid{display:grid;grid-template-columns:1.04fr .96fr;gap:54px;align-items:center}
+.hero h1{font-size:clamp(30px,4.4vw,52px);margin:20px 0 22px;color:var(--ink)}
+.hero h1 .hl{color:var(--teal-deep);position:relative;white-space:nowrap}
+.hero h1 .hl::after{content:"";position:absolute;left:-2px;right:-2px;bottom:.06em;height:.34em;
+  background:linear-gradient(90deg,rgba(12,165,160,.18),rgba(12,165,160,.05));z-index:-1;border-radius:3px}
+.hero p.lead{font-size:clamp(15px,1.6vw,17px);color:var(--muted);max-width:30em;margin-bottom:28px}
+.hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.trust{display:flex;gap:22px;margin-top:26px;flex-wrap:wrap}
+.trust div{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:7px}
+.trust b{color:var(--ink);font-weight:700}
+.trust .dot{width:6px;height:6px;border-radius:50%;background:var(--teal)}
+
+/* ---------- signature: rank trail ---------- */
+.panel{background:var(--panel);border:1px solid var(--hair);border-radius:20px;
+  box-shadow:0 30px 60px -34px rgba(16,58,92,.35);overflow:hidden}
+.trail-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--hair-soft)}
+.trail-head .who{display:flex;align-items:center;gap:11px}
+.trail-head .who .av{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#0CA5A0,#103A5C);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px;font-family:'Bricolage Grotesque'}
+.trail-head .who .nm{font-weight:700;font-size:14px;line-height:1.3}
+.trail-head .who .sub{font-size:11px;color:var(--muted)}
+.tag-demo{font-size:10.5px;letter-spacing:.08em;color:var(--muted);border:1px solid var(--hair);
+  border-radius:999px;padding:4px 11px}
+.trail-body{padding:8px 14px 4px}
+.trail-foot{display:flex;align-items:center;justify-content:space-between;padding:15px 22px;
+  border-top:1px solid var(--hair-soft);background:linear-gradient(180deg,#fff,#FAFDFE)}
+.trail-foot .lbl{font-size:12px;color:var(--muted)}
+.trail-foot .amt{font-size:24px;color:var(--navy)}
+.trail-foot .amt small{font-size:13px;color:var(--muted);font-weight:500;margin-left:3px}
+
+.svg-trail{width:100%;height:auto;display:block}
+.tl-line{fill:none;stroke:var(--teal);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:900;stroke-dashoffset:900;animation:draw 1.7s .25s ease forwards}
+.tl-dot{opacity:0;animation:pop .4s ease forwards}
+.tl-price{opacity:0;animation:pop .4s ease forwards;font-family:'IBM Plex Mono',monospace;font-size:11px;fill:var(--navy)}
+.tl-rank{font-family:'Bricolage Grotesque';font-weight:700;font-size:11px;fill:var(--muted)}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ---------- generic section ---------- */
+.section{padding:84px 0}
+.section-head{max-width:38em;margin-bottom:48px}
+.section-head h2{font-size:clamp(24px,3vw,34px);margin:16px 0 14px}
+.section-head p{color:var(--muted);font-size:15.5px}
+
+/* ---------- how it works ---------- */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.step{background:var(--panel);border:1px solid var(--hair);border-radius:18px;padding:30px 26px 32px;position:relative}
+.step .no{font-family:'Bricolage Grotesque';font-weight:800;font-size:15px;color:var(--teal-deep);
+  letter-spacing:.04em;display:inline-flex;align-items:center;gap:8px}
+.step .no::after{content:"";flex:1;height:1px;background:var(--hair);width:40px}
+.step h3{font-family:'Zen Kaku Gothic New';font-weight:700;font-size:19px;margin:18px 0 10px}
+.step p{font-size:14.5px;color:var(--muted)}
+.step .ic{position:absolute;top:28px;right:26px;color:var(--teal);opacity:.85}
+
+/* ---------- pricing: rank ladder ---------- */
+.pricing{background:var(--navy);color:#fff;border-radius:28px;padding:clamp(34px,4vw,60px);overflow:hidden;position:relative}
+.pricing::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(900px 400px at 88% -10%,rgba(12,165,160,.28),transparent 60%);pointer-events:none}
+.pricing-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:48px;align-items:center;position:relative}
+.pricing .eyebrow{color:#7FE7DE}
+.pricing .eyebrow::before{background:var(--teal)}
+.pricing h2{font-family:'Zen Kaku Gothic New';font-weight:900;font-size:clamp(24px,3vw,33px);margin:16px 0 18px;line-height:1.4}
+.pricing .pdesc{color:#AFC4D6;font-size:15px;max-width:24em;margin-bottom:26px}
+.pchips{display:flex;flex-wrap:wrap;gap:9px}
+.pchip{font-size:12.5px;border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:7px 14px;color:#D6E4EF}
+.pchip b{color:#7FE7DE;font-weight:600}
+
+.ladder{display:flex;flex-direction:column;gap:10px}
+.rung{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;
+  background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:14px;
+  padding:16px 20px;transition:transform .2s ease,background .2s ease}
+.rung:hover{transform:translateX(6px);background:rgba(255,255,255,.09)}
+.rung .rank{font-family:'Bricolage Grotesque';font-weight:800;font-size:15px;color:#fff;
+  min-width:70px;display:flex;align-items:center;gap:7px}
+.rung .rank .crown{color:var(--coral)}
+.rung .desc{font-size:13px;color:#AFC4D6}
+.rung .price{font-family:'Bricolage Grotesque';font-weight:800;font-size:26px;white-space:nowrap}
+.rung .price small{font-size:12px;color:#AFC4D6;font-weight:500;font-family:'IBM Plex Sans JP'}
+.rung.top{border-color:rgba(255,106,77,.55);background:rgba(255,106,77,.1)}
+.rung.top .price{color:var(--coral)}
+.rung.zero{opacity:.78}
+.rung.zero .price{color:#7FE7DE}
+
+/* ---------- results dashboard ---------- */
+.board{background:var(--panel);border:1px solid var(--hair);border-radius:20px;overflow:hidden;
+  box-shadow:0 24px 50px -34px rgba(16,58,92,.3)}
+.board-top{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--hair-soft)}
+.board-top .t{font-weight:700;font-size:14px}
+.board-top .live{font-size:11px;color:var(--teal-deep);display:flex;align-items:center;gap:7px;font-weight:600}
+.board-top .live i{width:7px;height:7px;border-radius:50%;background:var(--teal);display:inline-block;
+  box-shadow:0 0 0 0 rgba(12,165,160,.5);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(12,165,160,.5)}70%{box-shadow:0 0 0 7px rgba(12,165,160,0)}100%{box-shadow:0 0 0 0 rgba(12,165,160,0)}}
+table.bt{width:100%;border-collapse:collapse}
+table.bt th,table.bt td{text-align:left;padding:13px 22px;font-size:13.5px}
+table.bt th{font-size:11px;letter-spacing:.06em;color:var(--muted);font-weight:600;border-bottom:1px solid var(--hair-soft);text-transform:uppercase}
+table.bt td{border-bottom:1px solid var(--hair-soft)}
+table.bt tr:last-child td{border-bottom:0}
+.rk{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;border-radius:7px;
+  font-family:'Bricolage Grotesque';font-weight:800;font-size:13px;padding:0 7px}
+.rk.t1{background:rgba(255,106,77,.14);color:var(--coral)}
+.rk.t2{background:rgba(12,165,160,.13);color:var(--teal-deep)}
+.rk.t3{background:var(--hair-soft);color:var(--navy)}
+.rk.out{background:var(--hair-soft);color:var(--muted);font-size:11px}
+.amtcell{font-family:'Bricolage Grotesque';font-weight:700}
+.dim{color:var(--muted)}
+.board-foot{display:flex;align-items:center;justify-content:space-between;padding:15px 22px;background:#FAFDFE;border-top:1px solid var(--hair-soft)}
+.board-foot .lab{font-size:12.5px;color:var(--muted)}
+.board-foot .sum{font-family:'Bricolage Grotesque';font-weight:800;font-size:22px;color:var(--navy)}
+
+.split2{display:grid;grid-template-columns:.85fr 1.15fr;gap:50px;align-items:center}
+.split2 .lead-list{list-style:none;display:flex;flex-direction:column;gap:18px;margin-top:8px}
+.split2 .lead-list li{display:flex;gap:13px;font-size:14.5px;color:var(--ink)}
+.split2 .lead-list .ck{flex:none;width:24px;height:24px;border-radius:7px;background:rgba(12,165,160,.12);
+  color:var(--teal-deep);display:flex;align-items:center;justify-content:center;margin-top:2px}
+.split2 .lead-list b{font-weight:700}
+.split2 .lead-list span{color:var(--muted);display:block;font-size:13px}
+
+/* ---------- FAQ ---------- */
+.faq{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.qa{background:var(--panel);border:1px solid var(--hair);border-radius:16px;padding:24px 26px}
+.qa .q{display:flex;gap:11px;font-family:'Zen Kaku Gothic New';font-weight:700;font-size:15.5px;margin-bottom:9px}
+.qa .q em{font-family:'Bricolage Grotesque';font-weight:800;color:var(--teal-deep);font-style:normal;flex:none}
+.qa .a{font-size:14px;color:var(--muted);padding-left:25px}
+
+/* ---------- final cta ---------- */
+.final{text-align:center;padding:90px 0 96px}
+.final h2{font-family:'Zen Kaku Gothic New';font-weight:900;font-size:clamp(26px,3.4vw,40px);line-height:1.4;margin-bottom:18px}
+.final p{color:var(--muted);font-size:16px;max-width:32em;margin:0 auto 32px}
+.final .btn-line{padding:19px 50px;font-size:17px}
+.final .note{margin-top:18px;font-size:12.5px;color:var(--muted)}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--hair);padding:40px 0;margin-top:10px}
+.foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
+.foot .fb{font-family:'Bricolage Grotesque';font-weight:800;color:var(--navy);font-size:16px}
+.foot .fl{font-size:12.5px;color:var(--muted)}
+.foot a{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+
+/* ---------- reveal ---------- */
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+
+/* ---------- responsive ---------- */
+@media(max-width:920px){
+  .hero-grid{grid-template-columns:1fr;gap:40px}
+  .pricing-grid{grid-template-columns:1fr;gap:34px}
+  .split2{grid-template-columns:1fr;gap:34px}
+  .steps{grid-template-columns:1fr}
+  .faq{grid-template-columns:1fr}
+  .nav .btn{display:none}
+  .nav-cta-min{display:inline-flex}
+}
+@media(max-width:560px){
+  .section{padding:60px 0}
+  .hero{padding:44px 0 56px}
+  .trust{gap:14px}
+  .pricing{border-radius:20px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .tl-line{stroke-dashoffset:0}
+  .tl-dot,.tl-price{opacity:1}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="brand"><b>TeLARIA</b><span>KIRAKU</span></div>
+    <a class="btn btn-line" href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener">
+      <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.69 2 10.23c0 4.07 3.58 7.48 8.41 8.12.33.07.78.22.89.5.1.26.07.66.03.92l-.14.86c-.04.26-.2 1.02.9.56s5.92-3.49 8.08-5.97C21.6 13.6 22 11.97 22 10.23 22 5.69 17.52 2 12 2z"/></svg>
+      LINEで相談
+    </a>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">エステ魂 ネット予約 自動化 / 成果報酬</span>
+      <h1 class="jp-head">セラピストの順位を、<br><span class="hl">自動で押し上げる。</span></h1>
+      <p class="lead">エステ魂のネット予約をツールが毎日自動で入れ、ランキングを引き上げます。料金は<b>上がった順位ぶんだけ</b>。日割り・セラピスト1人ごと・<b>圏外なら0円</b>の純成果報酬です。</p>
+      <div class="hero-cta">
+        <a class="btn btn-line" href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener">
+          <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.69 2 10.23c0 4.07 3.58 7.48 8.41 8.12.33.07.78.22.89.5.1.26.07.66.03.92l-.14.86c-.04.26-.2 1.02.9.56s5.92-3.49 8.08-5.97C21.6 13.6 22 11.97 22 10.23 22 5.69 17.52 2 12 2z"/></svg>
+          LINEで無料相談
+        </a>
+        <a class="btn btn-ghost" href="#pricing">料金を見る</a>
+      </div>
+      <div class="trust">
+        <div><span class="dot"></span><b>初期費用なし</b></div>
+        <div><span class="dot"></span><b>純成果報酬</b>・上がらなければ0円</div>
+        <div><span class="dot"></span>自社2店で<b>運用検証中</b></div>
+      </div>
+    </div>
+
+    <!-- SIGNATURE: 順位トレイル -->
+    <div class="panel" aria-label="順位トレイルの動作イメージ">
+      <div class="trail-head">
+        <div class="who">
+          <div class="av num">R</div>
+          <div>
+            <div class="nm">あるセラピスト</div>
+            <div class="sub mono">24h ランキング推移・7日間</div>
+          </div>
+        </div>
+        <div class="tag-demo">動作イメージ</div>
+      </div>
+      <div class="trail-body">
+        <svg class="svg-trail" viewBox="0 0 540 280" role="img" aria-label="圏外から1位まで駆け上がる順位推移">
+          <!-- ルーラー目盛り -->
+          <g stroke="#EAF1F5" stroke-width="1">
+            <line x1="40" y1="40" x2="540" y2="40"/>
+            <line x1="40" y1="127" x2="540" y2="127"/>
+            <line x1="40" y1="240" x2="540" y2="240"/>
+          </g>
+          <g class="tl-rank" text-anchor="end">
+            <text x="33" y="44">1</text>
+            <text x="33" y="131">10</text>
+            <text x="33" y="244">圏外</text>
+          </g>
+          <!-- area -->
+          <path d="M40,240 116,240 193,180 270,127 347,87 423,67 500,40 L500,268 L40,268 Z" fill="url(#g)" opacity=".5"/>
+          <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#0CA5A0" stop-opacity=".22"/>
+            <stop offset="1" stop-color="#0CA5A0" stop-opacity="0"/>
+          </linearGradient></defs>
+          <!-- line -->
+          <polyline class="tl-line" points="40,240 116,240 193,180 270,127 347,87 423,67 500,40"/>
+          <!-- dots + price tags -->
+          <g>
+            <circle class="tl-dot" style="animation-delay:.5s"  cx="40"  cy="240" r="4.5" fill="#9FB4C2"/>
+            <circle class="tl-dot" style="animation-delay:.7s"  cx="116" cy="240" r="4.5" fill="#9FB4C2"/>
+            <circle class="tl-dot" style="animation-delay:.9s"  cx="193" cy="180" r="5" fill="#0CA5A0"/>
+            <text class="tl-price" style="animation-delay:.95s" x="193" y="168" text-anchor="middle">¥300</text>
+            <circle class="tl-dot" style="animation-delay:1.1s" cx="270" cy="127" r="5" fill="#0CA5A0"/>
+            <text class="tl-price" style="animation-delay:1.15s" x="270" y="115" text-anchor="middle">¥300</text>
+            <circle class="tl-dot" style="animation-delay:1.3s" cx="347" cy="87" r="5" fill="#0CA5A0"/>
+            <text class="tl-price" style="animation-delay:1.35s" x="347" y="75" text-anchor="middle">¥500</text>
+            <circle class="tl-dot" style="animation-delay:1.5s" cx="423" cy="67" r="5" fill="#0CA5A0"/>
+            <text class="tl-price" style="animation-delay:1.55s" x="423" y="55" text-anchor="middle">¥500</text>
+            <circle class="tl-dot" style="animation-delay:1.7s" cx="500" cy="40" r="6.5" fill="#FF6A4D" stroke="#fff" stroke-width="2"/>
+            <text class="tl-price" style="animation-delay:1.78s;fill:#FF6A4D;font-weight:600" x="500" y="28" text-anchor="middle">¥800</text>
+          </g>
+        </svg>
+      </div>
+      <div class="trail-foot">
+        <span class="lbl">この7日間の成果報酬（1人ぶん）</span>
+        <span class="amt num">¥2,400<small>圏外日は0円</small></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW ============ -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">仕組み</span>
+      <h2 class="jp-head">名前を入れるだけ。あとは、勝手に上がっていく。</h2>
+      <p>オーナーの手間はこれまでと変わりません。予約スケジュールにキャスト名を入れる——それだけで自動運転が始まります。</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <span class="no num">01<span style="color:var(--hair)"></span></span>
+        <svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16"/></svg>
+        <h3>予約を自動投入</h3>
+        <p>予約スケジュールに入れたキャストへ、ツールが毎日ネット予約を自動で入れます。手作業も、ログインも不要です。</p>
+      </div>
+      <div class="step reveal">
+        <span class="no num">02</span>
+        <svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l5-6 4 4 7-9"/><path d="M20 7v5h-5"/></svg>
+        <h3>ランキングが上がる</h3>
+        <p>予約が積み上がることで、エステ魂の24時間ランキングでセラピストの掲載順位が押し上がります。</p>
+      </div>
+      <div class="step reveal">
+        <span class="no num">03</span>
+        <svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M5 7h11a3 3 0 010 6H7a3 3 0 000 6h12"/></svg>
+        <h3>上がった順位だけ課金</h3>
+        <p>翌日のランキングを自動で観測。入った順位の料金を日割りで記録します。圏外（31位以下）なら<b>0円</b>です。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section class="section" id="pricing" style="padding-top:20px">
+  <div class="wrap">
+    <div class="pricing reveal">
+      <div class="pricing-grid">
+        <div>
+          <span class="eyebrow">料金</span>
+          <h2>順位が上がった、<br>そのぶんだけ。</h2>
+          <p class="pdesc">固定の月額ではありません。予約した子が翌日ランキングに入った順位で、自動で課金が記録されます。</p>
+          <div class="pchips">
+            <span class="pchip"><b>日割り</b>計算</span>
+            <span class="pchip">セラピスト<b>1人ごと</b></span>
+            <span class="pchip">課金<b>上限なし</b></span>
+            <span class="pchip">圏外は<b>0円</b></span>
+          </div>
+        </div>
+        <div class="ladder">
+          <div class="rung top">
+            <div class="rank num"><span class="crown">♛</span>1–3位</div>
+            <div class="desc">トップ表示・指名が集まる位置</div>
+            <div class="price num">¥800<small> /人・日</small></div>
+          </div>
+          <div class="rung">
+            <div class="rank num">4–10位</div>
+            <div class="desc">1ページ目の上位掲載</div>
+            <div class="price num">¥500<small> /人・日</small></div>
+          </div>
+          <div class="rung">
+            <div class="rank num">11–30位</div>
+            <div class="desc">ランキング掲載入り</div>
+            <div class="price num">¥300<small> /人・日</small></div>
+          </div>
+          <div class="rung zero">
+            <div class="rank num">圏外</div>
+            <div class="desc">31位以下・掲載なし</div>
+            <div class="price num">¥0<small> /人・日</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RESULTS / WHY ============ -->
+<section class="section" id="board" style="padding-top:24px">
+  <div class="wrap split2">
+    <div class="reveal">
+      <span class="eyebrow">成果が見える</span>
+      <h2 class="jp-head" style="font-size:clamp(23px,2.8vw,31px);margin:14px 0 8px">払う額が、<br>毎日その場で分かる。</h2>
+      <ul class="lead-list">
+        <li><span class="ck">✓</span><div><b>順位と料金が1対1</b><span>どの子が何位で、いくらだったか。日次でそのまま残ります。</span></div></li>
+        <li><span class="ck">✓</span><div><b>予約した子だけが対象</b><span>自然に上がった子・他店の子は課金しません。</span></div></li>
+        <li><span class="ck">✓</span><div><b>後出しの請求なし</b><span>観測した順位がそのまま根拠。集計は予約日ベースで締めます。</span></div></li>
+      </ul>
+    </div>
+    <div class="board reveal">
+      <div class="board-top">
+        <div class="t">成果報酬 日次ログ</div>
+        <div class="live"><i></i>自動記録</div>
+      </div>
+      <table class="bt">
+        <thead><tr><th>セラピスト</th><th>順位</th><th>料金帯</th><th style="text-align:right">当日</th></tr></thead>
+        <tbody>
+          <tr><td>永瀬</td><td><span class="rk t1">2</span></td><td class="dim">1–3位</td><td class="amtcell" style="text-align:right">¥800</td></tr>
+          <tr><td>ひな</td><td><span class="rk t2">8</span></td><td class="dim">4–10位</td><td class="amtcell" style="text-align:right">¥500</td></tr>
+          <tr><td>ななせ</td><td><span class="rk t2">6</span></td><td class="dim">4–10位</td><td class="amtcell" style="text-align:right">¥500</td></tr>
+          <tr><td>北村</td><td><span class="rk t3">19</span></td><td class="dim">11–30位</td><td class="amtcell" style="text-align:right">¥300</td></tr>
+          <tr><td>みお</td><td><span class="rk out">圏外</span></td><td class="dim">—</td><td class="amtcell dim" style="text-align:right">¥0</td></tr>
+        </tbody>
+      </table>
+      <div class="board-foot">
+        <span class="lab">本日の成果報酬・5名ぶん（動作イメージ）</span>
+        <span class="sum num">¥2,100</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="section" id="faq">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">よくある質問</span>
+      <h2 class="jp-head">気になるところに、先に答えます。</h2>
+    </div>
+    <div class="faq">
+      <div class="qa reveal"><div class="q"><em>Q</em>手間は増えますか？</div><div class="a">いいえ。これまで通り予約スケジュールに名前を入れるだけです。予約の投入も順位の観測も、すべて自動で行います。</div></div>
+      <div class="qa reveal"><div class="q"><em>Q</em>上がらなかったら？</div><div class="a">0円です。圏外（31位以下）は一切課金されません。成果が出たぶんだけのお支払いになります。</div></div>
+      <div class="qa reveal"><div class="q"><em>Q</em>課金のタイミングは？</div><div class="a">予約した翌日のランキングを観測し、その順位の料金を日割りで記録します。集計は予約日を基準に締めます。</div></div>
+      <div class="qa reveal"><div class="q"><em>Q</em>対応エリア・店舗は？</div><div class="a">エステ魂に掲載中の店舗なら対応できます。お店の地域を登録するだけで運用を開始できます。</div></div>
+      <div class="qa reveal"><div class="q"><em>Q</em>始めるのに必要なものは？</div><div class="a">初期費用はかかりません。LINEでお店の情報をうかがい、こちらで初期設定まで行います。</div></div>
+      <div class="qa reveal"><div class="q"><em>Q</em>やめたくなったら？</div><div class="a">いつでも停止できます。最低契約期間はありません。成果報酬なので、止めればその日から費用は発生しません。</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="final">
+  <div class="wrap">
+    <h2 class="jp-head">名前を入れるだけで、<br>順位は動き出します。</h2>
+    <p>まずはお店のセラピストで、どこまで上がるか。LINEでお気軽にご相談ください。</p>
+    <a class="btn btn-line" href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener">
+      <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.69 2 10.23c0 4.07 3.58 7.48 8.41 8.12.33.07.78.22.89.5.1.26.07.66.03.92l-.14.86c-.04.26-.2 1.02.9.56s5.92-3.49 8.08-5.97C21.6 13.6 22 11.97 22 10.23 22 5.69 17.52 2 12 2z"/></svg>
+      LINEで無料相談する
+    </a>
+    <p class="note">タップでLINE公式アカウントが開きます。ヒアリングからお見積もりまでご案内します。</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <div class="fb">TeLARIA <span style="color:var(--muted);font-size:12px;font-weight:500">/ KIRAKU</span></div>
+      <div class="fl">© 2026 KIRAKU All rights reserved.</div>
+    </div>
+    <div class="fl"><a href="/tokushoho-estama.html">特定商取引法に基づく表記</a></div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});
+  },{threshold:.16});
+  document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});
+})();
+</script>
+</body>
+</html>
