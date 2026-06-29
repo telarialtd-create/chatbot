@@ -111,6 +111,32 @@ header{position:sticky;top:0;z-index:50;background:rgba(244,247,249,.82);backdro
 @keyframes draw{to{stroke-dashoffset:0}}
 @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
+/* ---------- signature v2: 前日→翌日ジャンプ ---------- */
+.jump{padding:20px 22px 8px;display:flex;flex-direction:column}
+.jstep{display:flex;gap:13px;align-items:stretch;opacity:0;animation:pop .5s ease forwards}
+.jstep.prev{animation-delay:.2s}
+.jstep.next{animation-delay:.65s}
+.jday{flex:none;width:46px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding-top:15px}
+.dlabel{font-family:'Zen Kaku Gothic New';font-weight:700;font-size:13px;color:var(--muted)}
+.dlabel.hot{color:var(--navy)}
+.dnote{font-size:10px;color:#9FB4C2}
+.jcard{flex:1;display:flex;align-items:center;gap:13px;background:#F7FAFC;border:1px solid var(--hair-soft);
+  border-radius:14px;padding:14px 16px}
+.jcard.hot{background:#fff;border-color:rgba(12,165,160,.45);box-shadow:0 16px 32px -20px rgba(12,165,160,.55)}
+.jc-ic{width:34px;height:34px;flex:none;border-radius:10px;background:#fff;border:1px solid var(--hair);
+  display:flex;align-items:center;justify-content:center;font-size:16px}
+.jc-ic.up{background:rgba(12,165,160,.12);border-color:transparent;color:var(--teal-deep);font-size:14px;font-weight:800}
+.jc-tx{flex:1;line-height:1.45}
+.jc-tx b{font-weight:700;font-size:13.5px;display:block;color:var(--ink)}
+.jc-tx span{font-size:11.5px;color:var(--muted)}
+.jrank{flex:none;font-weight:700;text-align:center}
+.jrank.out{font-size:12px;color:var(--muted);background:var(--hair-soft);border-radius:8px;padding:6px 11px}
+.jrank.top{font-size:30px;color:var(--coral);font-family:'Bricolage Grotesque';line-height:1}
+.jrank.top small{font-size:12px;color:var(--coral);font-weight:600;margin-left:1px}
+.jconn{display:flex;align-items:center;gap:9px;padding:7px 0 7px 59px;opacity:0;animation:pop .5s .45s ease forwards}
+.jchev{color:var(--teal);font-size:13px}
+.jconn-tx{font-size:11px;color:var(--muted)}
+
 /* ---------- generic section ---------- */
 .section{padding:84px 0}
 .section-head{max-width:38em;margin-bottom:48px}
@@ -161,6 +187,8 @@ header{position:sticky;top:0;z-index:50;background:rgba(244,247,249,.82);backdro
   box-shadow:0 24px 50px -34px rgba(16,58,92,.3)}
 .board-top{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--hair-soft)}
 .board-top .t{font-weight:700;font-size:14px}
+.board-top .bsub{font-size:11px;color:var(--muted);margin-top:3px}
+.board-scroll{overflow-x:auto}
 .board-top .live{font-size:11px;color:var(--teal-deep);display:flex;align-items:center;gap:7px;font-weight:600}
 .board-top .live i{width:7px;height:7px;border-radius:50%;background:var(--teal);display:inline-block;
   box-shadow:0 0 0 0 rgba(12,165,160,.5);animation:pulse 2s infinite}
@@ -258,7 +286,7 @@ footer{border-top:1px solid var(--hair);padding:40px 0;margin-top:10px}
     <div>
       <span class="eyebrow">エステ魂 ネット予約 自動化 / 成果報酬</span>
       <h1 class="jp-head">セラピストの順位を、<br><span class="hl">自動で押し上げる。</span></h1>
-      <p class="lead">エステ魂のネット予約をツールが毎日自動で入れ、ランキングを引き上げます。料金は<b>上がった順位ぶんだけ</b>。日割り・セラピスト1人ごと・<b>圏外なら0円</b>の純成果報酬です。</p>
+      <p class="lead">予約スケジュールに<b>前日までに名前を入れておくだけ</b>。ツールが自動で予約を入れ、<b>翌日のランキングでそのセラピストが上位</b>に表示されます。料金は上がった順位ぶんだけ——日割り・1人ごと・<b>圏外なら0円</b>の純成果報酬です。</p>
       <div class="hero-cta">
         <a class="btn btn-line" href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener">
           <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.69 2 10.23c0 4.07 3.58 7.48 8.41 8.12.33.07.78.22.89.5.1.26.07.66.03.92l-.14.86c-.04.26-.2 1.02.9.56s5.92-3.49 8.08-5.97C21.6 13.6 22 11.97 22 10.23 22 5.69 17.52 2 12 2z"/></svg>
@@ -273,59 +301,40 @@ footer{border-top:1px solid var(--hair);padding:40px 0;margin-top:10px}
       </div>
     </div>
 
-    <!-- SIGNATURE: 順位トレイル -->
-    <div class="panel" aria-label="順位トレイルの動作イメージ">
+    <!-- SIGNATURE: 前日設定 → 翌日反映 -->
+    <div class="panel" aria-label="前日に設定したセラピストが翌日に上がる動作イメージ">
       <div class="trail-head">
         <div class="who">
-          <div class="av num">R</div>
+          <div class="av num">永</div>
           <div>
-            <div class="nm">あるセラピスト</div>
-            <div class="sub mono">24h ランキング推移・7日間</div>
+            <div class="nm">永瀬</div>
+            <div class="sub mono">エステ魂 24h ランキング</div>
           </div>
         </div>
         <div class="tag-demo">動作イメージ</div>
       </div>
-      <div class="trail-body">
-        <svg class="svg-trail" viewBox="0 0 540 280" role="img" aria-label="圏外から1位まで駆け上がる順位推移">
-          <!-- ルーラー目盛り -->
-          <g stroke="#EAF1F5" stroke-width="1">
-            <line x1="40" y1="40" x2="540" y2="40"/>
-            <line x1="40" y1="127" x2="540" y2="127"/>
-            <line x1="40" y1="240" x2="540" y2="240"/>
-          </g>
-          <g class="tl-rank" text-anchor="end">
-            <text x="33" y="44">1</text>
-            <text x="33" y="131">10</text>
-            <text x="33" y="244">圏外</text>
-          </g>
-          <!-- area -->
-          <path d="M40,240 116,240 193,180 270,127 347,87 423,67 500,40 L500,268 L40,268 Z" fill="url(#g)" opacity=".5"/>
-          <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#0CA5A0" stop-opacity=".22"/>
-            <stop offset="1" stop-color="#0CA5A0" stop-opacity="0"/>
-          </linearGradient></defs>
-          <!-- line -->
-          <polyline class="tl-line" points="40,240 116,240 193,180 270,127 347,87 423,67 500,40"/>
-          <!-- dots + price tags -->
-          <g>
-            <circle class="tl-dot" style="animation-delay:.5s"  cx="40"  cy="240" r="4.5" fill="#9FB4C2"/>
-            <circle class="tl-dot" style="animation-delay:.7s"  cx="116" cy="240" r="4.5" fill="#9FB4C2"/>
-            <circle class="tl-dot" style="animation-delay:.9s"  cx="193" cy="180" r="5" fill="#0CA5A0"/>
-            <text class="tl-price" style="animation-delay:.95s" x="193" y="168" text-anchor="middle">¥300</text>
-            <circle class="tl-dot" style="animation-delay:1.1s" cx="270" cy="127" r="5" fill="#0CA5A0"/>
-            <text class="tl-price" style="animation-delay:1.15s" x="270" y="115" text-anchor="middle">¥300</text>
-            <circle class="tl-dot" style="animation-delay:1.3s" cx="347" cy="87" r="5" fill="#0CA5A0"/>
-            <text class="tl-price" style="animation-delay:1.35s" x="347" y="75" text-anchor="middle">¥500</text>
-            <circle class="tl-dot" style="animation-delay:1.5s" cx="423" cy="67" r="5" fill="#0CA5A0"/>
-            <text class="tl-price" style="animation-delay:1.55s" x="423" y="55" text-anchor="middle">¥500</text>
-            <circle class="tl-dot" style="animation-delay:1.7s" cx="500" cy="40" r="6.5" fill="#FF6A4D" stroke="#fff" stroke-width="2"/>
-            <text class="tl-price" style="animation-delay:1.78s;fill:#FF6A4D;font-weight:600" x="500" y="28" text-anchor="middle">¥800</text>
-          </g>
-        </svg>
+      <div class="jump">
+        <div class="jstep prev">
+          <div class="jday"><span class="dlabel">前日</span><span class="dnote mono">6/28</span></div>
+          <div class="jcard">
+            <div class="jc-ic">🗓</div>
+            <div class="jc-tx"><b>予約スケジュールに設定</b><span>上げたい子の名前を入れておくだけ</span></div>
+            <div class="jrank out">圏外</div>
+          </div>
+        </div>
+        <div class="jconn"><span class="jchev">▼</span><span class="jconn-tx">翌朝、自動で予約を投入し順位を観測</span></div>
+        <div class="jstep next">
+          <div class="jday"><span class="dlabel hot">翌日</span><span class="dnote mono">6/29</span></div>
+          <div class="jcard hot">
+            <div class="jc-ic up">▲</div>
+            <div class="jc-tx"><b>ランキングで上位に</b><span>前日まで圏外だった子がランクイン</span></div>
+            <div class="jrank top num">3<small>位</small></div>
+          </div>
+        </div>
       </div>
       <div class="trail-foot">
-        <span class="lbl">この7日間の成果報酬（1人ぶん）</span>
-        <span class="amt num">¥2,400<small>圏外日は0円</small></span>
+        <span class="lbl">この日の成果報酬（1人ぶん）</span>
+        <span class="amt num">¥800</span>
       </div>
     </div>
   </div>
@@ -336,27 +345,27 @@ footer{border-top:1px solid var(--hair);padding:40px 0;margin-top:10px}
   <div class="wrap">
     <div class="section-head reveal">
       <span class="eyebrow">仕組み</span>
-      <h2 class="jp-head">名前を入れるだけ。あとは、勝手に上がっていく。</h2>
-      <p>オーナーの手間はこれまでと変わりません。予約スケジュールにキャスト名を入れる——それだけで自動運転が始まります。</p>
+      <h2 class="jp-head">前日に名前を入れる。翌日、その子が上がる。</h2>
+      <p>むずかしい操作はありません。上げたいセラピストを前日までに設定しておけば、翌日のランキングに反映されます。</p>
     </div>
     <div class="steps">
       <div class="step reveal">
-        <span class="no num">01<span style="color:var(--hair)"></span></span>
+        <span class="no num">01</span>
         <svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16"/></svg>
-        <h3>予約を自動投入</h3>
-        <p>予約スケジュールに入れたキャストへ、ツールが毎日ネット予約を自動で入れます。手作業も、ログインも不要です。</p>
+        <h3>前日に設定</h3>
+        <p>予約スケジュールに、上げたいセラピストの名前を前日までに入れておくだけ。手作業もログインも不要です。</p>
       </div>
       <div class="step reveal">
         <span class="no num">02</span>
         <svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l5-6 4 4 7-9"/><path d="M20 7v5h-5"/></svg>
-        <h3>ランキングが上がる</h3>
-        <p>予約が積み上がることで、エステ魂の24時間ランキングでセラピストの掲載順位が押し上がります。</p>
+        <h3>翌日に反映</h3>
+        <p>ツールが自動で予約を入れ、設定したセラピストが<b>翌日</b>のエステ魂24時間ランキングで上位に表示されます。</p>
       </div>
       <div class="step reveal">
         <span class="no num">03</span>
         <svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M5 7h11a3 3 0 010 6H7a3 3 0 000 6h12"/></svg>
-        <h3>上がった順位だけ課金</h3>
-        <p>翌日のランキングを自動で観測。入った順位の料金を日割りで記録します。圏外（31位以下）なら<b>0円</b>です。</p>
+        <h3>順位ぶんを課金</h3>
+        <p>翌日の順位を自動で観測し、その料金帯を日割りで記録します。圏外（31位以下）なら<b>0円</b>です。</p>
       </div>
     </div>
   </div>
@@ -419,19 +428,24 @@ footer{border-top:1px solid var(--hair);padding:40px 0;margin-top:10px}
     </div>
     <div class="board reveal">
       <div class="board-top">
-        <div class="t">成果報酬 日次ログ</div>
+        <div>
+          <div class="t">成果報酬 日次ログ</div>
+          <div class="bsub mono">前日（6/28）設定 → 6/29 の順位で記録</div>
+        </div>
         <div class="live"><i></i>自動記録</div>
       </div>
+      <div class="board-scroll">
       <table class="bt">
-        <thead><tr><th>セラピスト</th><th>順位</th><th>料金帯</th><th style="text-align:right">当日</th></tr></thead>
+        <thead><tr><th>観測日</th><th>セラピスト</th><th>順位</th><th>料金帯</th><th style="text-align:right">当日</th></tr></thead>
         <tbody>
-          <tr><td>永瀬</td><td><span class="rk t1">2</span></td><td class="dim">1–3位</td><td class="amtcell" style="text-align:right">¥800</td></tr>
-          <tr><td>ひな</td><td><span class="rk t2">8</span></td><td class="dim">4–10位</td><td class="amtcell" style="text-align:right">¥500</td></tr>
-          <tr><td>ななせ</td><td><span class="rk t2">6</span></td><td class="dim">4–10位</td><td class="amtcell" style="text-align:right">¥500</td></tr>
-          <tr><td>北村</td><td><span class="rk t3">19</span></td><td class="dim">11–30位</td><td class="amtcell" style="text-align:right">¥300</td></tr>
-          <tr><td>みお</td><td><span class="rk out">圏外</span></td><td class="dim">—</td><td class="amtcell dim" style="text-align:right">¥0</td></tr>
+          <tr><td class="mono dim">6/29</td><td>永瀬</td><td><span class="rk t1">2</span></td><td class="dim">1–3位</td><td class="amtcell" style="text-align:right">¥800</td></tr>
+          <tr><td class="mono dim">6/29</td><td>ひな</td><td><span class="rk t2">8</span></td><td class="dim">4–10位</td><td class="amtcell" style="text-align:right">¥500</td></tr>
+          <tr><td class="mono dim">6/29</td><td>ななせ</td><td><span class="rk t2">6</span></td><td class="dim">4–10位</td><td class="amtcell" style="text-align:right">¥500</td></tr>
+          <tr><td class="mono dim">6/29</td><td>北村</td><td><span class="rk t3">19</span></td><td class="dim">11–30位</td><td class="amtcell" style="text-align:right">¥300</td></tr>
+          <tr><td class="mono dim">6/29</td><td>みお</td><td><span class="rk out">圏外</span></td><td class="dim">—</td><td class="amtcell dim" style="text-align:right">¥0</td></tr>
         </tbody>
       </table>
+      </div>
       <div class="board-foot">
         <span class="lab">本日の成果報酬・5名ぶん（動作イメージ）</span>
         <span class="sum num">¥2,100</span>
