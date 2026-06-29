@@ -47,6 +47,18 @@ function normalizeName(s) {
   return String(s || '').replace(/[\s　]+/g, '');
 }
 
+// v5.7s: 店舗プレフィックス（1行目「店名 名前」）の店名トークン解決
+//   同名キャスト（例: ふわもこ「るな」 と CREA「星野 るな」）の取り違えを防ぐため、
+//   店名が付いていればその店舗のみにスコープして照合する。
+const STORE_ALIASES = {
+  'crea': 'CREA', 'クレア': 'CREA', 'くれあ': 'CREA',
+  'ふわもこ': 'ふわもこ', 'フワモコ': 'ふわもこ',
+};
+function resolveStoreAlias(token) {
+  const k = normalizeName(token).toLowerCase();
+  return STORE_ALIASES[k] || null;
+}
+
 // 列番号（1-based）→ 列文字
 function colIndexToLetter(n) {
   let s = '';
@@ -111,8 +123,22 @@ function parseShiftMessage(text) {
 
   if (lines.length < 2) return null;
 
-  const name = lines[0];
+  let name = lines[0];
   if (/^\d+(?:日|[\(（])/.test(toHalfDigits(name))) return null;
+
+  // v5.7s: 1行目が「店名 名前」形式なら店舗を分離（例:「ふわもこ　るな」→ store=ふわもこ / name=るな）
+  //   店名トークンに一致しなければ従来通り1行目まるごとを名前として扱う（後方互換）。
+  let store = null;
+  {
+    const mStore = name.match(/^([^\s　]+)[\s　]+(.+)$/);
+    if (mStore) {
+      const cand = resolveStoreAlias(mStore[1]);
+      if (cand) {
+        store = cand;
+        name = mStore[2].trim();
+      }
+    }
+  }
 
   const entries = [];
   // 範囲: 「1日(金)〜6日(水・振替休日) おやすみ」「1〜6 おやすみ」「11(月)〜13(水) お休み」
@@ -239,7 +265,7 @@ function parseShiftMessage(text) {
   }
 
   if (entries.length === 0) return null;
-  return { name, entries };
+  return { name, store, entries };
 }
 
 /**
@@ -588,12 +614,14 @@ async function loadMaster(ssId) {
   return master;
 }
 
-function resolveInMaster(inputName, master) {
+function resolveInMaster(inputName, master, onlyStore = null) {
   const normIn = normalizeName(inputName);
   if (!normIn || normIn.length < 2) return { matches: [] };
   const buckets = [[], [], [], []];
-  for (const store of ['CREA', 'ふわもこ']) {
-    for (const e of master[store]) {
+  // v5.7s: 店名指定があればその店舗のみ照合（同名キャストの取り違え防止）
+  const stores = onlyStore ? [onlyStore] : ['CREA', 'ふわもこ'];
+  for (const store of stores) {
+    for (const e of (master[store] || [])) {
       if (!e.normalized) continue;
       if (e.normalized === normIn) buckets[0].push({ store, master: e });
       else if (e.normalized.startsWith(normIn)) buckets[1].push({ store, master: e });
@@ -790,13 +818,15 @@ async function activateStaff(ssId, store, masterEntry, ssYear, ssMonth) {
  * 入力名前を名簿と突き合わせ
  * 優先: exact > prefix > suffix > includes
  */
-function resolveStaff(inputName, roster) {
+function resolveStaff(inputName, roster, onlyStore = null) {
   const normIn = normalizeName(inputName);
   if (!normIn || normIn.length < 2) return { matches: [] };
 
   const buckets = [[], [], [], []]; // exact, prefix, suffix, includes
-  for (const store of ['CREA', 'ふわもこ']) {
-    for (const e of roster[store]) {
+  // v5.7s: 店名指定があればその店舗のみ照合（同名キャストの取り違え防止）
+  const stores = onlyStore ? [onlyStore] : ['CREA', 'ふわもこ'];
+  for (const store of stores) {
+    for (const e of (roster[store] || [])) {
       if (!e.normalized) continue;
       if (e.normalized === normIn) buckets[0].push({ store, row: e.rowIndex, name: e.name });
       else if (e.normalized.startsWith(normIn)) buckets[1].push({ store, row: e.rowIndex, name: e.name });
@@ -894,7 +924,7 @@ async function reflectShiftMessage(text, folderId = null) {
   // 指定SSでスタッフを解決（シフト表にいれば即返却、いなければmasterからactivate）
   async function ensureStaff(ss, inputName) {
     const roster = await getRoster(ss.id);
-    const r = resolveStaff(inputName, roster);
+    const r = resolveStaff(inputName, roster, parsed.store);
     if (!r.matches) return { ...r, activated: false };
     if (r.matches.length > 1) {
       const list = r.matches.map(m => `${m.name}(${m.store})`).join(' / ');
@@ -902,7 +932,7 @@ async function reflectShiftMessage(text, folderId = null) {
     }
     // シフト表に居ない → 名簿で探す
     const master = await getMaster(ss.id);
-    const mHit = resolveInMaster(inputName, master);
+    const mHit = resolveInMaster(inputName, master, parsed.store);
     if (mHit.matches) {
       if (mHit.matches.length === 0) throw new Error(`「${inputName}」が名簿（スタッフ管理）に見つかりません`);
       const list = mHit.matches.map(m => `${m.master.name}(${m.store})`).join(' / ');

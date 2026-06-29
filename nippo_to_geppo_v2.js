@@ -318,7 +318,9 @@ async function syncNippoToGeppo(opts) {
   for (const r of zenRows) {
     const store = (r[0] || '').toString().trim();
     // store フィールド値による系列判定（config の storeFieldValue を使用）
-    const isCrea = store === creaCfg.storeFieldValue;
+    // 単一系列店（Angel Spa等）は日報自体が1店舗専用のため全行カウント。
+    // CREA(2系列)のみ store===CREA で系列分離する（2026-06-29 K-003 本数0バグ修正）。
+    const isCrea = !hasFuwa || store === creaCfg.storeFieldValue;
     const isFuwa = hasFuwa && store.includes(fuwaCfg.storeFieldValue);
     const slot = timeSlot(r[13]);
     if (slot) {
