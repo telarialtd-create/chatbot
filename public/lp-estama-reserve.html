@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
 <title>エステ魂 ネット予約自動化｜順位が上がったぶんだけ払う、成果報酬モデル ｜ KIRAKU</title>
-<meta name="description" content="エステ魂のネット予約をツールが自動で入れ、セラピストのランキングを押し上げる。料金は上がった順位ぶんだけ——日割り・セラピスト1人ごと・圏外は0円。手間は増やさず、成果が出たぶんだけお支払い。">
+<meta name="description" content="エステ魂のネット予約をツールが自動で入れ、セラピストのランキングを押し上げる。料金は上がった順位ぶんだけ——日割り・セラピスト1人ごと・圏外は0円。手間は増やさず、成果が出たぶんだけお支払い。予約の1分前に詳細をLINEで自動通知。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap" rel="stylesheet">
@@ -218,6 +218,29 @@ table.bt tr:last-child td{border-bottom:0}
 .split2 .lead-list b{font-weight:700}
 .split2 .lead-list span{color:var(--muted);display:block;font-size:13px}
 
+/* ---------- LINE 通知モック ---------- */
+.split2.rev{grid-template-columns:1.05fr .95fr}
+.linewrap{max-width:360px;margin:0 auto;border-radius:22px;overflow:hidden;border:1px solid var(--hair);
+  box-shadow:0 30px 60px -34px rgba(16,58,92,.4);background:#A6B7D1}
+.line-top{display:flex;align-items:center;gap:10px;background:var(--line);color:#fff;padding:13px 16px}
+.line-top .lava{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.22);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;font-family:'Bricolage Grotesque'}
+.line-top .lnm{font-weight:700;font-size:14px;line-height:1.2}
+.line-top .lst{font-size:10.5px;opacity:.85}
+.line-body{padding:20px 16px 24px}
+.line-row{display:flex;align-items:flex-end;gap:8px}
+.line-bubble{background:#fff;border-radius:5px 16px 16px 16px;padding:14px 16px;max-width:82%;
+  box-shadow:0 2px 7px rgba(16,58,92,.14)}
+.line-bubble .bt{font-family:'Zen Kaku Gothic New';font-weight:700;font-size:14px;color:var(--ink);
+  margin-bottom:10px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.line-bubble .bt em{font-style:normal;font-size:10.5px;color:var(--teal-deep);font-weight:700;
+  background:rgba(12,165,160,.1);border-radius:999px;padding:2px 9px}
+.line-bubble .br{display:flex;font-size:12.5px;line-height:1.95}
+.line-bubble .bk{flex:none;width:74px;color:var(--muted)}
+.line-bubble .bv{font-weight:600;color:var(--ink)}
+.line-bubble .bn{margin-top:10px;font-size:11px;color:var(--muted);border-top:1px solid var(--hair-soft);padding-top:9px}
+.line-time{font-size:10.5px;color:#fff;opacity:.95;align-self:flex-end;margin-bottom:3px}
+
 /* ---------- FAQ ---------- */
 .faq{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 .qa{background:var(--panel);border:1px solid var(--hair);border-radius:16px;padding:24px 26px}
@@ -247,7 +270,7 @@ footer{border-top:1px solid var(--hair);padding:40px 0;margin-top:10px}
 @media(max-width:920px){
   .hero-grid{grid-template-columns:1fr;gap:40px}
   .pricing-grid{grid-template-columns:1fr;gap:34px}
-  .split2{grid-template-columns:1fr;gap:34px}
+  .split2,.split2.rev{grid-template-columns:1fr;gap:34px}
   .steps{grid-template-columns:1fr}
   .faq{grid-template-columns:1fr}
   .nav .btn{display:none}
@@ -367,6 +390,46 @@ footer{border-top:1px solid var(--hair);padding:40px 0;margin-top:10px}
         <h3>順位ぶんを課金</h3>
         <p>翌日の順位を自動で観測し、その料金帯を日割りで記録します。圏外（31位以下）なら<b>0円</b>です。</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LINE NOTIFY ============ -->
+<section class="section" id="line-notify" style="padding-top:24px">
+  <div class="wrap split2 rev">
+    <div class="reveal">
+      <div class="linewrap">
+        <div class="line-top">
+          <div class="lava num">K</div>
+          <div>
+            <div class="lnm">KIRAKU 予約Bot</div>
+            <div class="lst">エステ魂ネット予約 通知</div>
+          </div>
+        </div>
+        <div class="line-body">
+          <div class="line-row">
+            <div class="line-bubble">
+              <div class="bt">🔔 まもなく予約します<em>1分前</em></div>
+              <div class="br"><span class="bk">店舗</span><span class="bv">CREA</span></div>
+              <div class="br"><span class="bk">セラピスト</span><span class="bv">永瀬</span></div>
+              <div class="br"><span class="bk">予約時刻</span><span class="bv">21:00〜</span></div>
+              <div class="br"><span class="bk">コース</span><span class="bv">90分</span></div>
+              <div class="bn">この内容で、1分後にネット予約を入れます。</div>
+            </div>
+            <span class="line-time">20:59</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="reveal">
+      <span class="eyebrow">LINE通知</span>
+      <h2 class="jp-head" style="font-size:clamp(23px,2.8vw,31px);margin:14px 0 12px">ネット予約は、<br>LINEで手元に届く。</h2>
+      <p style="color:var(--muted);font-size:15px;margin-bottom:8px">ネット予約は管理画面だと分かりにくい——だからツールが、<b>予約の1分前に詳細をLINEへ自動通知</b>します。誰を・いつ・どの枠で予約するかが、その場で手元に届きます。</p>
+      <ul class="lead-list">
+        <li><span class="ck">✓</span><div><b>予約の1分前にお知らせ</b><span>これから入る予約の内容を、実行直前に通知します。</span></div></li>
+        <li><span class="ck">✓</span><div><b>店舗・セラピスト・時刻・コースを明記</b><span>通知を見れば、何が起きるか一目で分かります。</span></div></li>
+        <li><span class="ck">✓</span><div><b>管理画面を開かなくていい</b><span>いつものLINEで、予約の動きをそのまま把握できます。</span></div></li>
+      </ul>
     </div>
   </div>
 </section>
