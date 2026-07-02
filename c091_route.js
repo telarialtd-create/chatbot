@@ -1,16 +1,16 @@
 // /app/chatbot/c091_route.js - C-091 シフト自動反映SaaS 新台帳ルート
 // 2026-07-02 かず(凪代行) 新規作成
+// 2026-07-02 v2: LINE投稿→台帳書込に加え、その子だけベンリー即時反映+配信+水色マークを追加(かず指示)
 //
-// ★役割: 設定ファイルに登録された「テスト用LINEグループ」からのシフト投稿だけを
-//   新台帳(C-091)へ書き込む。既存の shift_route.js(C-036/すい管轄) には一切触れない。
+// ★役割: 設定ファイルに登録されたLINEグループからのシフト投稿を
+//   新台帳(C-091)へ書き込み、続けてその子だけベンリーへ入力+配信する。
+//   既存の shift_route.js(C-036/すい管轄) には一切触れない。
 //
 // ★安全設計:
 //   - /app/c091/route_config.json の groups に groupId が無ければ完全に不活性(return false)
-//     → 設定が空の間は既存運用への影響ゼロ。
-//   - シフト形式(1行目=キャスト名/2行目以降に日付行)でなければ不活性 → 雑談は素通し。
-//   - 書込本体は /app/c091/ledger_writer_2026_06_25.js(実績あるCLI)へ子プロセス委譲。
-//   - 名簿は roster_from_ledger.js で「台帳A列の現在順」から毎回生成
-//     → 既存行の並びは絶対に変わらない(かず指示2026-07-02の不変ルール遵守)。
+//   - シフト形式(1行目=キャスト名/2行目以降に日付行)でなければ不活性 → 雑談は素通し
+//   - 台帳書込は ledger_writer(実績CLI)、ベンリー反映は apply_cast_c091.py(ID照合つき)へ子プロセス委譲
+//   - 名簿は roster_from_ledger.js で「台帳A列の現在順」から毎回生成(既存行の並び不変)
 //
 // 設定例: {"groups": {"Cxxxxxxxx...": "T-001"}}
 const fs = require('fs');
@@ -20,21 +20,26 @@ const CONFIG_PATH = '/app/c091/route_config.json';
 const PARSER_PATH = '/app/c091/shift_parser_v2_2026_06_25.js';
 const ROSTER_GEN = '/app/c091/roster_from_ledger.js';
 const WRITER_PATH = '/app/c091/ledger_writer_2026_06_25.js';
-const C091_ENV = { ...process.env, NODE_PATH: '/app/c091/node_modules' };
+const MARK_PATH = '/app/c091/mark_ledger_status.js';
+const APPLY_CAST = '/app/c091/venrey/venrey-automation/apply_cast_c091.py';
+const PYBIN = '/app/c091/venv/bin/python';
+const PYCWD = '/app/c091/venrey/venrey-automation';
+const C091_ENV = { ...process.env, NODE_PATH: '/app/c091/node_modules', PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', HEADLESS: 'true' };
 
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch (_) { return null; }
 }
 
 // JSTの今日 (サーバーはUTC)
-function jstTodayStr() {
+function jstToday() {
   const d = new Date(Date.now() + 9 * 3600 * 1000);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
+const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function run(args) {
+function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    execFile('node', args, { env: C091_ENV, timeout: 90000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(cmd, args, { env: C091_ENV, timeout: opts.timeout || 90000, maxBuffer: 1024 * 1024, cwd: opts.cwd }, (err, stdout, stderr) => {
       if (err) reject(new Error((stderr || stdout || err.message).trim()));
       else resolve((stdout || '').trim());
     });
@@ -63,31 +68,76 @@ async function handle(event, text, client) {
   console.log(`[c091_route] シフト投稿受信 store=${storeId} group=${groupId} 1行目="${lines[0]}"`);
 
   setImmediate(async () => {
+    const push = async (msg) => {
+      await client.pushMessage({ to: groupId, messages: [{ type: 'text', text: msg }] }).catch((e) => console.error('[c091_route] push失敗:', e.message));
+    };
     const sendBack = async (msg) => {
       try { await client.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] }); }
-      catch (_) { await client.pushMessage({ to: groupId, messages: [{ type: 'text', text: msg }] }).catch(() => {}); }
+      catch (_) { await push(msg); }
     };
     try {
-      const today = jstTodayStr();
+      // ── 1) 台帳書込 ──
+      const today = jstToday();
       const rosterPath = `/tmp/c091_roster_${storeId}.json`;
-      await run([ROSTER_GEN, '--out', rosterPath]);              // 名簿=台帳A列の現在順(並び不変)
+      await run('node', [ROSTER_GEN, '--out', rosterPath]);      // 名簿=台帳A列の現在順(並び不変)
 
       const msgPath = `/tmp/c091_msg_${Date.now()}_${Math.floor(Math.random() * 1e6)}.txt`;
       fs.writeFileSync(msgPath, lines.join('\n'));
-      const out = await run([WRITER_PATH, '--file', msgPath, '--today', today, '--roster', rosterPath, '--commit']);
+      const out = await run('node', [WRITER_PATH, '--file', msgPath, '--today', isoOf(today), '--roster', rosterPath, '--commit']);
       fs.unlink(msgPath, () => {});
 
-      // 返信サマリ: writer出力から要点行を抽出
       const summary = out.split('\n')
         .filter(l => /^(キャスト:|解析:|  \[)/.test(l))
         .join('\n') || out.slice(-300);
       console.log(`[c091_route] 書込完了 store=${storeId}\n${summary}`);
-      await sendBack(`✅ シフト表(新台帳)に反映しました\n${summary}`);
+      await sendBack(`✅ シフト表(新台帳)に反映しました\n${summary}\n⏳続けてベンリーを更新中…(1〜2分)`);
+
+      // ── 2) ベンリー即時反映(その子だけ) [2026-07-02 かず指示] ──
+      const resolved = (out.match(/名簿「(.+?)」/) || [])[1] || lines[0];
+      const entries = [];
+      for (const l of lines.slice(1)) {
+        const e = P.parseLine(l);
+        if (!e || !e.venrey || e.venrey.action === 'skip') continue;
+        const ymd = P.determineYearMonth(today, e);
+        entries.push({
+          date: `${ymd.year}-${String(ymd.month).padStart(2, '0')}-${String(ymd.day).padStart(2, '0')}`,
+          action: e.venrey.action, start: e.venrey.start || null, end: e.venrey.end || null, raw: e.ss,
+        });
+      }
+      if (!entries.length) return;
+
+      const entPath = `/tmp/c091_entries_${Date.now()}.json`;
+      fs.writeFileSync(entPath, JSON.stringify(entries));
+      let res = null;
+      try {
+        const pyOut = await run(PYBIN, [APPLY_CAST, storeId, resolved, entPath], { cwd: PYCWD, timeout: 300000 });
+        const m = pyOut.match(/JSON_RESULT: (\{.*\})/);
+        res = m ? JSON.parse(m[1]) : null;
+        console.log(`[c091_route] ベンリー反映結果 ${resolved}:`, m ? m[1] : pyOut.slice(-200));
+      } finally {
+        fs.unlink(entPath, () => {});
+      }
+      if (!res) { await push(`⚠️ ${resolved}: ベンリー反映の結果を確認できませんでした（管理者にご連絡ください）`); return; }
+
+      // ── 3) 反映できた日付セルを水色マーク ──
+      for (const a of res.applied) {
+        const [y, mo, d] = a.date.split('-').map(Number);
+        await run('node', [MARK_PATH, '--date', `${mo}/${d}`, '--mode', 'bg', '--names', resolved, '--today', isoOf(today)])
+          .catch(e => console.error('[c091_route] 水色マーク失敗:', e.message));
+      }
+
+      // ── 4) 結果をLINEへ ──
+      const okLines = res.applied.map(a => `  ${a.date.slice(5).replace('-', '/')} ${a.label}`);
+      const ngLines = (res.skipped || []).map(s => `  ${s.date.slice(5).replace('-', '/')} ⚠️${s.reason}`);
+      let msg = `🚀 ベンリー更新完了: ${resolved}`;
+      if (okLines.length) msg += `\n${okLines.join('\n')}\n📡 サイトへ配信済み(エステ魂の反映は毎時自動確認→赤文字)`;
+      if (ngLines.length) msg += `\n${ngLines.join('\n')}`;
+      if (!okLines.length) msg = `⚠️ ${resolved}: ベンリーに反映できませんでした\n${ngLines.join('\n')}`;
+      await push(msg);
     } catch (e) {
-      // 名簿外・候補複数・タブ未作成などは writer が ❌ 行で説明を出す → そのまま返す
       const errLine = String(e.message || '').split('\n').filter(l => l.includes('❌')).join('\n') || 'エラーが発生しました（管理者にご連絡ください）';
       console.error('[c091_route] エラー:', e.message);
-      await sendBack(`⚠️ 台帳に反映できませんでした\n${errLine}`);
+      await sendBack(`⚠️ 反映できませんでした\n${errLine}`);
     }
   });
   return true;
