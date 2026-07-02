@@ -21,6 +21,7 @@ const PARSER_PATH = '/app/c091/shift_parser_v2_2026_06_25.js';
 const ROSTER_GEN = '/app/c091/roster_from_ledger.js';
 const WRITER_PATH = '/app/c091/ledger_writer_2026_06_25.js';
 const MARK_PATH = '/app/c091/mark_ledger_status.js';
+const SETTINGS_TOOL = '/app/c091/c091_settings_tool.js';
 const APPLY_CAST = '/app/c091/venrey/venrey-automation/apply_cast_c091.py';
 const PYBIN = '/app/c091/venv/bin/python';
 const PYCWD = '/app/c091/venrey/venrey-automation';
@@ -76,14 +77,19 @@ async function handle(event, text, client) {
       catch (_) { await push(msg); }
     };
     try {
+      // ── 0) 店舗設定(台帳SS_ID)を解決 [2026-07-02 多店舗対応] ──
+      const storeCfg = JSON.parse(await run('node', [SETTINGS_TOOL, 'config', storeId]));
+      const ledgerSs = storeCfg.ledgerSsId;
+      if (!ledgerSs) throw new Error(`❌ ${storeId} の台帳SS_IDが設定シートにありません`);
+
       // ── 1) 台帳書込 ──
       const today = jstToday();
       const rosterPath = `/tmp/c091_roster_${storeId}.json`;
-      await run('node', [ROSTER_GEN, '--out', rosterPath]);      // 名簿=台帳A列の現在順(並び不変)
+      await run('node', [ROSTER_GEN, '--out', rosterPath, '--ss', ledgerSs]);  // 名簿=台帳A列の現在順(並び不変)
 
       const msgPath = `/tmp/c091_msg_${Date.now()}_${Math.floor(Math.random() * 1e6)}.txt`;
       fs.writeFileSync(msgPath, lines.join('\n'));
-      const out = await run('node', [WRITER_PATH, '--file', msgPath, '--today', isoOf(today), '--roster', rosterPath, '--commit']);
+      const out = await run('node', [WRITER_PATH, '--file', msgPath, '--today', isoOf(today), '--roster', rosterPath, '--ss', ledgerSs, '--commit']);
       fs.unlink(msgPath, () => {});
 
       const summary = out.split('\n')
@@ -122,7 +128,7 @@ async function handle(event, text, client) {
       // ── 3) 反映できた日付セルを水色マーク ──
       for (const a of res.applied) {
         const [y, mo, d] = a.date.split('-').map(Number);
-        await run('node', [MARK_PATH, '--date', `${mo}/${d}`, '--mode', 'bg', '--names', resolved, '--today', isoOf(today)])
+        await run('node', [MARK_PATH, '--date', `${mo}/${d}`, '--mode', 'bg', '--names', resolved, '--today', isoOf(today), '--ss', ledgerSs])
           .catch(e => console.error('[c091_route] 水色マーク失敗:', e.message));
       }
 
