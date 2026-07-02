@@ -23,6 +23,7 @@ on:
       - 'shift_route.js'
       - 'shift_route_date.js'
       - 'sync_monthly_overlap.js'
+      - 'c091_route.js'
       - 'lib/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch: {}
@@ -49,7 +50,7 @@ jobs:
                    build_dashboard.js customer_search.js meisai_handler.js \
                    kokyaku_update.js geppo_update.js nippo_screenshot.js \
                    shift_reflect.js shift_route.js shift_route_date.js \
-                   sync_monthly_overlap.js; do
+                   sync_monthly_overlap.js c091_route.js; do
             if [ -f "$f" ]; then
               scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
                 "$f" root@46.225.82.240:/app/chatbot/"$f"

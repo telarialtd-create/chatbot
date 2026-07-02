@@ -1643,6 +1643,15 @@ async function handleLineEvent(event) {
     console.error('[shift_route_t] エラー:', e.message);
   }
 
+  // [C-091] シフト自動反映SaaS 新台帳ルート (テストグループ限定・かず管轄 2026-07-02)
+  //   /app/c091/route_config.json の groups に登録された groupId のみ反応。設定が空なら完全不活性。
+  //   既存 shift_route.js (C-036/すい管轄) には影響しない。詳細: 共有記憶シート C-091 行
+  try {
+    if (await require('./c091_route').handle(event, text, client)) return;
+  } catch (e) {
+    console.error('[c091_route] エラー:', e.message);
+  }
+
   if (!isBotCommand(text, event)) {
     console.log(`[無視] 非コマンド userId=${userId || '(なし)'} text="${text.slice(0,40)}"`);
     return;
