@@ -124,6 +124,38 @@ async function resolveStore(storeTags, firstLine) {
   return {};
 }
 
+// [2026-07-06 かず指示] 「前欠」を日付なしで送った時の聞き返し検知。
+//   仕様: 前欠は日付必須。日付なし(例「立花 前欠」「立花⏎前欠」)は処理せず⚠️で日付を促す。
+//   誤反応防止のため厳密判定: 名前行末尾がちょうど前欠 or 2行目以降がすべて「前欠」だけ、の時のみ候補名を返す。
+//   雑談(例「立花さん前欠かも」)は末尾が前欠でないので非該当。日付付き前欠は通常処理へ流す(nullを返す)。
+function bareZenketsuName(lines, P) {
+  const isBareZK = s => s.replace(/\s+/g, '') === '前欠';
+  if (lines.length === 1) {
+    const m = lines[0].match(/^(.+?)\s*前欠\s*$/);
+    return (m && m[1].trim() && !/前欠/.test(m[1])) ? m[1].trim() : null;
+  }
+  if (lines.slice(1).some(l => P.parseLine(l))) return null;      // 日付付き行あり→通常処理へ
+  const rest = lines.slice(1);
+  if (!(rest.length && rest.every(isBareZK))) return null;        // 2行目以降が全部「前欠」だけの時のみ
+  const m0 = lines[0].match(/^(.+?)\s*前欠\s*$/);
+  return (m0 ? m0[1].trim() : lines[0].trim()) || null;
+}
+
+// 前欠(日付なし)を、本物のキャスト名に完全一致した時だけ⚠️聞き返す。返り値: 聞き返したらtrue。
+async function askZenketsuDate(candName, storeTags, event, client) {
+  let r;
+  try { r = await resolveStore(storeTags, candName); } catch (e) { return false; }
+  const t = norm(candName);
+  const exactHit = (r.hit && norm(r.hit.name) === t) ? r.hit
+    : (r.ambiguous && r.ambiguous.find(h => norm(h.name) === t)) || null;
+  if (!exactHit) return false;                                    // 名簿に完全一致しない→誤反応防止で素通し
+  const msg = `⚠️「前欠」は日付を付けて送ってください\n例：\n${exactHit.name}\n7/6 前欠\n（前欠は日にちが必要です）`;
+  try { await client.replyMessage({ replyToken: event.replyToken, messages: [{ type: 'text', text: msg }] }); }
+  catch (_) { await client.pushMessage({ to: event.source.groupId, messages: [{ type: 'text', text: msg }] }).catch(() => {}); }
+  console.log(`[c091_route] 前欠(日付なし)聞き返し: ${exactHit.name}`);
+  return true;
+}
+
 /**
  * @returns {Promise<boolean>} true=このルートで処理した / false=素通し(既存処理へ)
  */
@@ -139,9 +171,19 @@ async function handle(event, text, client) {
   let P;
   try { P = require(PARSER_PATH); } catch (e) { console.error('[c091_route] parser読込エラー:', e.message); return false; }
   const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  if (lines.length < 2) return false;
+  if (lines.length < 2) {
+    // 1行「立花 前欠」形式: 前欠(日付なし)なら聞き返し、それ以外は素通し
+    const cand = bareZenketsuName(lines, P);
+    if (cand && await askZenketsuDate(cand, storeTags, event, client)) return true;
+    return false;
+  }
   if (P.parseLine(lines[0])) return false;                       // 1行目が日付 → 想定形式でない
-  if (!lines.slice(1).some(l => P.parseLine(l))) return false;   // 日付行なし → 雑談として素通し
+  if (!lines.slice(1).some(l => P.parseLine(l))) {               // 日付行なし
+    // 前欠(日付なし・例「立花⏎前欠」)なら日付を促す聞き返し。雑談は素通し。
+    const cand = bareZenketsuName(lines, P);
+    if (cand && await askZenketsuDate(cand, storeTags, event, client)) return true;
+    return false;                                                // それ以外は雑談として素通し
+  }
 
   const replyToken = event.replyToken;
   const groupId = event.source.groupId;
