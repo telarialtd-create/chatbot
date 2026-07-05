@@ -22,12 +22,62 @@ const WRITER_PATH = '/app/c091/ledger_writer_2026_06_25.js';
 const MARK_PATH = '/app/c091/mark_ledger_status.js';
 const SETTINGS_TOOL = '/app/c091/c091_settings_tool.js';
 const APPLY_CAST = '/app/c091/venrey/venrey-automation/apply_cast_c091.py';
+const ESTAMA_KANBAI = '/app/c091/venrey/venrey-automation/estama_kanbai_c091.py'; // [2026-07-04 かず] 当欠/無欠/店欠→エステ魂完売
+const ESTAMA_CREDS = '/app/c091/estama_creds_c091.js';                            // [2026-07-04 かず] エステ魂認証取得
 const PYBIN = '/app/c091/venv/bin/python';
 const PYCWD = '/app/c091/venrey/venrey-automation';
 const C091_ENV = { ...process.env, NODE_PATH: '/app/c091/node_modules', PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', HEADLESS: 'true' };
 
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch (_) { return null; }
+}
+
+// [2026-07-02 かず] 直列処理キュー: 複数キャストが同時にシフトを送っても1件ずつ処理する。
+// 並行処理すると ①台帳writerの全体書き戻しで後勝ち消失(先の子のシフトが消える)
+// ②ヘッドレスChrome多重起動でVPS(2コア/4GB)が不安定 になるため必須。
+let _queueTail = Promise.resolve();
+let _queueLen = 0;
+function enqueue(task) {
+  _queueLen++;
+  const pos = _queueLen;
+  if (pos > 1) console.log(`[c091_route] キュー待ち ${pos - 1}件あり → 順番に処理します`);
+  const next = _queueTail.then(task, task).finally(() => { _queueLen--; });
+  _queueTail = next.catch(() => {});
+  return next;
+}
+
+// [2026-07-02 かず] スプール永続化: 受信したシフト投稿をディスクに保存し、処理完了で削除する。
+// pm2 restart・クラッシュ・再起動でキュー処理が中断されても、次の受信時に自動復旧する
+// (2026-07-02 りなの投稿が再起動で消失した実害の再発防止)。
+const SPOOL_DIR = '/app/c091/_spool';
+function spoolWrite(groupId, text) {
+  try {
+    fs.mkdirSync(SPOOL_DIR, { recursive: true });
+    const p = `${SPOOL_DIR}/${Date.now()}_${Math.floor(Math.random() * 1e6)}.json`;
+    fs.writeFileSync(p, JSON.stringify({ groupId, text, ts: new Date().toISOString() }));
+    return p;
+  } catch (e) { console.error('[c091_route] spool書込失敗:', e.message); return null; }
+}
+
+let _spoolRecovered = false;
+function recoverSpool(client) {
+  if (_spoolRecovered) return;
+  _spoolRecovered = true;
+  let files = [];
+  try { files = fs.readdirSync(SPOOL_DIR).filter(f => f.endsWith('.json')).sort(); } catch (_) { return; }
+  for (const f of files) {
+    const p = `${SPOOL_DIR}/${f}`;
+    try {
+      const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+      const lines = String(j.text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const cfgAll = loadConfig();
+      const gv = cfgAll && cfgAll.groups && cfgAll.groups[j.groupId];
+      if (!gv || lines.length < 2) { fs.unlink(p, () => {}); continue; }
+      const st = Array.isArray(gv) ? gv : [gv];
+      console.log(`[c091_route] 再起動で中断された投稿を復旧処理: 1行目="${lines[0]}"`);
+      enqueue(() => processShiftPost(client, st, lines, j.groupId, null, p));
+    } catch (e) { console.error('[c091_route] spool復旧失敗:', f, e.message); }
+  }
 }
 
 // JSTの今日 (サーバーはUTC)
@@ -40,7 +90,7 @@ const norm = s => String(s || '').replace(/[\s　]/g, '');
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { env: C091_ENV, timeout: opts.timeout || 90000, maxBuffer: 1024 * 1024, cwd: opts.cwd }, (err, stdout, stderr) => {
+    execFile(cmd, args, { env: opts.env || C091_ENV, timeout: opts.timeout || 90000, maxBuffer: 1024 * 1024, cwd: opts.cwd }, (err, stdout, stderr) => {
       if (err) reject(new Error((stderr || stdout || err.message).trim()));
       else resolve((stdout || '').trim());
     });
@@ -83,6 +133,7 @@ async function handle(event, text, client) {
   const groupVal = cfgAll && cfgAll.groups && cfgAll.groups[event.source.groupId];
   if (!groupVal) return false;
   const storeTags = Array.isArray(groupVal) ? groupVal : [groupVal];
+  recoverSpool(client);   // 対象グループの着信を契機に、再起動で中断された投稿を復旧(初回のみ)
 
   // シフト形式判定: 1行目=キャスト名(日付でない) + 2行目以降に日付行が1つ以上
   let P;
@@ -96,7 +147,15 @@ async function handle(event, text, client) {
   const groupId = event.source.groupId;
   console.log(`[c091_route] シフト投稿受信 stores=${storeTags.join('/')} group=${groupId} 1行目="${lines[0]}"`);
 
-  setImmediate(async () => {
+  const spoolPath = spoolWrite(groupId, text);     // 処理完了までディスクに保持(消失防止)
+  enqueue(() => processShiftPost(client, storeTags, lines, groupId, replyToken, spoolPath));
+  return true;
+}
+
+// シフト投稿1件の処理本体(キューから1件ずつ実行される)
+async function processShiftPost(client, storeTags, lines, groupId, replyToken, spoolPath) {
+    let P;
+    try { P = require(PARSER_PATH); } catch (e) { console.error('[c091_route] parser読込エラー:', e.message); return; }
     const push = async (msg) => {
       await client.pushMessage({ to: groupId, messages: [{ type: 'text', text: msg }] }).catch((e) => console.error('[c091_route] push失敗:', e.message));
     };
@@ -131,18 +190,47 @@ async function handle(event, text, client) {
         .filter(l => /^(キャスト:|解析:|  \[)/.test(l))
         .join('\n') || out.slice(-300);
       console.log(`[c091_route] 書込完了 store=${storeId}\n${summary}`);
-      await sendBack(`✅ ${storeCfg.name} のシフト表に反映しました\nキャスト: ${resolved}\n${summary.split('\n').filter(l => !l.startsWith('キャスト:')).join('\n')}\n⏳続けてベンリーを更新中…(1〜2分)`);
+      // [2026-07-02 かず指示] 成功時のLINE返信は送らない(✅台帳反映の返信を廃止)。⚠️系(聞き返し/失敗)のみ残す
 
       // ── 2) ベンリー即時反映(その子だけ) ──
+      // [2026-07-02 かず指示] ベンリーに入れるのは「今日を含めて1週間(今日〜+6日)」だけ。
+      // それより先・過去の日付は台帳のみ(未来分は各当日の深夜cron nightly_reflect が反映)。
+      const winStart = today.getTime();
+      const winEnd = today.getTime() + 6 * 86400000;
       const entries = [];
+      const deferred = [];
+      const ledgerOnly = [];
       for (const l of lines.slice(1)) {
         const e = P.parseLine(l);
         if (!e || !e.venrey || e.venrey.action === 'skip') continue;
         const ymd = P.determineYearMonth(today, e);
+        // [2026-07-04 かず指示] 当欠・無欠は台帳のみ。ベンリーは触らない(更新も配信もしない)
+        if (e.venrey.action === 'ledger_only') { ledgerOnly.push({ md: `${ymd.month}/${ymd.day}`, category: e.category }); continue; }
+        const dt = new Date(ymd.year, ymd.month - 1, ymd.day).getTime();
+        if (dt < winStart || dt > winEnd) { deferred.push(`${ymd.month}/${ymd.day}`); continue; }
         entries.push({
           date: `${ymd.year}-${String(ymd.month).padStart(2, '0')}-${String(ymd.day).padStart(2, '0')}`,
           action: e.venrey.action, start: e.venrey.start || null, end: e.venrey.end || null, raw: e.ss,
         });
+      }
+      if (deferred.length) console.log(`[c091_route] 1週間より先/過去のためベンリー即時反映せず(台帳のみ・当日深夜cronに委譲): ${deferred.join(', ')}`);
+      if (ledgerOnly.length) {
+        console.log(`[c091_route] 当欠/無欠/店欠のため台帳のみ・ベンリー触らず: ${ledgerOnly.map(o => `${o.md}(${o.category})`).join(', ')}`);
+        // [2026-07-04 かず指示] エステ魂だけは該当日を【完売】(全枠×)にして予約を止める(シフト表示は残す)。
+        //   ベンリーは引き続き触らない。エステ魂側が失敗してもLINE処理・台帳記入は止めない。
+        //   店側が既にお休み処理済み等で完売ボタンが押せない日はスクリプト側が⏭スキップ(正常終了)する。
+        for (const o of ledgerOnly) {
+          try {
+            const cred = (await run('node', [ESTAMA_CREDS, storeId])).trim().split('\t');
+            if (cred.length < 2 || !cred[0] || !cred[1]) throw new Error('エステ魂の認証情報を取得できません');
+            const kOut = await run(PYBIN, [ESTAMA_KANBAI, storeId, resolved, o.md, '--commit'],
+              { cwd: PYCWD, timeout: 300000, env: { ...C091_ENV, ESTAMA_USER: cred[0], ESTAMA_PASS: cred[1] } });
+            console.log(`[c091_route] エステ魂完売 ${storeId} ${resolved} ${o.md}: ${kOut.split('\n').pop()}`);
+          } catch (err) {
+            console.error(`[c091_route] エステ魂完売エラー ${storeId} ${resolved} ${o.md}:`, String(err.message).slice(0, 300));
+            await push(`⚠️ ${resolved} ${o.md}(${o.category}): エステ魂の完売反映に失敗しました（台帳記入は完了しています。手動で完売にしてください）`).catch(() => {});
+          }
+        }
       }
       if (!entries.length) return;
 
@@ -166,21 +254,19 @@ async function handle(event, text, client) {
           .catch(e => console.error('[c091_route] 水色マーク失敗:', e.message));
       }
 
-      // ── 4) 結果をLINEへ ──
-      const okLines = res.applied.map(a => `  ${a.date.slice(5).replace('-', '/')} ${a.label}`);
-      const ngLines = (res.skipped || []).map(s => `  ${s.date.slice(5).replace('-', '/')} ⚠️${s.reason}`);
-      let msg = `🚀 ベンリー更新完了: ${storeCfg.name} ${resolved}`;
-      if (okLines.length) msg += `\n${okLines.join('\n')}\n📡 サイトへ配信済み(エステ魂の反映は毎時自動確認→赤文字)`;
-      if (ngLines.length) msg += `\n${ngLines.join('\n')}`;
-      if (!okLines.length) msg = `⚠️ ${resolved}: ベンリーに反映できませんでした\n${ngLines.join('\n')}`;
-      await push(msg);
+      // ── 4) 結果通知 ── [2026-07-02 かず指示] 成功時は返信しない。実失敗(表示範囲外以外)がある時だけ⚠️通知
+      const realNg = (res.skipped || []).filter(s => s.reason !== 'ベンリーの表示範囲外');
+      if (realNg.length) {
+        const ngLines = realNg.map(s => `  ${s.date.slice(5).replace('-', '/')} ⚠️${s.reason}`);
+        await push(`⚠️ ${resolved}: ベンリーに反映できなかった日があります\n${ngLines.join('\n')}`);
+      }
     } catch (e) {
       const errLine = String(e.message || '').split('\n').filter(l => l.includes('❌')).join('\n') || 'エラーが発生しました（管理者にご連絡ください）';
       console.error('[c091_route] エラー:', e.message);
       await sendBack(`⚠️ 反映できませんでした\n${errLine}`);
+    } finally {
+      if (spoolPath) fs.unlink(spoolPath, () => {});   // 処理が終わった(成功/失敗問わず応答済み)のでスプール削除
     }
-  });
-  return true;
 }
 
 module.exports = { handle };
