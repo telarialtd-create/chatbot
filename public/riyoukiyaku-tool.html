@@ -135,9 +135,48 @@
       letter-spacing: 0.05em;
     }
 
+    /* --- 電子署名セクション --- */
+    .sign-section {
+      margin-top: 72px;
+      background: var(--black);
+      border-radius: 12px;
+      padding: 44px 40px;
+      color: var(--white);
+    }
+    .sign-section h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .sign-section .lead { font-size: 13px; color: rgba(255,255,255,0.55); margin-bottom: 28px; line-height: 1.9; }
+    .sf-group { margin-bottom: 18px; }
+    .sf-label { display:block; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; margin-bottom: 8px; color: rgba(255,255,255,0.8); }
+    .sf-label .req { color: #f0b840; margin-left: 4px; font-size: 11px; }
+    .sf-input {
+      width: 100%; padding: 13px 16px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06);
+      color: #fff; font-size: 14px; font-family: inherit; outline: none;
+    }
+    .sf-input:focus { border-color: var(--gold); }
+    #tool-sig { font-size: 17px; font-weight: 600; letter-spacing: 0.05em; }
+    .sf-agree { display:flex; align-items:flex-start; gap:12px; margin:20px 0 8px; padding:16px; background: rgba(255,255,255,0.05); border-radius:8px; cursor:pointer; }
+    .sf-box { width:20px; height:20px; border:2px solid rgba(255,255,255,0.3); border-radius:4px; flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center; }
+    .sf-box.on { background: var(--gold); border-color: var(--gold); }
+    .sf-box svg { display:none; } .sf-box.on svg { display:block; }
+    .sf-agree-text { font-size: 12.5px; line-height: 1.8; color: rgba(255,255,255,0.85); }
+    .sf-meta { font-size: 12px; color: rgba(255,255,255,0.5); margin: 12px 0 20px; }
+    .sf-meta strong { color: #fff; }
+    .sf-btn {
+      width: 100%; padding: 16px; border: none; border-radius: 6px;
+      background: var(--gold); color: #fff; font-size: 15px; font-weight: 700;
+      letter-spacing: 0.05em; cursor: pointer; font-family: inherit;
+    }
+    .sf-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .sf-note { font-size: 11.5px; color: rgba(255,255,255,0.45); margin-top: 12px; line-height:1.7; text-align:center; }
+    .sf-done { display:none; text-align:center; padding: 20px 0; }
+    .sf-done h3 { color: var(--gold); }
+    .sf-err { display:none; background: rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ffb4b4; padding:12px 16px; border-radius:6px; font-size:13px; margin-top:14px; }
+
     @media (max-width: 640px) {
       nav { padding: 0 20px; }
       .content-wrap { padding: 60px 20px 80px; }
+      .sign-section { padding: 32px 22px; }
     }
   </style>
 </head>
@@ -323,15 +362,41 @@
     <p>本規約のいずれかの条項が無効または執行不能と判断された場合でも、残りの条項は引き続き有効に存続します。</p>
   </div>
 
-  <!-- 附則 -->
-  <div class="addendum">
-    <p><strong>附則</strong></p>
-    <p>本規約は、2026年7月5日より施行します。</p>
-    <p style="margin-top: 16px;"><strong>事業者情報</strong></p>
-    <p>事業者名：株式会社TeLARIA</p>
-    <p>代表者名：平岡和真</p>
-    <p>所在地：広島市中区</p>
-    <p>お問い合わせ：LINE公式アカウントまたは当社が別途案内する窓口</p>
+  <!-- 電子署名セクション -->
+  <div class="sign-section" id="tool-sign">
+    <div id="tool-form-wrap">
+      <h3>本規約に同意して電子署名する</h3>
+      <p class="lead">以下にご署名いただくことで、上記ツール利用規約（第5条・第6条・第7条の免責条項を含む全条項）に同意したものとして、同意日時・送信元IPアドレスとともに記録されます。</p>
+
+      <div class="sf-group">
+        <label class="sf-label" for="tool-company">会社名・屋号<span class="req">任意</span></label>
+        <input type="text" id="tool-company" class="sf-input" placeholder="例：〇〇スパ / 株式会社〇〇" autocomplete="off">
+      </div>
+      <div class="sf-group">
+        <label class="sf-label" for="tool-sig">電子署名（担当者氏名を正確にご入力ください）<span class="req">*必須</span></label>
+        <input type="text" id="tool-sig" class="sf-input" placeholder="例：山田 花子" autocomplete="off">
+      </div>
+
+      <div class="sf-agree" id="tool-agree-row" onclick="toolToggle()">
+        <div class="sf-box" id="tool-box">
+          <svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M1 4.5l3 3L11 1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="sf-agree-text">
+          上記ツール利用規約の全条項（とくに第5条＝外部サービス利用リスクとアカウント停止等の免責、第6条＝本ツールの不具合・停止・利用不能の免責、第7条＝包括免責）を読み、内容を理解のうえ同意します。
+        </div>
+      </div>
+
+      <div class="sf-meta">同意日時（自動）：<strong id="tool-datetime">―</strong></div>
+
+      <button class="sf-btn" id="tool-btn" onclick="toolSubmit()" disabled>同意して電子署名する</button>
+      <div class="sf-err" id="tool-err"></div>
+      <p class="sf-note">この署名は電子署名として扱われ、記録日時・送信元IPアドレスとともに当社の台帳に安全に保存されます。</p>
+    </div>
+
+    <div class="sf-done" id="tool-done">
+      <h3>✓ 電子署名を受け付けました</h3>
+      <p style="color:rgba(255,255,255,0.7); font-size:14px; line-height:2; margin-top:12px;">ツール利用規約への同意を記録しました。<br>ご署名ありがとうございました。</p>
+    </div>
   </div>
 
 </div>
@@ -339,6 +404,57 @@
 <footer>
   <p>© 2026 株式会社TeLARIA. All rights reserved. | ツール利用規約</p>
 </footer>
+
+<script>
+  // 同意日時（署名時点の日付・時刻が自動で入る）
+  function toolNow(){
+    return new Date().toLocaleString('ja-JP', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+  function toolRefreshTime(){ document.getElementById('tool-datetime').textContent = toolNow(); }
+  setInterval(toolRefreshTime, 1000); toolRefreshTime();
+
+  let toolAgreed = false;
+  function toolToggle(){
+    toolAgreed = !toolAgreed;
+    document.getElementById('tool-box').classList.toggle('on', toolAgreed);
+    toolValidate();
+  }
+  function toolValidate(){
+    const sig = document.getElementById('tool-sig').value.trim();
+    const ok = sig.length > 0 && toolAgreed;
+    document.getElementById('tool-btn').disabled = !ok;
+    return ok;
+  }
+  document.getElementById('tool-sig').addEventListener('input', toolValidate);
+
+  async function toolSubmit(){
+    if(!toolValidate()) return;
+    const btn = document.getElementById('tool-btn');
+    btn.disabled = true; btn.textContent = '送信中…';
+    const payload = {
+      company:   document.getElementById('tool-company').value.trim(),
+      signature: document.getElementById('tool-sig').value.trim(),
+      agreed:    true,
+      agreed_at: new Date().toISOString(),
+    };
+    try{
+      const res = await fetch('/api/agree-tool', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if(res.ok && data.ok){
+        document.getElementById('tool-form-wrap').style.display='none';
+        document.getElementById('tool-done').style.display='block';
+        window.scrollTo({ top: document.getElementById('tool-sign').offsetTop - 80, behavior:'smooth' });
+      } else { throw new Error(data.error || '送信に失敗しました'); }
+    }catch(err){
+      const e = document.getElementById('tool-err');
+      e.textContent = 'エラー：' + err.message + ' ／ お手数ですが再度お試しください。';
+      e.style.display='block';
+      btn.disabled=false; btn.textContent='同意して電子署名する';
+    }
+  }
+</script>
 
 </body>
 </html>
