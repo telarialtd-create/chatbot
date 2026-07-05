@@ -327,6 +327,20 @@
     }
     .agree-label a:hover { text-decoration: underline; }
 
+    /* Risk acknowledgment row (重要・強調) */
+    .risk-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      margin-top: 14px;
+      padding: 18px;
+      background: #fdf6e3;
+      border: 1px solid rgba(201,168,76,0.6);
+      border-left: 4px solid var(--gold);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .risk-row .agree-label { color: #4a3c10; font-size: 12.5px; line-height: 1.9; }
+    .risk-row .agree-label strong { color: #000; }
+
     /* Signature section */
     .signature-box {
       margin-top: 24px;
@@ -683,6 +697,8 @@
         リバースエンジニアリング・転売・第三者への再提供・不正アクセス・虚偽申込みは禁止します。
         <h4>第6条（免責）</h4>
         外部サービス（エスタマ・LINE等）の仕様変更・障害による影響については当社は責任を負いません。損害賠償は当該月の利用料金相当額を上限とします。
+        <h4 style="color:#b8860b;">第9条の2（外部サービス利用のリスク・重要）</h4>
+        エスタマ自動更新等は外部サイトに対し自動で操作を行うツールです。ご利用により外部サイト運営者から利用者のアカウントが停止・凍結・削除される可能性、および外部サイトの仕様変更等によりツールが利用できなくなる可能性があります。これらにより生じた一切の損害（売上減少・逸失利益・データ消失・再登録費用等）について、当社は理由の如何を問わず一切の責任を負いません。利用者はこのリスクを承諾のうえ、自己の判断と責任で利用するものとします。
         <h4>第7条（知的財産）</h4>
         本サービスに関する一切の知的財産権は当社に帰属します。
         <h4>第8条（個人情報）</h4>
@@ -707,6 +723,20 @@
         </div>
       </div>
       <div class="form-error" id="err-agree">利用規約への同意が必要です。</div>
+
+      <!-- 外部サービス利用リスクの個別確認（重要） -->
+      <div class="risk-row" id="risk-row" onclick="toggleRisk()">
+        <div class="agree-checkbox" id="risk-check">
+          <svg width="12" height="9" viewBox="0 0 12 9" fill="none">
+            <path d="M1 4.5l3 3L11 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="agree-label">
+          <strong>【重要・外部サービス利用のリスク確認】</strong><br>
+          エスタマ自動更新等が外部サイトに対し自動で操作を行うツールであること、その利用により当該サイトの運営者から<strong>私のアカウントが停止・凍結・削除される可能性</strong>があること、また外部サイトの仕様変更等により<strong>ツールが利用できなくなる可能性</strong>があることを理解しました。これらにより生じた一切の損害（売上減少・逸失利益・データ消失・再登録費用等を含む）について、<strong>株式会社TeLARIAが理由の如何を問わず一切の責任を負わないこと</strong>に同意し、自己の判断と責任において本サービスを利用します（利用規約 第9条の2）。
+        </div>
+      </div>
+      <div class="form-error" id="err-risk">外部サービス利用リスクの確認・同意が必要です。</div>
 
       <!-- 電子署名 -->
       <div class="signature-box">
@@ -875,6 +905,16 @@
     validateForm();
   }
 
+  // ----- Risk acknowledgment toggle（外部サービス利用リスクの個別確認） -----
+  let riskAgreed = false;
+  function toggleRisk() {
+    riskAgreed = !riskAgreed;
+    const box = document.getElementById('risk-check');
+    box.classList.toggle('checked', riskAgreed);
+    updateSummary();
+    validateForm();
+  }
+
   // ----- Real-time summary update -----
   function updateSummary() {
     const plan = document.querySelector('.plan-option.selected input');
@@ -904,7 +944,7 @@
     const sig      = document.getElementById('signature').value.trim();
     const emailOk  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-    const allOk = plan && company && rep && email && emailOk && agreed && sig;
+    const allOk = plan && company && rep && email && emailOk && agreed && riskAgreed && sig;
     document.getElementById('btn-submit').disabled = !allOk;
     return allOk;
   }
@@ -932,6 +972,9 @@
       message:      document.getElementById('message').value.trim(),
       signature:    document.getElementById('signature').value.trim(),
       agreed_at:    new Date().toISOString(),
+      terms_agreed: agreed,
+      risk_agreed:  riskAgreed,
+      risk_ack_text: '利用規約 第9条の2（外部サービス利用リスク）に同意。アカウント停止・凍結・削除およびツール利用不能により生じた損害について当社が一切責任を負わないことを承諾。',
     };
 
     try {
@@ -969,7 +1012,7 @@
 
     if (plan) document.getElementById('step1-ind').classList.add('done');
     if (company && rep && email) document.getElementById('step2-ind').classList.add('done');
-    if (agreed && sig) document.getElementById('step3-ind').classList.add('done');
+    if (agreed && riskAgreed && sig) document.getElementById('step3-ind').classList.add('done');
   }
   setInterval(updateSteps, 500);
 
