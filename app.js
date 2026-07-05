@@ -1355,5 +1355,8 @@ app.listen(PORT, () => {
   });
   // 月報自動更新は無効化（LINE「月報更新 4月24日」等で手動発火のみ）
   // scheduleGeppoSync();
-  scheduleDashboardWatch();
+  // C-018 (2026-07-05 かず): 売上ダッシュボード自動更新をエスタマVPSのcron(dashboard_auto_refresh.js・15分毎)に一本化。
+  // KIRAKU側の5分毎監視は同一3店舗を二重更新し、Sheets API読み取りクォータ超過を頻発させLINE bot本体にも波及していたため無効化。
+  // 再有効化する場合は下行のコメントを外す（ただしエスタマcronと二重稼働になる点に注意）。
+  // scheduleDashboardWatch();
 });
