@@ -369,8 +369,16 @@
       <p class="lead">以下にご署名いただくことで、上記ツール利用規約（第5条・第6条・第7条の免責条項を含む全条項）に同意したものとして、同意日時・送信元IPアドレスとともに記録されます。</p>
 
       <div class="sf-group">
-        <label class="sf-label" for="tool-company">会社名・屋号<span class="req">任意</span></label>
+        <label class="sf-label" for="tool-company">会社名・屋号<span class="req">*必須</span></label>
         <input type="text" id="tool-company" class="sf-input" placeholder="例：〇〇スパ / 株式会社〇〇" autocomplete="off">
+      </div>
+      <div class="sf-group">
+        <label class="sf-label" for="tool-email">メールアドレス<span class="req">*必須</span></label>
+        <input type="email" id="tool-email" class="sf-input" placeholder="example@domain.com" autocomplete="off">
+      </div>
+      <div class="sf-group">
+        <label class="sf-label" for="tool-phone">電話番号<span class="req">*必須</span></label>
+        <input type="tel" id="tool-phone" class="sf-input" placeholder="例：082-909-1234" autocomplete="off">
       </div>
       <div class="sf-group">
         <label class="sf-label" for="tool-sig">電子署名（担当者氏名を正確にご入力ください）<span class="req">*必須</span></label>
@@ -386,7 +394,10 @@
         </div>
       </div>
 
-      <div class="sf-meta">同意日時（自動）：<strong id="tool-datetime">―</strong></div>
+      <div class="sf-meta">
+        同意する規約：<strong id="tool-version">―</strong><br>
+        同意日時（自動）：<strong id="tool-datetime">―</strong>
+      </div>
 
       <button class="sf-btn" id="tool-btn" onclick="toolSubmit()" disabled>同意して電子署名する</button>
       <div class="sf-err" id="tool-err"></div>
@@ -406,6 +417,10 @@
 </footer>
 
 <script>
+  // 同意した規約のバージョン（規約本文を改定したらここを更新する）
+  const TOOL_TERMS_VERSION = 'ツール利用規約 v1.0（2026-07-05 制定）';
+  document.getElementById('tool-version').textContent = TOOL_TERMS_VERSION;
+
   // 同意日時（署名時点の日付・時刻が自動で入る）
   function toolNow(){
     return new Date().toLocaleString('ja-JP', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -420,22 +435,31 @@
     toolValidate();
   }
   function toolValidate(){
-    const sig = document.getElementById('tool-sig').value.trim();
-    const ok = sig.length > 0 && toolAgreed;
+    const company = document.getElementById('tool-company').value.trim();
+    const email   = document.getElementById('tool-email').value.trim();
+    const phone   = document.getElementById('tool-phone').value.trim();
+    const sig     = document.getElementById('tool-sig').value.trim();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const ok = company.length > 0 && emailOk && phone.length > 0 && sig.length > 0 && toolAgreed;
     document.getElementById('tool-btn').disabled = !ok;
     return ok;
   }
-  document.getElementById('tool-sig').addEventListener('input', toolValidate);
+  ['tool-company','tool-email','tool-phone','tool-sig'].forEach(id => {
+    document.getElementById(id).addEventListener('input', toolValidate);
+  });
 
   async function toolSubmit(){
     if(!toolValidate()) return;
     const btn = document.getElementById('tool-btn');
     btn.disabled = true; btn.textContent = '送信中…';
     const payload = {
-      company:   document.getElementById('tool-company').value.trim(),
-      signature: document.getElementById('tool-sig').value.trim(),
-      agreed:    true,
-      agreed_at: new Date().toISOString(),
+      company:       document.getElementById('tool-company').value.trim(),
+      email:         document.getElementById('tool-email').value.trim(),
+      phone:         document.getElementById('tool-phone').value.trim(),
+      signature:     document.getElementById('tool-sig').value.trim(),
+      agreed:        true,
+      terms_version: TOOL_TERMS_VERSION,
+      agreed_at:     new Date().toISOString(),
     };
     try{
       const res = await fetch('/api/agree-tool', {
