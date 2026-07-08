@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>みたよ、が止まらない。｜ヘブンネット 足あと自動送信</title>
+<meta name="description" content="ヘブンネットの「みたよ（足あと）」を24時間ぜんぶ自動で。見てもらう回数を、指名に変える集客ツール。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+Antique:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0a0612;
+    --night:#140a24;
+    --panel:#1b0f30;
+    --magenta:#ff2d95;
+    --cyan:#22e0ff;
+    --violet:#8b5cf6;
+    --haze:#cbb8ec;
+    --white:#f6f1ff;
+    --dim:#7a6b99;
+    --f-disp:'Zen Kaku Gothic Antique', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+    --f-body:'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+    --f-mono:'Space Grotesk', 'SFMono-Regular', monospace;
+    --glow-m:0 0 8px rgba(255,45,149,.75), 0 0 26px rgba(255,45,149,.45);
+    --glow-c:0 0 8px rgba(34,224,255,.75), 0 0 24px rgba(34,224,255,.4);
+    --maxw:1120px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--f-body);
+    background:var(--void);
+    color:var(--haze);
+    line-height:1.75;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(60% 45% at 78% 8%, rgba(255,45,149,.16), transparent 60%),
+      radial-gradient(55% 40% at 12% 22%, rgba(34,224,255,.12), transparent 60%),
+      radial-gradient(70% 60% at 50% 100%, rgba(139,92,246,.18), transparent 65%);
+  }
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px;position:relative;z-index:2}
+
+  /* --- neon type primitives --- */
+  .eyebrow{
+    font-family:var(--f-mono);font-size:.72rem;letter-spacing:.34em;
+    text-transform:uppercase;color:var(--cyan);text-shadow:var(--glow-c);
+    display:inline-block;margin-bottom:18px;
+  }
+  h1,h2,h3{font-family:var(--f-disp);font-weight:900;color:var(--white);line-height:1.14;letter-spacing:.01em}
+  .neon-m{color:#ffe7f4;text-shadow:var(--glow-m)}
+  .neon-c{color:#e5fbff;text-shadow:var(--glow-c)}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;min-height:100svh;display:flex;align-items:center;overflow:hidden}
+  #trail{position:absolute;inset:0;z-index:1;width:100%;height:100%;display:block}
+  .hero .wrap{padding-top:120px;padding-bottom:90px}
+  .hero-inner{max-width:760px}
+  .hero h1{
+    font-size:clamp(2.9rem,9vw,6.4rem);letter-spacing:-.01em;margin:6px 0 22px;
+  }
+  .hero h1 .q{color:var(--dim);font-weight:700;text-shadow:none}
+  .hero p.lead{
+    font-size:clamp(1.05rem,2.4vw,1.35rem);color:var(--haze);max-width:none;margin-bottom:38px;
+  }
+  .hero p.lead b{color:var(--white);font-weight:700}
+  .cta-row{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .btn{
+    font-family:var(--f-disp);font-weight:700;font-size:1.02rem;
+    text-decoration:none;border-radius:999px;padding:16px 30px;display:inline-flex;
+    align-items:center;gap:10px;transition:transform .18s ease, box-shadow .25s ease;
+  }
+  .btn-primary{
+    color:#1a0512;background:linear-gradient(120deg,var(--magenta),#ff6ab8);
+    box-shadow:0 0 0 1px rgba(255,45,149,.5), 0 0 24px rgba(255,45,149,.55);
+  }
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(255,45,149,.8),0 0 40px rgba(255,45,149,.8)}
+  .btn-ghost{color:var(--cyan);border:1px solid rgba(34,224,255,.4);text-shadow:var(--glow-c)}
+  .btn-ghost:hover{border-color:var(--cyan);box-shadow:var(--glow-c)}
+  .hero-tag{
+    margin-top:34px;font-family:var(--f-mono);font-size:.78rem;letter-spacing:.12em;
+    color:var(--dim);display:flex;align-items:center;gap:10px;
+  }
+  .hero-tag .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:var(--glow-c);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+  /* ============ generic section ============ */
+  .band{position:relative;z-index:2;padding:96px 0}
+  .band-head{max-width:640px;margin-bottom:56px}
+  .band-head h2{font-size:clamp(1.9rem,4.6vw,3rem);margin-top:8px}
+  .band-head p{margin-top:18px;color:var(--haze);font-size:1.05rem}
+
+  /* ---- PAIN ---- */
+  .pain{background:linear-gradient(180deg,transparent, rgba(20,10,36,.6))}
+  .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .pain-card{
+    background:rgba(27,15,48,.55);border:1px solid rgba(139,92,246,.22);
+    border-radius:16px;padding:30px 26px;
+  }
+  .pain-card .k{font-family:var(--f-mono);font-size:.8rem;color:var(--magenta);text-shadow:var(--glow-m);letter-spacing:.1em}
+  .pain-card h3{font-size:1.28rem;margin:14px 0 10px;font-weight:700}
+  .pain-card p{font-size:.96rem;color:var(--haze)}
+
+  /* ---- FLOW ---- */
+  .flow-list{display:grid;gap:0;border-top:1px solid rgba(139,92,246,.2)}
+  .flow-item{
+    display:grid;grid-template-columns:96px 1fr;gap:28px;align-items:baseline;
+    padding:30px 8px;border-bottom:1px solid rgba(139,92,246,.2);transition:background .3s ease;
+  }
+  .flow-item:hover{background:rgba(255,45,149,.05)}
+  .flow-num{font-family:var(--f-mono);font-size:1.6rem;font-weight:700;color:var(--cyan);text-shadow:var(--glow-c)}
+  .flow-body h3{font-size:1.35rem;margin-bottom:8px;font-weight:700}
+  .flow-body p{color:var(--haze);font-size:1rem;max-width:52ch}
+
+  /* ---- SPEC ---- */
+  .spec{background:linear-gradient(180deg,rgba(20,10,36,.6),transparent)}
+  .chip-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .chip{
+    position:relative;background:rgba(10,6,18,.6);border:1px solid rgba(34,224,255,.22);
+    border-radius:14px;padding:26px 22px;overflow:hidden;
+  }
+  .chip::after{content:"";position:absolute;left:0;top:0;height:100%;width:3px;background:linear-gradient(var(--magenta),var(--cyan));box-shadow:var(--glow-c)}
+  .chip .big{font-family:var(--f-disp);font-weight:900;font-size:1.5rem;color:var(--white);display:block;margin-bottom:6px}
+  .chip .lbl{font-size:.92rem;color:var(--haze)}
+  .chip .big em{font-style:normal;color:var(--magenta);text-shadow:var(--glow-m)}
+
+  /* ---- PRICE ---- */
+  .price-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:24px;align-items:stretch}
+  .pcard{
+    position:relative;border-radius:22px;padding:40px 34px;
+    background:radial-gradient(120% 90% at 50% 0%, rgba(255,45,149,.14), rgba(27,15,48,.7));
+    border:1px solid rgba(255,45,149,.4);box-shadow:0 0 0 1px rgba(255,45,149,.12) inset, 0 0 40px rgba(255,45,149,.12);
+  }
+  .pcard.add{
+    background:radial-gradient(120% 90% at 50% 0%, rgba(34,224,255,.12), rgba(20,10,36,.7));
+    border-color:rgba(34,224,255,.38);box-shadow:0 0 0 1px rgba(34,224,255,.1) inset,0 0 34px rgba(34,224,255,.1);
+  }
+  .pcard .tier{font-family:var(--f-mono);letter-spacing:.14em;font-size:.78rem;text-transform:uppercase;color:var(--cyan);text-shadow:var(--glow-c)}
+  .pcard.base .tier{color:var(--magenta);text-shadow:var(--glow-m)}
+  .pcard .amount{font-family:var(--f-disp);font-weight:900;line-height:1;margin:18px 0 6px;color:var(--white)}
+  .pcard .amount .yen{font-size:1.6rem;vertical-align:top;margin-right:4px}
+  .pcard .amount .num{font-size:clamp(3rem,7vw,4.4rem)}
+  .pcard .unit{font-size:1.05rem;color:var(--haze)}
+  .pcard .unit b{color:var(--white)}
+  .pcard .note{margin-top:20px;font-size:.9rem;color:var(--dim)}
+  .pcard .ex{margin-top:16px;font-family:var(--f-mono);font-size:.9rem;color:var(--cyan)}
+  .pcard .ex span{display:inline-block;margin-right:14px}
+  .price-foot{margin-top:26px;text-align:center;font-size:.9rem;color:var(--dim)}
+
+  /* ---- FAQ ---- */
+  .faq-list{border-top:1px solid rgba(139,92,246,.2)}
+  details{border-bottom:1px solid rgba(139,92,246,.2)}
+  summary{
+    list-style:none;cursor:pointer;padding:24px 4px;font-family:var(--f-disp);
+    font-weight:700;font-size:1.12rem;color:var(--white);display:flex;justify-content:space-between;gap:20px;align-items:center;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary .pm{color:var(--magenta);text-shadow:var(--glow-m);font-family:var(--f-mono);transition:transform .2s ease;flex:none}
+  details[open] summary .pm{transform:rotate(45deg)}
+  details .ans{padding:0 4px 26px;color:var(--haze);font-size:1rem;max-width:60ch}
+
+  /* ---- FINAL CTA ---- */
+  .final{padding:120px 0;text-align:center}
+  .final h2{font-size:clamp(2.1rem,6vw,3.8rem)}
+  .final p{margin:22px auto 40px;max-width:40ch;color:var(--haze);font-size:1.1rem}
+  .final .btn-primary{font-size:1.15rem;padding:20px 44px}
+
+  footer{position:relative;z-index:2;border-top:1px solid rgba(139,92,246,.16);padding:40px 0;text-align:center}
+  footer .brand{font-family:var(--f-disp);font-weight:900;letter-spacing:.2em;color:var(--haze);font-size:.95rem}
+  footer small{display:block;margin-top:12px;color:var(--dim);font-size:.78rem;line-height:1.8}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease, transform .7s ease}
+  .reveal.on{opacity:1;transform:none}
+
+  /* ============ responsive ============ */
+  @media(max-width:860px){
+    .pain-grid{grid-template-columns:1fr}
+    .chip-grid{grid-template-columns:1fr 1fr}
+    .price-grid{grid-template-columns:1fr}
+    .band{padding:76px 0}
+  }
+  @media(max-width:560px){
+    .chip-grid{grid-template-columns:1fr}
+    .flow-item{grid-template-columns:64px 1fr;gap:16px}
+    .hero .wrap{padding-top:96px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .reveal{opacity:1;transform:none;transition:none}
+    .hero-tag .dot{animation:none}
+  }
+  a:focus-visible,summary:focus-visible,.btn:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:6px}
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <canvas id="trail" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="hero-inner">
+      <span class="eyebrow">ヘブンネット 足あと自動送信</span>
+      <h1><span class="q">その</span>“みたよ”、<br><span class="neon-m">止まらない。</span></h1>
+      <p class="lead">ヘブンネットの足あとを、<b>24時間ぜんぶ自動</b>で。<br>「見てもらう回数」を、指名に変える。</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://line.me/ti/p/E1KWZ-0_f5">LINEで無料相談 →</a>
+        <a class="btn btn-ghost" href="#price">料金を見る</a>
+      </div>
+      <div class="hero-tag"><span class="dot"></span>今夜も、あなたの代わりに足あとを付けて回る</div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ PAIN ============ -->
+<section class="band pain">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <span class="eyebrow">手作業の限界</span>
+      <h2>“みたよ”回り、<br>もう限界じゃないですか？</h2>
+    </div>
+    <div class="pain-grid">
+      <div class="pain-card reveal">
+        <span class="k">01 / 時間</span>
+        <h3>時間が溶ける</h3>
+        <p>1件ずつプロフィールを開いて足あと。まとまった件数を回すだけで、営業前の時間が消えていく。</p>
+      </div>
+      <div class="pain-card reveal">
+        <span class="k">02 / 深夜</span>
+        <h3>夜中は回せない</h3>
+        <p>お客さんが見ている時間ほど、こちらは動けない。ゴールデンタイムを取りこぼしている。</p>
+      </div>
+      <div class="pain-card reveal">
+        <span class="k">03 / 継続</span>
+        <h3>続かない</h3>
+        <p>足あとは「毎日」やって効く。忙しい日ほど止まり、気づけば指名の波も止まっている。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FLOW ============ -->
+<section class="band">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <span class="eyebrow">仕組み</span>
+      <h2>登録したら、<br><span class="neon-c">あとは夜通し自動。</span></h2>
+      <p>やることは、女の子を登録するだけ。設定から先はこちらで。</p>
+    </div>
+    <div class="flow-list">
+      <div class="flow-item reveal">
+        <div class="flow-num">01</div>
+        <div class="flow-body">
+          <h3>女の子を登録する</h3>
+          <p>管理シートに源氏名とアカウントを入れるだけ。人数ぶんまとめてOK。</p>
+        </div>
+      </div>
+      <div class="flow-item reveal">
+        <div class="flow-num">02</div>
+        <div class="flow-body">
+          <h3>まず“みたよ返し”から始める</h3>
+          <p>稼働はここから。自分に足あとをくれた相手へ、もれなく足あとを返します。反応してくれた人こそ、いちばん見込みが濃い。取りこぼしません。</p>
+        </div>
+      </div>
+      <div class="flow-item reveal">
+        <div class="flow-num">03</div>
+        <div class="flow-body">
+          <h3>それから、全国へ能動巡回</h3>
+          <p>返しが済んだら、候補プロフィールを次々に巡回して足あと。ページ送りでエリアは全国まで。自店は自動で除外、二重起動もしない安全設計。</p>
+        </div>
+      </div>
+      <div class="flow-item reveal">
+        <div class="flow-num">04</div>
+        <div class="flow-body">
+          <h3>見返し、そして指名へ</h3>
+          <p>足あとが相手の“みたよ返し”を呼ぶ。「見られている」から、指名は始まります。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SPEC ============ -->
+<section class="band spec">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <span class="eyebrow">スペック</span>
+      <h2>止まらないための、<br>裏側の作り込み。</h2>
+    </div>
+    <div class="chip-grid">
+      <div class="chip reveal"><span class="big">1日 <em>人数×50</em>件</span><span class="lbl">プランの人数に応じて上限を自動計算。20人なら1日1,000件。</span></div>
+      <div class="chip reveal"><span class="big">全国 <em>候補</em></span><span class="lbl">エリアを全国まで拡張。ページ送りで候補を取りこぼさない。</span></div>
+      <div class="chip reveal"><span class="big">1日 <em>5回</em> 自動運転</span><span class="lbl">朝から夜まで時間を分けて自動巡回。稼働時間帯も指定可。</span></div>
+      <div class="chip reveal"><span class="big">二重起動 <em>防止</em></span><span class="lbl">前の処理と重ならない安全ロック。件数の暴発を防ぎます。</span></div>
+      <div class="chip reveal"><span class="big">失敗を <em>通知</em></span><span class="lbl">連続で失敗したときだけLINEでお知らせ。普段は静かに稼働。</span></div>
+      <div class="chip reveal"><span class="big">シートで <em>丸見え</em></span><span class="lbl">誰にいつ足あとを付けたか、管理シートで可視化。運用が見える。</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICE ============ -->
+<section class="band" id="price">
+  <div class="wrap">
+    <div class="band-head reveal" style="max-width:none">
+      <span class="eyebrow">料金</span>
+      <h2>人数で、シンプルに。</h2>
+    </div>
+    <div class="price-grid">
+      <div class="pcard base reveal">
+        <span class="tier">Base ／ 基本プラン</span>
+        <div class="amount"><span class="yen">¥</span><span class="num">22,000</span></div>
+        <div class="unit"><b>20人</b>まで ／ 月額（税込）</div>
+        <p class="note">1日あたり最大1,000件の足あと。まずはこの1枚で、お店ぜんぶ回せます。</p>
+      </div>
+      <div class="pcard add reveal">
+        <span class="tier">Add ／ 追加</span>
+        <div class="amount"><span class="yen">＋¥</span><span class="num">11,000</span></div>
+        <div class="unit"><b>10人ごと</b>に追加 ／ 月額（税込）</div>
+        <div class="ex"><span>30人 ¥33,000</span><span>40人 ¥44,000</span></div>
+        <p class="note">在籍が増えても、10人単位で足すだけ。上限は人数に合わせて自動で伸びます。</p>
+      </div>
+    </div>
+    <p class="price-foot reveal">最低契約や初期費用はありません。まずはLINEでご相談ください。</p>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="band">
+  <div class="wrap">
+    <div class="band-head reveal"><span class="eyebrow">よくある質問</span><h2>気になるところ。</h2></div>
+    <div class="faq-list">
+      <details class="reveal"><summary>始めるまで、何をすればいい？<span class="pm">＋</span></summary><div class="ans">管理シートに女の子のアカウントを入れていただくだけです。稼働時間やエリアの設定は、こちらで行います。</div></details>
+      <details class="reveal"><summary>何人から使える？<span class="pm">＋</span></summary><div class="ans">基本プランで20人まで。在籍が増えたら10人単位で追加できます。上限は人数に合わせて自動で計算されます。</div></details>
+      <details class="reveal"><summary>安全に運用できる？<span class="pm">＋</span></summary><div class="ans">お店のアカウントで、無理のないペースで巡回します。自店は自動で除外し、処理が重ならないよう二重起動も防止しています。</div></details>
+      <details class="reveal"><summary>やめたいときは？<span class="pm">＋</span></summary><div class="ans">月単位でご利用いただけます。停止・解約はいつでも承ります。</div></details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="final">
+  <div class="wrap">
+    <h2 class="reveal">“見られる”を、<span class="neon-m">自動</span>に。</h2>
+    <p class="reveal">今日から、足あと回りはこちらに任せてください。<br>まずはLINEで、お店の人数をお聞かせください。</p>
+    <div class="reveal"><a class="btn btn-primary" href="https://line.me/ti/p/E1KWZ-0_f5">LINEで無料相談 →</a></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="brand">KIRAKU</div>
+    <small>ヘブンネット 足あと（みたよ）自動送信ツール<br>© KIRAKU. 掲載の料金はすべて税込・月額です。サービス内容は予告なく変更する場合があります。</small>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- scroll reveal ---- */
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('on'); io.unobserve(e.target);} });
+  },{threshold:.12});
+  document.querySelectorAll('.reveal').forEach(function(el,i){
+    el.style.transitionDelay = (Math.min(i,6)*40)+'ms';
+    io.observe(el);
+  });
+
+  /* ---- hero footprint trail ---- */
+  var cv = document.getElementById('trail');
+  if(!cv) return;
+  var ctx = cv.getContext('2d');
+  var W,H,DPR, nodes=[], cur, prev, t0, litOrder=[];
+
+  function build(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W*DPR; cv.height = H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    nodes = [];
+    var gap = W < 640 ? 78 : 104;
+    var cols = Math.ceil(W/gap)+1, rows = Math.ceil(H/gap)+1;
+    for(var r=0;r<rows;r++){
+      for(var c=0;c<cols;c++){
+        nodes.push({
+          x:c*gap + (r%2?gap/2:0) + (Math.random()*20-10),
+          y:r*gap + (Math.random()*20-10),
+          lit:0
+        });
+      }
+    }
+    litOrder = [];
+    cur = pickNear(W*0.2, H*0.5);
+    prev = cur;
+  }
+  function pickNear(x,y){
+    var best=0,bd=1e9;
+    for(var i=0;i<nodes.length;i++){
+      var d=(nodes[i].x-x)*(nodes[i].x-x)+(nodes[i].y-y)*(nodes[i].y-y);
+      if(d<bd){bd=d;best=i;}
+    }
+    return best;
+  }
+  function nextNode(){
+    // walk to a nearby unlit-ish node, biased rightward/downward like scanning a list
+    var p=nodes[cur], best=-1, bs=-1e9;
+    for(var i=0;i<nodes.length;i++){
+      if(i===cur) continue;
+      var n=nodes[i];
+      var dx=n.x-p.x, dy=n.y-p.y, dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<40||dist>260) continue;
+      var score = -dist*0.6 + (dx>0?60:0) - n.lit*400 + Math.random()*120;
+      if(score>bs){bs=score;best=i;}
+    }
+    if(best<0) best = Math.floor(Math.random()*nodes.length);
+    prev=cur; cur=best;
+    nodes[cur].lit = 1;
+    litOrder.push(cur);
+    if(litOrder.length>26){ var old=litOrder.shift(); }
+  }
+
+  var acc=0, stepEvery=0.16;
+  function frame(ts){
+    if(!t0) t0=ts;
+    var dt=(ts-t0)/1000; t0=ts; acc+=dt;
+    if(acc>stepEvery){ acc=0; nextNode(); }
+    draw(ts/1000);
+    requestAnimationFrame(frame);
+  }
+
+  function draw(time){
+    ctx.clearRect(0,0,W,H);
+    // faint node lattice
+    for(var i=0;i<nodes.length;i++){
+      var n=nodes[i];
+      n.lit *= 0.985;
+      var base = 0.10 + 0.06*Math.sin(time*1.2 + i);
+      ctx.beginPath();
+      ctx.arc(n.x,n.y, 1.6 + n.lit*2.4, 0, 6.2832);
+      if(n.lit>0.06){
+        ctx.fillStyle='rgba(255,45,149,'+(0.25+n.lit*0.7)+')';
+        ctx.shadowColor='rgba(255,45,149,0.9)'; ctx.shadowBlur=10+n.lit*14;
+      }else{
+        ctx.fillStyle='rgba(139,92,246,'+base+')';
+        ctx.shadowBlur=0;
+      }
+      ctx.fill();
+    }
+    ctx.shadowBlur=0;
+    // scanning beam from prev -> cur
+    var a=nodes[prev], b=nodes[cur];
+    if(a&&b){
+      ctx.strokeStyle='rgba(34,224,255,0.9)';
+      ctx.lineWidth=1.4; ctx.shadowColor='rgba(34,224,255,0.9)'; ctx.shadowBlur=14;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      ctx.beginPath(); ctx.arc(b.x,b.y,3.4,0,6.2832);
+      ctx.fillStyle='rgba(229,251,255,1)'; ctx.fill();
+      ctx.shadowBlur=0;
+    }
+  }
+
+  function staticDraw(){
+    // reduced-motion: light a diagonal path once, no loop
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<nodes.length;i++){
+      var n=nodes[i];
+      var lit = (Math.abs((n.x/W)-(n.y/H))<0.08);
+      ctx.beginPath(); ctx.arc(n.x,n.y,lit?3:1.6,0,6.2832);
+      ctx.fillStyle = lit?'rgba(255,45,149,0.85)':'rgba(139,92,246,0.12)';
+      ctx.fill();
+    }
+  }
+
+  build();
+  if(reduce){ staticDraw(); }
+  else{ requestAnimationFrame(frame); }
+  var rt;
+  window.addEventListener('resize',function(){
+    clearTimeout(rt); rt=setTimeout(function(){ build(); if(reduce) staticDraw(); },200);
+  });
+})();
+</script>
+</body>
+</html>
