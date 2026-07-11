@@ -22,6 +22,7 @@ on:
       - 'shift_reflect.js'
       - 'shift_route.js'
       - 'shift_route_date.js'
+      - 'shift_route_t.js'
       - 'sync_monthly_overlap.js'
       - 'c091_route.js'
       - 'lib/**'
@@ -49,7 +50,7 @@ jobs:
                    nippo_to_geppo_v2.js create_sb_dashboard.js scheduleReader.js \
                    build_dashboard.js customer_search.js meisai_handler.js \
                    kokyaku_update.js geppo_update.js nippo_screenshot.js \
-                   shift_reflect.js shift_route.js shift_route_date.js \
+                   shift_reflect.js shift_route.js shift_route_date.js shift_route_t.js \
                    sync_monthly_overlap.js c091_route.js; do
             if [ -f "$f" ]; then
               scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
