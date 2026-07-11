@@ -481,6 +481,21 @@ async function handle(event, text, client) {
   const now = new Date();
   const { year, month } = determineInitialMonth(shiftData.entries[0], now);
 
+  // [Angel K-XXX 2026-07-12 かず] T-1043+「出勤」は SS反映の成否に依存せずベンリー(rd04)へ即時反映。
+  //   Angelは月次シフト表SSを常設していない(ベンリーが実質マスター)ため、SSに縛られず反映する。
+  //   旧GHA(venrey_dispatch_clients.sh)は使わない=二重書込回避。「出勤」無しの#1043はベンリー非接触。
+  const _firstLine = String(text).split(/\r?\n/)[0] || "";
+  const _isAngelShukkin = (storeId === "T-1043" && /出勤/.test(_firstLine));
+  if (_isAngelShukkin) {
+    try {
+      const shiftLines = String(text).split(/\r?\n/).slice(1); // タグ行の後(名前行はパーサが日付無しで無視)
+      require("/app/chatbot/angel_shift_apply/angel_apply_hook").applyToVenrey(shiftData.name, shiftLines);
+      console.log(`[Angel] T-1043 出勤 → KIRAKUベンリー反映 起動 staff=${shiftData.name}`);
+    } catch (e) {
+      console.error("[Angel] 反映フック失敗(本処理は継続):", e.message);
+    }
+  }
+
   try {
     const result = await shiftReflect.reflectShifts({
       storeConfig, year, month,
@@ -488,33 +503,9 @@ async function handle(event, text, client) {
       entries: shiftData.entries
     });
     if (result.success) {
-      // v7 (2026-05-28 すいさん指示): 成功時 LINE通知 廃止。
-      // 配信・色付け完了は Venrey 管理画面+SS色 で確認できるため。
-      // エラー時のみ通知 (下記 else / catch)。
       console.log(`[shift_route_t] reflectShifts OK storeId=${storeId} staff=${result.name} count=${result.count}`);
-
-      // v9.3 (2026-05-29): T-XXX系 venrey-automation-clients repo に dispatch。
-      // T-001 (CREA/ふわもこ) と T-XXXX (Angel Spa等) で workflow が異なる:
-      //   T-001    → /root/venrey_dispatch_specific.sh (CREA/ふわもこ用 update_schedule_test.yml)
-      //   T-XXXX   → /root/venrey_dispatch_clients.sh  (納品先用  update_clients_schedule.yml)
-      // 本ハンドラ (shift_route_t.js) は T-001 以外のみ扱うので clients 専用で問題ない。
-      if (storeId === "T-1043") {
-        // [Angel K-XXX 2026-07-12 かず] T-1043 は KIRAKUローカル方式(apply_cast_angel/Playwright)へ移行。
-        //   旧GHA(venrey_dispatch_clients.sh)は使わない=二重書込回避。
-        //   1行目に「出勤」がある時だけベンリー(rd04)へ即時反映。無ければSS反映のみ(ベンリー非接触)。
-        const firstLineRaw = String(text).split(/\r?\n/)[0] || "";
-        if (/出勤/.test(firstLineRaw)) {
-          try {
-            const shiftLines = String(text).split(/\r?\n/).slice(1); // タグ行の後(名前行はパーサが日付無しで無視)
-            require("/app/chatbot/angel_shift_apply/angel_apply_hook").applyToVenrey(result.name, shiftLines);
-            console.log(`[Angel] T-1043 出勤 → KIRAKUベンリー反映 起動 staff=${result.name}`);
-          } catch (e) {
-            console.error("[Angel] 反映フック失敗(本処理は継続):", e.message);
-          }
-        } else {
-          console.log(`[Angel] T-1043 「出勤」無し → ベンリー反映せず(SS反映のみ) staff=${result.name}`);
-        }
-      } else {
+      // 他T-XXXX店舗は従来通りGHA dispatch。T-1043は上でベンリー反映済(GHA不使用)。
+      if (storeId !== "T-1043") {
         try {
           const sanitized = String(result.name || "").replace(/["\$`\n\r]/g, "");
           if (sanitized) {
@@ -530,11 +521,18 @@ async function handle(event, text, client) {
         }
       }
     } else {
-      await client.pushMessage({to: target, messages: [{type: "text", text: `❌ シフト反映失敗\n${result.error}`}]}).catch(() => {});
+      // [Angel] T-1043は月次SS未整備でも許容(ベンリーは上で反映済)。失敗通知はしない。他店は従来通り通知。
+      if (storeId === "T-1043") {
+        console.log(`[Angel] SS反映は見送り(月次シフト表SS未整備の可能性) staff=${shiftData.name} err=${result.error}`);
+      } else {
+        await client.pushMessage({to: target, messages: [{type: "text", text: `❌ シフト反映失敗\n${result.error}`}]}).catch(() => {});
+      }
     }
   } catch (e) {
     console.error("[shift_route_t] reflectShifts エラー:", e.message);
-    await client.pushMessage({to: target, messages: [{type: "text", text: `❌ シフト反映エラー: ${e.message}`}]}).catch(() => {});
+    if (storeId !== "T-1043") {
+      await client.pushMessage({to: target, messages: [{type: "text", text: `❌ シフト反映エラー: ${e.message}`}]}).catch(() => {});
+    }
   }
   return true;
 }
