@@ -483,20 +483,12 @@ async function handle(event, text, client) {
   const now = new Date();
   const { year, month } = determineInitialMonth(shiftData.entries[0], now);
 
-  // [Angel K-XXX 2026-07-12 かず] T-1043+「出勤」は SS反映の成否に依存せずベンリー(rd04)へ即時反映。
-  //   Angelは月次シフト表SSを常設していない(ベンリーが実質マスター)ため、SSに縛られず反映する。
-  //   旧GHA(venrey_dispatch_clients.sh)は使わない=二重書込回避。「出勤」無しの#1043はベンリー非接触。
+  // [Angel K-022 2026-07-12] CREA式(SS先)方式へ組替:
+  //   まず月次シフト表SSへ書込 → 成功時のみ ベンリー(rd04) 反映(出勤タグ時)。
+  //   SS書込が失敗(未登録スタッフ等)ならベンリーも見送り、原因をLINE返信する。
+  //   旧「ベンリー先即時反映」は廃止(SSを正とする一本フロー化・二重書込回避)。
   const _firstLine = String(text).split(/\r?\n/)[0] || "";
   const _isAngelShukkin = (storeId === "T-1043" && /出勤/.test(_firstLine));
-  if (_isAngelShukkin) {
-    try {
-      const shiftLines = String(text).split(/\r?\n/).slice(1); // タグ行の後(名前行はパーサが日付無しで無視)
-      require("/app/chatbot/angel_shift_apply/angel_apply_hook").applyToVenrey(shiftData.name, shiftLines);
-      console.log(`[Angel] T-1043 出勤 → KIRAKUベンリー反映 起動 staff=${shiftData.name}`);
-    } catch (e) {
-      console.error("[Angel] 反映フック失敗(本処理は継続):", e.message);
-    }
-  }
 
   try {
     const result = await shiftReflect.reflectShifts({
@@ -506,8 +498,19 @@ async function handle(event, text, client) {
     });
     if (result.success) {
       console.log(`[shift_route_t] reflectShifts OK storeId=${storeId} staff=${result.name} count=${result.count}`);
-      // 他T-XXXX店舗は従来通りGHA dispatch。T-1043は上でベンリー反映済(GHA不使用)。
-      if (storeId !== "T-1043") {
+      if (storeId === "T-1043") {
+        // [Angel] SS書込成功後にベンリー反映(出勤タグ時のみ)。GHA不使用。
+        if (_isAngelShukkin) {
+          try {
+            const shiftLines = String(text).split(/\r?\n/).slice(1); // タグ行の後(名前行はパーサが日付無しで無視)
+            require("/app/chatbot/angel_shift_apply/angel_apply_hook").applyToVenrey(shiftData.name, shiftLines);
+            console.log(`[Angel] T-1043 SS反映OK → ベンリー反映 起動 staff=${shiftData.name}`);
+          } catch (e) {
+            console.error("[Angel] ベンリー反映フック失敗(SS反映は成功):", e.message);
+          }
+        }
+      } else {
+        // 他T-XXXX店舗は従来通りGHA dispatch。
         try {
           const sanitized = String(result.name || "").replace(/["\$`\n\r]/g, "");
           if (sanitized) {
@@ -523,18 +526,15 @@ async function handle(event, text, client) {
         }
       }
     } else {
-      // [Angel] T-1043は月次SS未整備でも許容(ベンリーは上で反映済)。失敗通知はしない。他店は従来通り通知。
+      // SS反映失敗: T-1043はベンリーも見送り。原因をLINE返信(未登録スタッフ等をユーザーへ通知)。
       if (storeId === "T-1043") {
-        console.log(`[Angel] SS反映は見送り(月次シフト表SS未整備の可能性) staff=${shiftData.name} err=${result.error}`);
-      } else {
-        await client.pushMessage({to: target, messages: [{type: "text", text: `❌ シフト反映失敗\n${result.error}`}]}).catch(() => {});
+        console.log(`[Angel] SS反映失敗のためベンリー反映も中止 staff=${shiftData.name} err=${result.error}`);
       }
+      await client.pushMessage({to: target, messages: [{type: "text", text: `❌ シフト反映失敗\n${result.error}`}]}).catch(() => {});
     }
   } catch (e) {
     console.error("[shift_route_t] reflectShifts エラー:", e.message);
-    if (storeId !== "T-1043") {
-      await client.pushMessage({to: target, messages: [{type: "text", text: `❌ シフト反映エラー: ${e.message}`}]}).catch(() => {});
-    }
+    await client.pushMessage({to: target, messages: [{type: "text", text: `❌ シフト反映エラー: ${e.message}`}]}).catch(() => {});
   }
   return true;
 }
