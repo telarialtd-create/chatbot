@@ -108,7 +108,9 @@ function _getAuthRW() {
 function parseStoreIdFromText(text) {
   if (!text) return null;
   const firstLine = String(text).split(/\r?\n/)[0].trim();
-  const m = firstLine.match(/^#?T-?(\d{3,4})\b/i);
+  // [Angel K-022 2026-07-12] トリガー表記ゆれを吸収: #1043 / T#1043 / #T1043 / T-1043 / T1043 を全て受理。
+  //   旧 /^#?T-?(\d{3,4})\b/i はT必須で「#1043 出勤」を弾き無視していた(夕方テスト失敗の根本原因)。
+  const m = firstLine.match(/^(?:T#-?|#?T-?|#)(\d{3,4})\b/i);
   if (!m) return null;
   const num = m[1].padStart(3, "0");
   if (num === "001") return null;
