@@ -167,6 +167,18 @@ function normalizeStaffName(s) {
     .toLowerCase();
 }
 
+// [Angel K-022 2026-07-13] シフト行の日付「日」抜けを補正 (「7月17 20-24上」→「7月17日 20-24上」)。
+//   日が抜けると CREA(SS)側は誤った日(先頭数字)へゴミ書込、C091(ベンリー)側は無反応になるため予防。
+//   1行目(タグ行)は対象外。行頭の (N月)?N が「日」でなく空白の直前にある場合のみ日を挿入。
+//   既に「日」付き・「N日(曜)」・時刻(20-24等)・休み/OFF は不変。
+function normalizeAngelDateLines(text) {
+  const lines = String(text).split(/\r?\n/);
+  for (let i = 1; i < lines.length; i++) {
+    lines[i] = lines[i].replace(/^((?:\d+月)?\d+)(?!日)(?=\s)/, "$1日");
+  }
+  return lines.join("\n");
+}
+
 // v9.1 (2026-05-29): C-028 認証データのファイル永続化キャッシュ (5分TTL + Quotaエラー時 stale fallback)
 // pm2 restart 跨いで保持・Dashboard監視等の他機能がQuota食い続けても認証通る保険
 const fs = require("fs");
@@ -464,6 +476,11 @@ async function handle(event, text, client) {
       `オーナーに進捗を確認してください。`
     }]}).catch(() => {});
     return true;
+  }
+
+  // [Angel K-022 2026-07-13] T-1043は日付「日」抜けを補正してからパース(SS誤書込/ベンリー無反応の予防)
+  if (storeId === "T-1043") {
+    text = normalizeAngelDateLines(text);
   }
 
   const shiftData = shiftReflect.parseShiftMessage(text);
