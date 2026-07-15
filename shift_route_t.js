@@ -508,7 +508,10 @@ async function handle(event, text, client) {
   //   SS書込が失敗(未登録スタッフ等)ならベンリーも見送り、原因をLINE返信する。
   //   旧「ベンリー先即時反映」は廃止(SSを正とする一本フロー化・二重書込回避)。
   const _firstLine = String(text).split(/\r?\n/)[0] || "";
-  const _isAngelShukkin = (storeId === "T-1043" && /出勤/.test(_firstLine));
+  // [2026-07-15 かず] 起動条件を「出勤タグ時のみ」→「T-1043のSS書込成功時つねに」へ拡大。
+  //   目的: LINEで「休み/取消」を送った時も即ベンリー反映→エステ魂から即削除(幽霊の予約リスク対策)。
+  //   安全網: buildEntriesが休み=off/出勤=setを判定し対象行が無ければno-op。apply_castはgirl_id照合で取り違え防止。
+  const _isAngelShukkin = (storeId === "T-1043");
 
   try {
     const result = await shiftReflect.reflectShifts({
