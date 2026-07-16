@@ -980,7 +980,7 @@ async function transferMeisaiDirect(spreadsheetId, sheets) {
 // 明細書（新フォーマット）処理本体
 // parsed: { storeId, dateStr, name, transport, bance, otsuri }
 // userId: LINEイベントの発言者userId（許可チェック用）
-async function processMeisaisyoAndPush(target, client, parsed, userId) {
+async function processMeisaisyoAndPush(target, client, parsed, userId, replyToken) {
   try {
     // T-XXX から店舗フォルダIDを取得（許可userIdチェック付き）
     const folderInfo = await getFolderByStoreId(parsed.storeId, userId);
@@ -1038,11 +1038,22 @@ async function processMeisaisyoAndPush(target, client, parsed, userId) {
     const filename = await screenshotMeisai(spreadsheetId, MEISAISYO_SHEET_NAME, MEISAISYO_RANGE, 'meisaisyo', { compactEmpty: true });
     const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
     const imageUrl = `${baseUrl}/temp/${filename}`;
-    console.log(`[明細書] Push送信: ${imageUrl} → ${target}`);
-    await client.pushMessage({
-      to: target,
-      messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }],
-    });
+    // [課金削減] reply優先（無料）・失敗時のみpush（課金）へフォールバック。
+    // 明細書処理は約5〜10秒でreply有効時間内。実測でreply成功を確認済(2026-07-16)。
+    const imageMsg = { type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl };
+    let sentVia = 'push';
+    if (replyToken) {
+      try {
+        await client.replyMessage({ replyToken, messages: [imageMsg] });
+        sentVia = 'reply';
+      } catch (replyErr) {
+        console.log(`[明細書] reply失敗→push(課金)フォールバック: ${replyErr.message}`);
+        await client.pushMessage({ to: target, messages: [imageMsg] });
+      }
+    } else {
+      await client.pushMessage({ to: target, messages: [imageMsg] });
+    }
+    console.log(`[明細書] 送信完了(${sentVia === 'reply' ? '✅reply無料' : '💰push課金'}): ${imageUrl} → ${target}`);
 
     // [K-006 2026-05-21] クライアント仕様の明細書処理完了後、3秒待ってE40をクリア（次回明細書作成時の残値混入を防止）
     // 注: スプシ上で人間が手動E48トグルしたケースはNode処理外。Apps Script onEdit側で別途対応予定
@@ -1621,30 +1632,6 @@ async function handleLineEvent(event) {
   const text = event.message.text.trim();
   const userId = event.source?.userId;
 
-  // ── [一時テスト・検証後削除] reply無料化の実地確認（LINE課金削減 C-XXX）──
-  // "replytest" 受信で、明細書と同等以上の遅延(10秒)後に画像をreplyで送信し、
-  // 無料replyが有効時間内に届くか実測する。失敗時はpush(課金)に自動フォールバック。
-  // ※本番の明細書処理には一切触れない独立分岐。
-  if (text === 'replytest') {
-    const replyToken = event.replyToken;
-    const target = event.source?.groupId || userId;
-    const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
-    const imageUrl = `${baseUrl}/replytest.png`;
-    const t0 = Date.now();
-    console.log(`[replytest] 受信 target=${target} → 10秒後にreply送信を試行`);
-    setTimeout(async () => {
-      const waited = Date.now() - t0;
-      try {
-        await client.replyMessage({ replyToken, messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }] });
-        console.log(`[replytest] ✅ reply成功(無料) 遅延${waited}ms後に送信OK`);
-      } catch (replyErr) {
-        console.log(`[replytest] ⚠️ reply失敗→push(課金)フォールバック 遅延${waited}ms err=${replyErr.message}`);
-        await client.pushMessage({ to: target, messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }] }).catch(e => console.error(`[replytest] pushも失敗: ${e.message}`));
-      }
-    }, 10000);
-    return;
-  }
-
   // #whoami: 自分のLINE userIdを返信（1対1/グループ共通・許可リスト登録用）
   if (/^#whoami$/i.test(text)) {
     const replyToken = event.replyToken;
@@ -1876,7 +1863,7 @@ async function handleLineEvent(event) {
       if (meisaisyo) {
         const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
         console.log(`[LINE] [C-033] 明細書リクエスト受信: ${meisaisyo.storeId} / ${meisaisyo.dateStr} / ${meisaisyo.name} / 交通費=${meisaisyo.transport ?? '指定なし'} / バンス=${meisaisyo.bance ?? 'なし'} / お釣り=${meisaisyo.otsuri ?? 'なし'} → target=${target}`);
-        setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyo, userId).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
+        setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyo, userId, event.replyToken).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
         return;
       }
 
@@ -2317,7 +2304,7 @@ async function handleLineEvent(event) {
   if (meisaisyoG) {
     const target = event.source?.groupId || userId || process.env.LINE_USER_ID;
     console.log(`[LINE] [C-033] 明細書リクエスト受信(G): ${meisaisyoG.storeId} / ${meisaisyoG.dateStr} / ${meisaisyoG.name} / 交通費=${meisaisyoG.transport ?? '指定なし'} / バンス=${meisaisyoG.bance ?? 'なし'} / お釣り=${meisaisyoG.otsuri ?? 'なし'} → target=${target}`);
-    setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyoG, userId).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
+    setImmediate(() => processMeisaisyoAndPush(target, client, meisaisyoG, userId, event.replyToken).catch(err => console.error('[明細書] 未処理エラー:', err.message)));
     return;
   }
 
