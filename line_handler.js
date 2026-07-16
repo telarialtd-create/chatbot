@@ -97,6 +97,39 @@ function createLineClient() {
   });
 }
 
+// ── [LINE課金削減] reply優先クライアント ───────────────────────
+// pushMessage(課金) の呼び出しを、未使用の reply token(無料) があれば replyMessage(無料) に
+// 自動振替し、失敗時のみ push にフォールバックする。reply token は1イベントにつき1回のみ有効な
+// ため「最初の送信=reply(無料)・2通目以降=push」を state.used で自動制御する。
+// ※ handleLineEvent 内の全 pushMessage 宛先は event 送信元(groupId/userId)のため、reply化しても
+//   配信先は変わらない（誤配信なし）。能動送信(cron等/別targetへのpush)には適用しない。
+function makeReplyFirstClient(realClient, replyToken) {
+  const state = { used: false };
+  return new Proxy(realClient, {
+    get(t, prop, r) {
+      if (prop === 'pushMessage') {
+        return async (arg) => {
+          if (replyToken && !state.used && arg && arg.messages) {
+            try {
+              await t.replyMessage({ replyToken, messages: arg.messages });
+              state.used = true;
+              return {};
+            } catch (e) {
+              console.log(`[LINE課金削減] reply失敗→push(課金)フォールバック: ${e.message}`);
+            }
+          }
+          return t.pushMessage(arg);
+        };
+      }
+      if (prop === 'replyMessage') {
+        return (arg) => { state.used = true; return t.replyMessage(arg); };
+      }
+      const v = Reflect.get(t, prop, r);
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+  });
+}
+
 // ── Google 認証 ───────────────────────────────────────────
 function createAuthClient() {
   let client_id, client_secret, refresh_token;
@@ -1625,7 +1658,12 @@ function isBotCommand(text, event) {
 
 // ── LINE イベントハンドラ（200を即返してバックグラウンド処理） ──
 async function handleLineEvent(event) {
-  const client = createLineClient();
+  const realClient = createLineClient();
+  // [LINE課金削減] message eventは reply token(無料) を優先し、失敗時のみ push(課金) に落とす。
+  // 顧客更新/月報/明細/明細書/シフト応答/日報スクショ 等のコマンド応答が自動で無料化される。
+  const client = (event.type === 'message' && event.replyToken)
+    ? makeReplyFirstClient(realClient, event.replyToken)
+    : realClient;
 
   if (event.type !== 'message' || event.message.type !== 'text') return;
 
