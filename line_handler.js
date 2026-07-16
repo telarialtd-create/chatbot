@@ -1621,6 +1621,30 @@ async function handleLineEvent(event) {
   const text = event.message.text.trim();
   const userId = event.source?.userId;
 
+  // ── [一時テスト・検証後削除] reply無料化の実地確認（LINE課金削減 C-XXX）──
+  // "replytest" 受信で、明細書と同等以上の遅延(10秒)後に画像をreplyで送信し、
+  // 無料replyが有効時間内に届くか実測する。失敗時はpush(課金)に自動フォールバック。
+  // ※本番の明細書処理には一切触れない独立分岐。
+  if (text === 'replytest') {
+    const replyToken = event.replyToken;
+    const target = event.source?.groupId || userId;
+    const baseUrl = (process.env.LINE_BOT_SERVER_URL || '').replace(/\/$/, '');
+    const imageUrl = `${baseUrl}/replytest.png`;
+    const t0 = Date.now();
+    console.log(`[replytest] 受信 target=${target} → 10秒後にreply送信を試行`);
+    setTimeout(async () => {
+      const waited = Date.now() - t0;
+      try {
+        await client.replyMessage({ replyToken, messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }] });
+        console.log(`[replytest] ✅ reply成功(無料) 遅延${waited}ms後に送信OK`);
+      } catch (replyErr) {
+        console.log(`[replytest] ⚠️ reply失敗→push(課金)フォールバック 遅延${waited}ms err=${replyErr.message}`);
+        await client.pushMessage({ to: target, messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }] }).catch(e => console.error(`[replytest] pushも失敗: ${e.message}`));
+      }
+    }, 10000);
+    return;
+  }
+
   // #whoami: 自分のLINE userIdを返信（1対1/グループ共通・許可リスト登録用）
   if (/^#whoami$/i.test(text)) {
     const replyToken = event.replyToken;
