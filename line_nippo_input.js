@@ -42,6 +42,11 @@ const CELL_MAP = {
   '来店時間': 'C13',
 };
 
+// 既知の項目ラベル一覧（区切り文字を付け忘れた入力 例「番号090…」でも確実に分離するため）
+// 長い順に判定する（備考欄→備考 / 店舗名→店名 の誤マッチを防ぐ）
+const KNOWN_LABELS = ['来店時間', '店舗名', '備考欄', 'オプション', '予約者', '日付', '店名', '名前', '指名', 'コース', '媒体', '備考', '部屋', '番号']
+  .sort((a, b) => b.length - a.length);
+
 // ── Google 認証 ──────────────────────────────────────────────
 function createAuthClient() {
   const credsPath = path.join(process.env.HOME, '.config/gdrive-server-credentials.json');
@@ -95,12 +100,25 @@ function parseNippoInput(text) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // 「項目名:値」または「項目名　値」（コロン/全角コロン/スペース/タブ区切り）
-    const match = line.match(/^(.+?)[:\uff1a\s\u3000]+(.*)$/) ||
-                  line.match(/^(.+?)[\s\u3000]+(.+)$/);
-    if (match) {
-      const key = match[1].trim();
-      let val = match[2].trim();
+    // まず既知ラベルで先頭一致を試す（区切り文字が無くても分離できる）
+    //   例「番号090 3377 4359」「番号09033774359」→ key=番号 / val=番号以降
+    let key = null;
+    let val = null;
+    const label = KNOWN_LABELS.find(l => line.startsWith(l));
+    if (label) {
+      key = label;
+      // ラベル直後の区切り（コロン/全角コロン/スペース/タブ）は任意で除去
+      val = line.slice(label.length).replace(/^[:\uff1a\s\u3000]+/, '').trim();
+    } else {
+      // 未知ラベルは従来通り「項目名:値」または「項目名　値」で分離
+      const match = line.match(/^(.+?)[:\uff1a\s\u3000]+(.*)$/) ||
+                    line.match(/^(.+?)[\s\u3000]+(.+)$/);
+      if (match) {
+        key = match[1].trim();
+        val = match[2].trim();
+      }
+    }
+    if (key !== null) {
       // 半角英字のみの値は大文字に変換（r→R, t→T など）
       if (/^[a-zA-Z]+$/.test(val)) {
         val = val.toUpperCase();
