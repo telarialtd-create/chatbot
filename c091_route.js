@@ -97,18 +97,31 @@ function run(cmd, args, opts = {}) {
   });
 }
 
+// [2026-07-19 かず] Sheets APIの一時的なタイムアウト/レート制限に備え、設定・名簿の取得はリトライする。
+//   これが無いと1回の一時失敗で resolveStore がその店舗を黙って候補から外し、
+//   実在キャスト(例:小林もえ)を「名簿にありません」と誤返信していた(T-001名簿取得タイムアウトで実害)。
+async function runRetry(cmd, args, tries = 3) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try { return await run(cmd, args); }
+    catch (e) { lastErr = e; if (i < tries - 1) await new Promise(r => setTimeout(r, 1500 * (i + 1))); }
+  }
+  throw lastErr;
+}
+
 // 対象店舗群の名簿から店舗+キャストを特定(完全一致優先→部分一致・一意でなければ聞き返し)
 async function resolveStore(storeTags, firstLine) {
   const t = norm(firstLine);
   const exact = [], partial = [];
+  const failedTags = [];   // 名簿(または設定)を取得できなかった店舗。名前の有無を判定できないので「無い」と断定しない
   for (const tag of storeTags) {
     let cfg;
-    try { cfg = JSON.parse(await run('node', [SETTINGS_TOOL, 'config', tag])); }
-    catch (e) { console.error(`[c091_route] ${tag} 設定取得失敗:`, e.message); continue; }
+    try { cfg = JSON.parse(await runRetry('node', [SETTINGS_TOOL, 'config', tag])); }
+    catch (e) { console.error(`[c091_route] ${tag} 設定取得失敗:`, e.message); failedTags.push(tag); continue; }
     if (!cfg.ledgerSsId) continue;
     const rosterPath = `/tmp/c091_roster_${tag}.json`;
-    try { await run('node', [ROSTER_GEN, '--out', rosterPath, '--ss', cfg.ledgerSsId]); }
-    catch (e) { console.error(`[c091_route] ${tag} 名簿取得失敗:`, e.message); continue; }
+    try { await runRetry('node', [ROSTER_GEN, '--out', rosterPath, '--ss', cfg.ledgerSsId]); }
+    catch (e) { console.error(`[c091_route] ${tag} 名簿取得失敗:`, e.message); failedTags.push(tag); continue; }
     const roster = (JSON.parse(fs.readFileSync(rosterPath, 'utf8')).roster || []);
     for (const r of roster) {
       const n = norm(r.name);
@@ -121,6 +134,8 @@ async function resolveStore(storeTags, firstLine) {
   if (exact.length > 1) return { ambiguous: exact };
   if (partial.length === 1) return { hit: partial[0] };
   if (partial.length > 1) return { ambiguous: partial };
+  // ヒット無し。ただし名簿を取得できなかった店舗がある場合は「名前が無い」と誤断せず、一時失敗として通知する。
+  if (failedTags.length) return { rosterError: failedTags };
   return {};
 }
 
@@ -211,6 +226,12 @@ async function processShiftPost(client, storeTags, lines, groupId, replyToken, s
       if (r.ambiguous) {
         const cand = r.ambiguous.map(h => `${h.cfg.name}「${h.name}」`).join(' / ');
         await sendBack(`⚠️「${lines[0]}」は複数の候補があります: ${cand}\nフルネーム(または店舗が分かる名前)で送り直してください`);
+        return;
+      }
+      if (r.rosterError) {
+        // 名簿を取得できなかった店舗があり、名前の有無を判定できない状態。名前ミスと誤解させないよう明示する。
+        console.error(`[c091_route] 名簿一時取得失敗のため保留: 失敗店舗=${r.rosterError.join('/')} name="${lines[0]}"`);
+        await sendBack(`⚠️システムが一時的に名簿を取得できませんでした(対象: ${r.rosterError.join('/')})。\n名前の間違いではありません。30秒ほどおいて、もう一度そのまま送ってください🙇`);
         return;
       }
       if (!r.hit) {
