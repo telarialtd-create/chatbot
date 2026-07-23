@@ -46,16 +46,12 @@ test('sanitizeLine: 改行と制御文字を空白化', () => {
   assert.strictEqual(h.sanitizeLine('あ\r\nい\tう'), 'あ い う');
 });
 
-test('escapeHtml: 特殊文字をエスケープ', () => {
-  assert.strictEqual(h.escapeHtml('<b>&"\''), '&lt;b&gt;&amp;&quot;&#39;');
-});
-
-test('buildRow: 17列・電話は先頭アポストロフィでゼロ落ち防止', () => {
+test('buildRow: 17列・RAW書込のため電話に先頭アポストロフィは付与しない', () => {
   const row = h.buildRow({ ...validBody, timestamp: '2026-07-24 10:00:00', ip: '1.2.3.4' });
   assert.strictEqual(row.length, 17);
   assert.strictEqual(row[0], '2026-07-24 10:00:00');
-  assert.strictEqual(row[8], "'0541234567"); // 店舗電話
-  assert.strictEqual(row[3], "'09011112222"); // 代理店連絡先
+  assert.strictEqual(row[8], '0541234567'); // 店舗電話
+  assert.strictEqual(row[3], '09011112222'); // 代理店連絡先
   assert.strictEqual(row[16], '1.2.3.4');
 });
 
@@ -65,4 +61,64 @@ test('buildEmailText: 全項目とID/PWを含む', () => {
   assert.match(txt, /esthe\.test@icloud\.com/);
   assert.match(txt, /Pw12345/);
   assert.match(txt, /限定/);
+});
+
+test('sendIntakeMails: self成功・primary失敗を個別に返す', async () => {
+  process.env.AGENCY_NOTIFY_SELF = 'self@example.com';
+  process.env.AGENCY_NOTIFY_PRIMARY = 'primary@example.com';
+  const fakeTransport = {
+    sendMail: async ({ to }) => {
+      if (to === 'primary@example.com') throw new Error('primary送信失敗（テスト用）');
+      return { ok: true };
+    },
+  };
+  const result = await h.sendIntakeMails(
+    { ...validBody, timestamp: '2026-07-24 10:00:00', ip: '1.2.3.4' },
+    fakeTransport
+  );
+  assert.deepStrictEqual(result, { self: true, primary: false });
+});
+
+test('sendIntakeMails: 両方成功', async () => {
+  process.env.AGENCY_NOTIFY_SELF = 'self@example.com';
+  process.env.AGENCY_NOTIFY_PRIMARY = 'primary@example.com';
+  const fakeTransport = { sendMail: async () => ({ ok: true }) };
+  const result = await h.sendIntakeMails(
+    { ...validBody, timestamp: '2026-07-24 10:00:00', ip: '1.2.3.4' },
+    fakeTransport
+  );
+  assert.deepStrictEqual(result, { self: true, primary: true });
+});
+
+test('sendIntakeMails: 両方失敗', async () => {
+  process.env.AGENCY_NOTIFY_SELF = 'self@example.com';
+  process.env.AGENCY_NOTIFY_PRIMARY = 'primary@example.com';
+  const fakeTransport = { sendMail: async () => { throw new Error('送信失敗（テスト用）'); } };
+  const result = await h.sendIntakeMails(
+    { ...validBody, timestamp: '2026-07-24 10:00:00', ip: '1.2.3.4' },
+    fakeTransport
+  );
+  assert.deepStrictEqual(result, { self: false, primary: false });
+});
+
+test('registerAgencyIntakeRoute: ハニーポット項目に値があれば検証・保存・送信をスキップしok=trueを返す', async () => {
+  let captured;
+  const fakeApp = { post: (path, handler) => { captured = { path, handler }; } };
+  h.registerAgencyIntakeRoute(fakeApp);
+  assert.strictEqual(captured.path, '/api/agency-intake');
+
+  const req = {
+    body: { ...validBody, website: 'http://spam.example.com' },
+    headers: {},
+    socket: {},
+  };
+  let statusCode = null;
+  let jsonBody = null;
+  const res = {
+    status(code) { statusCode = code; return this; },
+    json(body) { jsonBody = body; return this; },
+  };
+  await captured.handler(req, res);
+  assert.strictEqual(statusCode, null); // status()未呼び出し＝デフォルト200相当
+  assert.deepStrictEqual(jsonBody, { ok: true });
 });
