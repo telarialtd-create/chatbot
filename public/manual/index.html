@@ -3,287 +3,317 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KIRAKUBOT｜LINEひとつで店舗業務が劇的に変わる、究極の自動化サービス</title>
+<title>KIRAKUBOT｜電話番号を送ると、3秒で履歴が返ってくる。LINEひとつの店舗業務自動化</title>
+<meta name="description" content="電話番号を送ると3秒で顧客履歴が返信。給料明細・月報・シフト・日報・売上分析まで、店舗業務をLINEひとつで自動化するKIRAKUBOT。">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
-    color:#1a1a2e;
-    line-height:1.7;
-    background:#fafbff;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    color:#1d2733;
+    line-height:1.75;
+    background:#fff;
     -webkit-font-smoothing:antialiased;
   }
-  .container { max-width:1080px; margin:0 auto; padding:0 24px; }
+  .container { max-width:1000px; margin:0 auto; padding:0 24px; }
+  a { color:inherit; }
+  strong { font-weight:700; }
+
+  .section { padding:72px 0; }
+  .section.alt { background:#f5f7f9; }
+  .section-title {
+    font-size:clamp(24px,3.4vw,32px);
+    font-weight:700;
+    line-height:1.4;
+    margin-bottom:14px;
+  }
+  .section-lead {
+    font-size:15px;
+    color:#5a6570;
+    margin-bottom:40px;
+    max-width:680px;
+  }
+
+  .btn-line {
+    display:inline-block;
+    background:#06c755;
+    color:#fff;
+    padding:15px 32px;
+    border-radius:10px;
+    font-weight:700;
+    font-size:16px;
+    text-decoration:none;
+    box-shadow:0 4px 14px rgba(6,199,85,0.3);
+  }
+  .btn-line:hover { background:#05b34c; }
+
+  /* ============================================================
+     .line-chat — LINEトーク画面 再現コンポーネント
+     ============================================================ */
+  :root{
+    --lc-bg-top:#94AFDC;
+    --lc-bg-mid:#86A4D4;
+    --lc-bg-btm:#7E9CCB;
+    --lc-green:#85E249;
+    --lc-ink:#1f2937;
+    --lc-meta:rgba(63,76,94,.78);
+    --lc-link:#2662d9;
+  }
+  .line-chat{
+    width:100%;
+    max-width:375px;
+    margin:0 auto;
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:0 4px 24px rgba(15,30,60,.18);
+    background:linear-gradient(180deg,var(--lc-bg-top) 0%,var(--lc-bg-mid) 55%,var(--lc-bg-btm) 100%);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  .lc-header{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 14px 10px;
+    color:var(--lc-ink);
+  }
+  .lc-back{flex:none;display:flex;align-items:center}
+  .lc-back svg{width:22px;height:22px;stroke:var(--lc-ink)}
+  .lc-title{
+    flex:1;font-size:17px;font-weight:700;letter-spacing:.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .lc-hicons{flex:none;display:flex;align-items:center;gap:18px}
+  .lc-hicons svg{width:22px;height:22px;stroke:var(--lc-ink)}
+  .lc-body{padding:6px 12px 16px;min-height:100px}
+  .lc-date{text-align:center;margin:8px 0 14px}
+  .lc-date span{
+    display:inline-block;padding:3px 12px;border-radius:999px;
+    background:rgba(90,110,142,.45);color:#fff;font-size:11px;
+  }
+  .lc-row{display:flex;margin-bottom:12px}
+  .lc-sent{justify-content:flex-end;align-items:flex-end}
+  .lc-sent .lc-meta{
+    display:flex;flex-direction:column;align-items:flex-end;
+    margin-right:6px;margin-bottom:2px;
+    font-size:10px;line-height:1.5;color:var(--lc-meta);
+  }
+  .lc-sent .lc-bubble{
+    position:relative;
+    max-width:72%;
+    background:var(--lc-green);
+    border-radius:18px;
+    padding:9px 13px;
+    font-size:15px;line-height:1.5;color:#111;
+    white-space:pre-line;
+    word-break:break-word;
+    text-align:left;
+  }
+  .lc-sent .lc-bubble::before{
+    content:"";position:absolute;top:0;right:-5px;
+    width:10px;height:13px;background:var(--lc-green);
+    clip-path:polygon(0 0,100% 0,0 100%);
+  }
+  .lc-recv{justify-content:flex-start;align-items:flex-start}
+  .lc-avatar{
+    flex:none;width:36px;height:36px;border-radius:50%;
+    background:#fff;margin-right:8px;margin-top:2px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:#111;text-align:center;
+    box-shadow:0 1px 2px rgba(0,0,0,.12);
+    overflow:hidden;
+    line-height:1.1;
+  }
+  .lc-avatar .a1{font-size:8px;font-weight:700;line-height:1.1}
+  .lc-avatar .a2{font-size:5px;letter-spacing:.02em;line-height:1.2;color:#333}
+  .lc-recv-main{max-width:78%;min-width:0}
+  .lc-name{font-size:11px;color:rgba(40,52,70,.85);margin:0 0 4px 2px;line-height:1.3}
+  .lc-recv-line{display:flex;align-items:flex-end}
+  .lc-recv .lc-bubble{
+    position:relative;
+    background:#fff;
+    border-radius:18px;
+    padding:9px 13px;
+    font-size:15px;line-height:1.5;color:#111;
+    white-space:pre-line;
+    word-break:break-word;
+    text-align:left;
+  }
+  .lc-recv .lc-bubble::before{
+    content:"";position:absolute;top:6px;left:-5px;
+    width:9px;height:12px;background:#fff;
+    clip-path:polygon(100% 0,0 45%,100% 100%);
+  }
+  .lc-recv .lc-time{
+    flex:none;font-size:10px;color:var(--lc-meta);
+    margin-left:6px;margin-bottom:2px;line-height:1.4;
+  }
+  .lc-bubble .lc-a{color:var(--lc-link);text-decoration:underline}
+  /* 画像メッセージ（明細書サムネイル＝全体を縮小表示） */
+  .lc-recv-main.wide{max-width:calc(100% - 46px)}
+  .lc-img{
+    width:100%;
+    border-radius:14px;overflow:hidden;
+    box-shadow:0 1px 3px rgba(0,0,0,.18);
+    background:#fff;
+  }
+  .lc-scale{width:355px;transform-origin:top left}
+  .lc-scale .salary-wrap{margin:0;border-radius:0;box-shadow:none;max-width:100%;overflow:hidden}
+  .lc-scale .salary-title{font-size:13px;letter-spacing:.25em;padding:10px}
+  .lc-scale .salary-meta{grid-template-columns:60px 1fr !important}
+  .lc-scale .salary-meta > div{padding:5px 7px;font-size:10px}
+  .lc-scale .salary-meta .lbl{letter-spacing:.15em}
+  .lc-scale .salary-section-title{font-size:10px;letter-spacing:.25em;padding:6px}
+  .lc-scale table.salary-table th,.lc-scale table.salary-table td{padding:3px 1px;font-size:9px;letter-spacing:0}
+  .lc-scale table.salary-table th{line-height:1.15}
+  .lc-scale table.salary-table tr.total td{letter-spacing:.1em}
+  .lc-scale table.settle td{padding:5px 7px;font-size:10px}
+  .lc-scale table.settle td:first-child{letter-spacing:.08em}
+  .lc-scale table.settle td:nth-child(2){font-size:9px}
+  .lc-scale table.settle tr.sum td,.lc-scale table.settle tr.shop td{font-size:11px;letter-spacing:.05em}
+  .lc-scale table.settle tr.shop td.amt{font-size:12px}
+  .lc-input{
+    display:flex;align-items:center;gap:12px;
+    padding:8px 12px 10px;
+  }
+  .lc-input svg{width:22px;height:22px;stroke:var(--lc-ink);flex:none}
+  .lc-field{
+    flex:1;height:32px;border-radius:16px;background:rgba(255,255,255,.92);
+    display:flex;align-items:center;padding:0 12px;
+    font-size:14px;color:#9aa3ad;
+  }
+  .chat-note{
+    font-size:12.5px;color:#5a6570;
+    max-width:375px;margin:10px auto 0;
+    text-align:left;
+  }
 
   /* HERO */
-  .hero {
-    background:linear-gradient(135deg,#1e3c72 0%,#2a5298 50%,#6a3093 100%);
-    color:#fff;
-    padding:90px 0 110px;
-    position:relative;
-    overflow:hidden;
+  .hero{
+    background:linear-gradient(180deg,#eef2f7 0%,#fff 100%);
+    padding:72px 0 80px;
   }
-  .hero::before {
+  .hero-grid{
+    display:grid;
+    grid-template-columns:1fr 375px;
+    gap:56px;
+    align-items:center;
+  }
+  .hero-note{
+    font-size:13px;
+    color:#5a6570;
+    margin-bottom:16px;
+    font-weight:600;
+  }
+  .hero h1{
+    font-size:clamp(30px,4.6vw,46px);
+    font-weight:800;
+    line-height:1.35;
+    margin-bottom:20px;
+    letter-spacing:-0.01em;
+  }
+  .hero-sub{
+    font-size:15.5px;
+    color:#3c4652;
+    margin-bottom:28px;
+    max-width:520px;
+  }
+  .hero-facts{
+    list-style:none;
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 20px;
+    margin-top:22px;
+  }
+  .hero-facts li{
+    font-size:13px;
+    color:#5a6570;
+    padding-left:16px;
+    position:relative;
+  }
+  .hero-facts li::before{
     content:"";
     position:absolute;
-    top:-50%; right:-20%;
-    width:600px; height:600px;
-    background:radial-gradient(circle,rgba(255,215,0,0.15) 0%,transparent 70%);
-    border-radius:50%;
-  }
-  .badge {
-    display:inline-block;
-    background:rgba(255,215,0,0.2);
-    color:#ffd700;
-    padding:6px 16px;
-    border-radius:50px;
-    font-size:14px;
-    font-weight:bold;
-    margin-bottom:24px;
-    border:1px solid rgba(255,215,0,0.4);
-  }
-  .hero h1 {
-    font-size:clamp(34px,5.5vw,60px);
-    font-weight:900;
-    line-height:1.25;
-    margin-bottom:24px;
-    letter-spacing:-0.02em;
-  }
-  .hero h1 span { color:#ffd700; }
-  .hero h1 .strike {
-    color:#ff8a8a;
-    text-decoration:line-through;
-    text-decoration-thickness:3px;
-    text-decoration-color:rgba(255,255,255,0.6);
-  }
-  .hero-sub {
-    font-size:clamp(16px,2.2vw,22px);
-    opacity:0.95;
-    margin-bottom:36px;
-    max-width:760px;
-    font-weight:500;
-  }
-  .hero-cta {
-    display:inline-block;
-    background:#ffd700;
-    color:#1a1a2e;
-    padding:18px 44px;
-    border-radius:50px;
-    font-weight:900;
-    font-size:18px;
-    text-decoration:none;
-    box-shadow:0 8px 24px rgba(255,215,0,0.4);
-    margin-bottom:48px;
-  }
-  .hero-stats {
-    display:flex;
-    gap:32px;
-    flex-wrap:wrap;
-    margin-top:24px;
-  }
-  .stat {
-    background:rgba(255,255,255,0.1);
-    backdrop-filter:blur(10px);
-    padding:20px 28px;
-    border-radius:16px;
-    border:1px solid rgba(255,255,255,0.2);
-  }
-  .stat-num {
-    font-size:36px;
-    font-weight:900;
-    color:#ffd700;
-    line-height:1;
-  }
-  .stat-label { font-size:14px; opacity:0.9; margin-top:6px; }
-
-  /* IMPACT BANNER */
-  .impact {
-    background:linear-gradient(90deg,#ffd700 0%,#ffb700 100%);
-    padding:36px 24px;
-    text-align:center;
-    color:#1a1a2e;
-  }
-  .impact-row {
-    display:flex;
-    justify-content:center;
-    gap:48px;
-    flex-wrap:wrap;
-    max-width:1080px;
-    margin:0 auto;
-  }
-  .impact-item { padding:8px 12px; }
-  .impact-num {
-    font-size:clamp(36px,5vw,52px);
-    font-weight:900;
-    line-height:1;
-    color:#1a1a2e;
-  }
-  .impact-num small { font-size:60%; font-weight:700; margin-left:4px; }
-  .impact-label {
-    font-size:14px;
-    font-weight:bold;
-    margin-top:6px;
-    letter-spacing:0.05em;
-  }
-  .impact-headline {
-    font-size:clamp(20px,2.5vw,26px);
-    font-weight:900;
-    margin-bottom:20px;
-    letter-spacing:0.05em;
+    left:0;top:9px;
+    width:8px;height:8px;
+    border-radius:2px;
+    background:#06c755;
   }
 
-  /* SECTION */
-  .section { padding:80px 0; }
-  .section-tag {
-    color:#6a3093;
-    font-size:14px;
-    font-weight:bold;
-    letter-spacing:0.15em;
-    margin-bottom:12px;
-  }
-  .section-title {
-    font-size:clamp(28px,4vw,40px);
-    font-weight:900;
-    margin-bottom:48px;
-    line-height:1.3;
-  }
-  .section-title span { color:#6a3093; }
-
-  /* PROBLEM */
-  .problems {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-    gap:20px;
-  }
-  .problem {
-    background:#fff;
-    padding:28px;
-    border-radius:16px;
-    border-left:4px solid #ff6b6b;
-    box-shadow:0 4px 20px rgba(0,0,0,0.05);
-  }
-  .problem-icon { font-size:32px; margin-bottom:12px; }
-  .problem-text { font-size:16px; font-weight:600; color:#444; }
-  .problem-text strong { color:#ff6b6b; }
-
-  /* FEATURES */
-  .features-bg { background:linear-gradient(180deg,#f0f2ff 0%,#fafbff 100%); }
-  .features {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
-    gap:24px;
-  }
-  .feature {
-    background:#fff;
-    padding:32px 28px;
-    border-radius:20px;
-    box-shadow:0 8px 32px rgba(106,48,147,0.08);
-    border:1px solid #e8eaff;
-    position:relative;
-  }
-  .feature-speed {
-    position:absolute;
-    top:-12px; right:20px;
-    background:linear-gradient(135deg,#ff6b6b,#ee5a8a);
+  /* 実績バンド */
+  .band{
+    background:#1b2b3d;
     color:#fff;
-    padding:5px 14px;
-    border-radius:50px;
-    font-size:11px;
-    font-weight:900;
-    letter-spacing:0.05em;
-    box-shadow:0 4px 12px rgba(238,90,138,0.4);
+    padding:52px 0;
   }
-  .feature-num {
-    display:inline-block;
-    background:linear-gradient(135deg,#6a3093,#2a5298);
-    color:#fff;
-    width:44px; height:44px;
-    border-radius:50%;
-    text-align:center;
-    line-height:44px;
-    font-weight:900;
-    margin-bottom:18px;
+  .band h2{font-size:19px;font-weight:700;margin-bottom:26px}
+  .impact-row{display:flex;flex-wrap:wrap;gap:32px 56px}
+  .impact-num{font-size:34px;font-weight:800;line-height:1.1}
+  .impact-num small{font-size:60%;font-weight:700;margin-left:2px}
+  .impact-label{font-size:13px;color:#a9b7c6;margin-top:6px;line-height:1.5}
+
+  /* 課題 */
+  .problems{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+    gap:16px 40px;
+    max-width:900px;
   }
-  .feature h3 {
-    font-size:22px;
-    font-weight:800;
-    margin-bottom:10px;
-    color:#1a1a2e;
-  }
-  .feature-desc {
-    color:#555;
-    margin-bottom:14px;
+  .problem{
+    border-left:3px solid #d7dde3;
+    padding:2px 0 2px 16px;
     font-size:14.5px;
+    color:#3c4652;
   }
-  .feature-before-after {
-    background:#fff3e8;
-    border-left:3px solid #ff6b6b;
-    padding:10px 14px;
-    margin-bottom:16px;
-    font-size:13px;
-    line-height:1.6;
-    border-radius:4px;
-  }
-  .feature-before-after .ba-label {
-    display:inline-block;
-    background:#ff6b6b;
-    color:#fff;
-    font-size:10px;
-    padding:1px 8px;
-    border-radius:4px;
-    font-weight:bold;
-    margin-right:6px;
-    vertical-align:middle;
-  }
-  .feature-before-after .ba-label.after { background:#06c755; }
-  .cmd-block {
-    background:#0f172a;
-    color:#e2e8f0;
-    padding:14px 16px;
-    border-radius:10px;
-    font-family:"SF Mono","Consolas","Yu Gothic",monospace;
-    font-size:12.5px;
-    margin-bottom:14px;
-    white-space:pre-line;
-    line-height:1.5;
-    position:relative;
-  }
-  .cmd-block::before {
-    content:"▼ LINEで送信";
-    position:absolute;
-    top:-9px; left:12px;
-    background:#0f172a;
-    color:#ffd700;
-    font-size:10px;
-    padding:1px 8px;
-    border-radius:4px;
-    font-family:"Hiragino Sans",sans-serif;
-    font-weight:bold;
-    letter-spacing:0.05em;
-  }
-  .reply-block {
-    background:#06c755;
-    color:#fff;
-    padding:14px 16px;
-    border-radius:10px;
-    font-size:13px;
-    white-space:pre-line;
-    line-height:1.55;
-    position:relative;
-  }
-  .reply-block::before {
-    content:"▼ Bot自動返信";
-    position:absolute;
-    top:-9px; left:12px;
-    background:#06c755;
-    color:#fff;
-    font-size:10px;
-    padding:1px 8px;
-    border-radius:4px;
-    font-weight:bold;
-    letter-spacing:0.05em;
+  .problem strong{color:#c0392b}
+  .problems-close{
+    margin-top:36px;
+    font-size:16px;
+    font-weight:700;
   }
 
+  /* 機能 */
+  .feat-index{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:44px}
+  .feat-index a{
+    display:inline-block;
+    padding:7px 14px;
+    border:1px solid #d7dde3;
+    border-radius:999px;
+    background:#fff;
+    color:#1d2733;
+    text-decoration:none;
+    font-size:13px;
+    font-weight:600;
+  }
+  .feat-index a span{color:#06c755;font-weight:800;margin-right:6px}
+  .feat-index a:hover{border-color:#06c755}
+  .feature{
+    background:#fff;
+    border:1px solid #e3e7ec;
+    border-radius:16px;
+    padding:36px 32px;
+    margin-bottom:28px;
+  }
+  .feat-head{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  .feat-num{color:#06c755;font-weight:800;font-size:14px;letter-spacing:.06em}
+  .feature h3{font-size:20px;font-weight:700}
+  .feat-label{font-size:13px;color:#5a6570;margin-bottom:14px}
+  .feature-desc{color:#3c4652;font-size:14.5px;margin-bottom:24px;max-width:660px}
+  .callout{
+    background:#f5f7f9;
+    border-left:3px solid #06c755;
+    padding:10px 16px;
+    border-radius:0 8px 8px 0;
+    font-size:13px;
+    color:#333;
+    margin-top:14px;
+    max-width:660px;
+  }
+  .callout + .callout{margin-top:10px}
+  .feature .chat-note{margin-bottom:4px}
+  .salary-expand{margin-top:28px}
+  .salary-expand > p{font-size:13px;color:#5a6570;margin-bottom:10px}
+
+  /* 明細書（現行LPから流用） */
+/*@CSS_SALARY@*/
   /* SALARY SHEET */
   .salary-wrap {
     background:#fff;
@@ -396,661 +426,8 @@
   }
   table.settle tr.shop td.amt { font-size:18px; }
 
-  /* WHY */
-  .why-bg {
-    background:linear-gradient(135deg,#1a1a2e 0%,#2a3f6a 100%);
-    color:#fff;
-  }
-  .why-bg .section-tag { color:#ffd700; }
-  .why-bg .section-title { color:#fff; }
-  .why-bg .section-title span { color:#ffd700; }
-  .why-grid {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
-    gap:20px;
-  }
-  .why-card {
-    background:rgba(255,255,255,0.08);
-    backdrop-filter:blur(8px);
-    border:1px solid rgba(255,255,255,0.15);
-    padding:28px 24px;
-    border-radius:16px;
-  }
-  .why-icon { font-size:36px; margin-bottom:14px; }
-  .why-card h4 {
-    font-size:18px;
-    font-weight:900;
-    margin-bottom:10px;
-    color:#ffd700;
-  }
-  .why-card p { font-size:14.5px; opacity:0.92; }
-
-  /* VOICE */
-  .voice-grid {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
-    gap:24px;
-  }
-  .voice {
-    background:#fff;
-    padding:32px 28px;
-    border-radius:20px;
-    box-shadow:0 8px 32px rgba(0,0,0,0.06);
-    position:relative;
-  }
-  .voice::before {
-    content:"\201C";
-    position:absolute;
-    top:8px; left:18px;
-    font-size:64px;
-    color:#e8eaff;
-    font-family:Georgia,serif;
-    line-height:1;
-  }
-  .voice-text {
-    font-size:15px;
-    color:#333;
-    line-height:1.7;
-    margin-bottom:18px;
-    position:relative;
-    z-index:1;
-  }
-  .voice-meta {
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding-top:14px;
-    border-top:1px solid #eef;
-  }
-  .voice-avatar {
-    width:42px; height:42px;
-    border-radius:50%;
-    background:linear-gradient(135deg,#6a3093,#2a5298);
-    color:#fff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:900;
-    font-size:16px;
-  }
-  .voice-name { font-weight:bold; font-size:14px; color:#333; }
-  .voice-role { font-size:12px; color:#888; }
-
-  /* COMPARISON */
-  .comparison {
-    background:#fff;
-    border-radius:24px;
-    overflow:hidden;
-    box-shadow:0 8px 40px rgba(0,0,0,0.08);
-  }
-  .comp-row {
-    display:grid;
-    grid-template-columns:1.2fr 1fr 1fr;
-    border-bottom:1px solid #eef;
-  }
-  .comp-row:last-child { border-bottom:none; }
-  .comp-cell { padding:18px 22px; font-size:15px; }
-  .comp-head {
-    background:#1a1a2e;
-    color:#fff;
-    font-weight:800;
-    text-align:center;
-  }
-  .comp-head.before { background:#888; }
-  .comp-head.after { background:linear-gradient(135deg,#6a3093,#2a5298); }
-  .comp-label { background:#f5f5fb; font-weight:bold; color:#555; }
-  .comp-before { color:#999; }
-  .comp-after { color:#1a1a2e; font-weight:600; }
-  .comp-after::before { content:"✓ "; color:#06c755; font-weight:bold; }
-
-  /* TRUST */
-  .trust-bg { background:#fff; }
-  .trust-grid {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
-    gap:24px;
-  }
-  .trust-card {
-    border:2px solid #f0f0fa;
-    padding:32px 28px;
-    border-radius:16px;
-    transition:border-color 0.2s;
-  }
-  .trust-card:hover { border-color:#6a3093; }
-  .trust-icon {
-    width:56px; height:56px;
-    border-radius:14px;
-    background:linear-gradient(135deg,#6a3093,#2a5298);
-    color:#fff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:24px;
-    margin-bottom:18px;
-  }
-  .trust-card h4 {
-    font-size:18px;
-    font-weight:900;
-    margin-bottom:10px;
-  }
-  .trust-card p { font-size:14.5px; color:#666; }
-
-  /* FLOW */
-  .flow {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-    gap:20px;
-    counter-reset:step;
-  }
-  .step {
-    background:#fff;
-    padding:28px 24px;
-    border-radius:16px;
-    text-align:center;
-    box-shadow:0 4px 20px rgba(0,0,0,0.05);
-  }
-  .step::before {
-    counter-increment:step;
-    content:"STEP " counter(step);
-    display:block;
-    color:#6a3093;
-    font-size:12px;
-    font-weight:900;
-    letter-spacing:0.15em;
-    margin-bottom:12px;
-  }
-  .step h4 { font-size:18px; font-weight:800; margin-bottom:8px; }
-  .step p { font-size:14px; color:#666; }
-
-  /* FAQ */
-  .faq-bg { background:#f5f5fb; }
-  .faq-item {
-    background:#fff;
-    border-radius:14px;
-    margin-bottom:14px;
-    overflow:hidden;
-    box-shadow:0 2px 12px rgba(0,0,0,0.04);
-  }
-  .faq-q {
-    padding:20px 24px;
-    font-weight:bold;
-    cursor:pointer;
-    display:flex;
-    align-items:flex-start;
-    gap:16px;
-    font-size:16px;
-    user-select:none;
-  }
-  .faq-q::before {
-    content:"Q";
-    background:linear-gradient(135deg,#6a3093,#2a5298);
-    color:#fff;
-    width:30px; height:30px;
-    border-radius:50%;
-    text-align:center;
-    line-height:30px;
-    flex-shrink:0;
-    font-weight:900;
-    font-size:14px;
-  }
-  .faq-a {
-    padding:0 24px 20px 70px;
-    color:#555;
-    font-size:14.5px;
-    line-height:1.7;
-  }
-
-  /* OFFER */
-  .offer-bg {
-    background:linear-gradient(135deg,#ff6b6b 0%,#ee5a8a 100%);
-    color:#fff;
-    text-align:center;
-  }
-  .offer-headline {
-    font-size:clamp(24px,3.5vw,36px);
-    font-weight:900;
-    margin-bottom:16px;
-    letter-spacing:0.02em;
-  }
-  .offer-list {
-    display:flex;
-    justify-content:center;
-    gap:24px;
-    flex-wrap:wrap;
-    margin:32px 0;
-  }
-  .offer-item {
-    background:rgba(255,255,255,0.15);
-    backdrop-filter:blur(10px);
-    border:2px solid rgba(255,255,255,0.3);
-    padding:20px 28px;
-    border-radius:16px;
-    min-width:200px;
-  }
-  .offer-item-num {
-    font-size:32px;
-    font-weight:900;
-    color:#ffd700;
-  }
-  .offer-item-text { font-size:14px; font-weight:600; }
-
-  /* FINAL CTA */
-  .cta {
-    background:linear-gradient(135deg,#1e3c72 0%,#6a3093 100%);
-    color:#fff;
-    text-align:center;
-    padding:90px 24px;
-    position:relative;
-    overflow:hidden;
-  }
-  .cta::before {
-    content:"";
-    position:absolute;
-    top:-30%; left:-10%;
-    width:500px; height:500px;
-    background:radial-gradient(circle,rgba(255,215,0,0.2) 0%,transparent 70%);
-    border-radius:50%;
-  }
-  .cta-inner { position:relative; z-index:1; }
-  .cta-tag {
-    display:inline-block;
-    background:rgba(255,215,0,0.2);
-    color:#ffd700;
-    padding:6px 16px;
-    border-radius:50px;
-    font-size:14px;
-    font-weight:bold;
-    margin-bottom:20px;
-    border:1px solid rgba(255,215,0,0.4);
-  }
-  .cta h2 {
-    font-size:clamp(30px,4.5vw,46px);
-    font-weight:900;
-    margin-bottom:20px;
-    line-height:1.3;
-  }
-  .cta h2 span { color:#ffd700; }
-  .cta p {
-    font-size:18px;
-    opacity:0.95;
-    margin-bottom:36px;
-    max-width:680px;
-    margin-left:auto;
-    margin-right:auto;
-  }
-  .cta-btn {
-    display:inline-block;
-    background:#ffd700;
-    color:#1a1a2e;
-    padding:20px 56px;
-    border-radius:50px;
-    font-weight:900;
-    font-size:20px;
-    text-decoration:none;
-    box-shadow:0 8px 24px rgba(255,215,0,0.4);
-  }
-  .cta-sub {
-    margin-top:24px;
-    font-size:14px;
-    opacity:0.85;
-  }
-
-  /* ANALYTICS DASHBOARD */
-  .analytics-bg {
-    background:linear-gradient(135deg,#1e3c72 0%,#2a5298 50%,#6a3093 100%);
-    color:#fff;
-    position:relative;
-    overflow:hidden;
-  }
-  .analytics-bg::before {
-    content:"";
-    position:absolute;
-    top:-100px; right:-100px;
-    width:500px; height:500px;
-    background:radial-gradient(circle,rgba(255,215,0,0.12) 0%,transparent 70%);
-    border-radius:50%;
-  }
-  .analytics-badge-top {
-    display:inline-block;
-    background:rgba(255,215,0,0.2);
-    color:#ffd700;
-    padding:8px 22px;
-    border-radius:50px;
-    font-weight:900;
-    font-size:14px;
-    margin-bottom:24px;
-    border:1px solid rgba(255,215,0,0.4);
-    letter-spacing:0.05em;
-  }
-  .analytics-title {
-    color:#fff !important;
-    text-align:center;
-  }
-  .analytics-title span { color:#ffd700 !important; }
-  .analytics-lead {
-    font-size:clamp(16px,2vw,22px);
-    line-height:1.9;
-    text-align:center;
-    max-width:820px;
-    margin:30px auto 50px;
-    position:relative;
-    z-index:1;
-  }
-  .analytics-lead .gold { color:#ffd700; font-weight:900; }
-  .analytics-lead .big { font-size:1.3em; }
-  .analytics-zero {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-    gap:20px;
-    max-width:800px;
-    margin:0 auto 60px;
-    position:relative;
-    z-index:1;
-  }
-  .zero-card {
-    background:rgba(255,255,255,0.08);
-    backdrop-filter:blur(10px);
-    padding:28px 20px;
-    border-radius:18px;
-    border:1px solid rgba(255,215,0,0.3);
-    text-align:center;
-  }
-  .zero-num {
-    font-size:48px;
-    font-weight:900;
-    color:#ffd700;
-    line-height:1;
-    margin-bottom:8px;
-  }
-  .zero-label {
-    font-size:14px;
-    opacity:0.95;
-    font-weight:600;
-  }
-  .dashboard-wrap {
-    background:#fff;
-    color:#1a1a2e;
-    border-radius:24px;
-    padding:32px 28px;
-    box-shadow:0 20px 60px rgba(0,0,0,0.3);
-    margin-bottom:50px;
-    position:relative;
-    z-index:1;
-  }
-  .dash-header {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    flex-wrap:wrap;
-    gap:12px;
-    border-bottom:2px solid #f0f2ff;
-    padding-bottom:16px;
-    margin-bottom:24px;
-  }
-  .dash-title-text {
-    font-size:18px;
-    font-weight:900;
-  }
-  .dash-device-badges { display:flex; gap:8px; flex-wrap:wrap; }
-  .dash-device-badge {
-    background:#f0f2ff;
-    color:#6a3093;
-    padding:4px 12px;
-    border-radius:50px;
-    font-size:12px;
-    font-weight:700;
-  }
-  .dash-device-badge.live {
-    background:#06c755;
-    color:#fff;
-  }
-  .dash-summary {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
-    gap:12px;
-    margin-bottom:28px;
-  }
-  .sum-card {
-    background:linear-gradient(135deg,#f0f2ff,#fafbff);
-    padding:16px 12px;
-    border-radius:12px;
-    text-align:center;
-    border-left:4px solid #6a3093;
-  }
-  .sum-label { font-size:11px; color:#666; font-weight:700; }
-  .sum-value { font-size:22px; font-weight:900; color:#1a1a2e; margin-top:4px; }
-  .dash-section { margin-bottom:32px; }
-  .dash-section-title {
-    font-size:15px;
-    font-weight:900;
-    color:#6a3093;
-    margin-bottom:14px;
-    padding-left:12px;
-    border-left:4px solid #6a3093;
-  }
-  .rank-list { display:flex; flex-direction:column; gap:8px; }
-  .rank-row {
-    display:grid;
-    grid-template-columns:32px 110px 1fr 80px;
-    align-items:center;
-    gap:8px;
-  }
-  .rank-num {
-    font-weight:900;
-    font-size:13px;
-    color:#6a3093;
-    text-align:center;
-  }
-  .rank-name { font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .rank-bar-wrap {
-    background:#f0f2ff;
-    border-radius:50px;
-    height:22px;
-    position:relative;
-    overflow:hidden;
-  }
-  .rank-bar {
-    height:100%;
-    border-radius:50px;
-    background:linear-gradient(90deg,#2a5298,#6a3093);
-  }
-  .rank-bar.sales { background:linear-gradient(90deg,#2a5298,#4dabf7); }
-  .rank-bar.count { background:linear-gradient(90deg,#6a3093,#c956d4); }
-  .rank-value {
-    font-size:12px;
-    font-weight:800;
-    color:#1a1a2e;
-    text-align:right;
-  }
-  .rank-badge {
-    display:inline-block;
-    padding:2px 8px;
-    border-radius:4px;
-    font-size:11px;
-    font-weight:900;
-    margin-right:6px;
-    color:#fff;
-    min-width:26px;
-    text-align:center;
-  }
-  .rb-SS { background:linear-gradient(135deg,#ffd700,#ff9500); color:#1a1a2e; }
-  .rb-S { background:linear-gradient(135deg,#ff9500,#ff6b6b); }
-  .rb-A { background:#4dabf7; }
-  .rb-B { background:#06c755; }
-  .rb-C { background:#aaa; }
-  .rb-D { background:#ff9500; }
-  .rb-E { background:#ff6b6b; }
-  .quad-grid {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-    gap:12px;
-  }
-  .quad-card {
-    padding:16px;
-    border-radius:12px;
-    border:2px solid;
-  }
-  .quad-card.elite { background:#e8f7e9; border-color:#06c755; }
-  .quad-card.once  { background:#fff3e8; border-color:#ff9500; }
-  .quad-card.fan   { background:#e8f0ff; border-color:#2a5298; }
-  .quad-card.need  { background:#ffe8e8; border-color:#ff6b6b; }
-  .quad-title {
-    font-weight:900;
-    font-size:14px;
-    margin-bottom:6px;
-  }
-  .quad-card.elite .quad-title { color:#06c755; }
-  .quad-card.once .quad-title  { color:#ff9500; }
-  .quad-card.fan .quad-title   { color:#2a5298; }
-  .quad-card.need .quad-title  { color:#ff6b6b; }
-  .quad-desc { font-size:12px; color:#555; line-height:1.5; margin-bottom:8px; }
-  .quad-members {
-    font-size:11px;
-    color:#1a1a2e;
-    background:rgba(255,255,255,0.6);
-    padding:6px 10px;
-    border-radius:6px;
-    font-weight:700;
-  }
-  .signal-table {
-    width:100%;
-    border-collapse:collapse;
-    font-size:12px;
-  }
-  .signal-table th, .signal-table td {
-    padding:6px 8px;
-    text-align:center;
-    border-bottom:1px solid #f0f2ff;
-  }
-  .signal-table th { background:#f0f2ff; color:#6a3093; font-weight:800; font-size:11px; }
-  .signal-table td.sig-name { text-align:left; font-weight:700; }
-  .sig-mark { font-size:16px; font-weight:900; }
-  .sig-circle-bold { color:#06c755; }
-  .sig-circle { color:#4dabf7; }
-  .sig-tri { color:#ff9500; }
-  .sig-x { color:#ff6b6b; }
-  .pillars {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
-    gap:18px;
-    margin-bottom:50px;
-    position:relative;
-    z-index:1;
-  }
-  .pillar {
-    background:rgba(255,255,255,0.08);
-    backdrop-filter:blur(10px);
-    padding:28px 20px;
-    border-radius:18px;
-    border:1px solid rgba(255,255,255,0.2);
-    text-align:center;
-  }
-  .pillar-icon { font-size:44px; margin-bottom:10px; }
-  .pillar-name { font-size:17px; font-weight:900; color:#ffd700; margin-bottom:10px; }
-  .pillar-desc { font-size:13.5px; line-height:1.6; opacity:0.95; }
-  .praise-wrap {
-    background:linear-gradient(135deg,#ffd700,#ffa500);
-    color:#1a1a2e;
-    padding:36px 28px;
-    border-radius:20px;
-    text-align:center;
-    position:relative;
-    z-index:1;
-    box-shadow:0 12px 40px rgba(255,215,0,0.3);
-  }
-  .praise-title {
-    font-size:14px;
-    font-weight:900;
-    margin-bottom:14px;
-    letter-spacing:0.1em;
-  }
-  .praise-quotes {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
-    gap:14px;
-    margin-top:18px;
-  }
-  .praise-q {
-    background:#fff;
-    padding:16px;
-    border-radius:12px;
-    font-size:14px;
-    font-weight:700;
-    line-height:1.6;
-    box-shadow:0 4px 12px rgba(0,0,0,0.08);
-  }
-
-  footer {
-    background:#0d1117;
-    color:#888;
-    padding:32px 24px;
-    text-align:center;
-    font-size:13px;
-  }
-
-  @media (max-width:640px) {
-    .section { padding:50px 0; }
-    .comp-row { grid-template-columns:1fr; }
-    .comp-cell { padding:14px 16px; }
-    .hero { padding:60px 0 70px; }
-    .hero-sub { font-size:15px; line-height:1.7; }
-    .hero-cta { padding:14px 28px; font-size:15px; }
-    .hero-stats { gap:10px; }
-    .stat { padding:12px 14px; flex:1 1 calc(50% - 10px); min-width:0; }
-    .stat-num { font-size:26px; }
-    .stat-label { font-size:11px; }
-    .badge { font-size:11px; padding:5px 12px; }
-    .impact-row { gap:18px; }
-    .impact-num { font-size:30px; }
-    .impact-label { font-size:12px; }
-    .section-title { font-size:24px; margin-bottom:30px; line-height:1.4; }
-    .problem { padding:20px; }
-    .problem-text { font-size:14px; }
-    .feature { padding:24px 20px; }
-    .feature h3 { font-size:18px; }
-    .feature-desc { font-size:13.5px; }
-    .cmd-block, .reply-block { font-size:12px; padding:12px 14px; }
-    /* 明細書はスマホで全体が見えるように縮小（スクロールなし） */
-    .salary-wrap { overflow:hidden; }
-    .salary-title { font-size:13px; letter-spacing:0.25em; padding:10px; }
-    .salary-meta { grid-template-columns:60px 1fr !important; }
-    .salary-meta > div { padding:5px 7px; font-size:10px; }
-    .salary-meta .lbl { letter-spacing:0.15em; }
-    .salary-section-title { font-size:10px; letter-spacing:0.25em; padding:6px; }
-    table.salary-table th, table.salary-table td { padding:3px 1px; font-size:9px; letter-spacing:0; }
-    table.salary-table th { line-height:1.15; }
-    table.salary-table tr.total td { letter-spacing:0.1em; }
-    table.settle td { padding:5px 7px; font-size:10px; }
-    table.settle td:first-child { letter-spacing:0.08em; }
-    table.settle td:nth-child(2) { font-size:9px; }
-    table.settle tr.sum td, table.settle tr.shop td { font-size:11px; letter-spacing:0.05em; }
-    table.settle tr.shop td.amt { font-size:12px; }
-    .voice { padding:24px 20px; }
-    .voice-text { font-size:14px; }
-    .why-grid, .why-bg .why-grid { gap:16px; }
-    .faq-q { font-size:14px; padding:14px 18px; }
-    .faq-a { font-size:13px; padding:0 18px 14px; }
-    .offer-headline { font-size:18px; }
-    .offer-item { padding:18px 14px; }
-    .offer-item-num { font-size:20px; }
-    .cta h2 { font-size:24px; }
-    .cta p { font-size:14px; }
-    .cta-btn { padding:14px 28px; font-size:15px; }
-    .rank-row { grid-template-columns:24px 90px 1fr 60px; gap:4px; }
-    .rank-name { font-size:11px; }
-    .rank-value { font-size:11px; }
-    .rank-bar-wrap { height:18px; }
-    .sum-value { font-size:18px; }
-    .dash-section-title { font-size:13px; }
-    .signal-table th, .signal-table td { padding:4px 2px; font-size:10px; }
-    .signal-table td.sig-name { font-size:11px; }
-    .dashboard-wrap { padding:20px 16px; }
-    .zero-num { font-size:38px; }
-    .analytics-lead { font-size:14px; line-height:1.8; }
-    .praise-q { font-size:13px; padding:14px; }
-  }
-
-
+  /* 売上分析ダッシュボード（現行LPから流用） */
+/*@CSS_AV2@*/
 /* === ANALYTICS V2 (matches screenshot aesthetic) === */
 .analytics-v2 {
   background: #fff;
@@ -1197,157 +574,7 @@
   .av2-score-bar-wrap { height: 18px; }
   .av2-seg { font-size: 8px; }
 }
-
-
-/* === SHIFT FEATURE DETAILS === */
-.feature.feature-wide {
-  grid-column: 1 / -1;
-}
-.shift-flow {
-  display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center;
-  background: linear-gradient(135deg, #fff8e1, #ffe0b2);
-  padding: 14px 12px;
-  border-radius: 12px;
-  margin: 16px 0;
-  border: 2px solid #ffb300;
-}
-.shift-flow .sf-step {
-  background: #fff;
-  padding: 9px 14px;
-  border-radius: 8px;
-  font-weight: 800;
-  color: #5a3a00;
-  font-size: 13px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-  white-space: nowrap;
-}
-.shift-flow .sf-arrow {
-  font-weight: 900;
-  color: #ef6c00;
-  font-size: 18px;
-}
-.shift-h {
-  margin: 18px 0 6px;
-  font-weight: 800;
-  color: #1a1a2e;
-  font-size: 14px;
-  border-left: 4px solid #ff9800;
-  padding-left: 10px;
-}
-.shift-rules {
-  margin: 8px 0 14px 22px;
-  font-size: 13.5px;
-  line-height: 1.95;
-  color: #222;
-}
-.shift-rules li { margin: 5px 0; }
-.shift-rules code {
-  background: #fff3e0;
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  color: #d84315;
-  font-weight: 700;
-  font-size: 12.5px;
-}
-.shift-callout {
-  background: #fff3e0;
-  border-left: 4px solid #ff9800;
-  padding: 11px 16px;
-  border-radius: 8px;
-  margin-top: 12px;
-  font-size: 13px;
-  color: #5a3a00;
-  line-height: 1.7;
-}
-.shift-callout.warn {
-  background: #ffebee;
-  border-left-color: #d93b48;
-  color: #5a0000;
-}
-.shift-callout code {
-  background: #fff;
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  color: #d84315;
-  font-weight: 700;
-}
-@media (max-width: 640px) {
-  .shift-flow { padding: 10px 6px; gap: 6px; }
-  .shift-flow .sf-step { font-size: 11px; padding: 6px 9px; }
-  .shift-flow .sf-arrow { font-size: 14px; }
-  .shift-rules { font-size: 12.5px; margin-left: 18px; }
-  .shift-h { font-size: 13px; }
-  .shift-callout { font-size: 12px; padding: 9px 12px; }
-}
-
-
-/* === FEATURES INDEX (7-card jump menu) === */
-.features-index {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
-  margin-bottom: 40px;
-}
-.fi-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 14px 8px 12px;
-  background: linear-gradient(135deg, #fff, #f5f7fa);
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
-  text-decoration: none;
-  color: #1a1a2e;
-  transition: all 0.2s ease;
-  text-align: center;
-}
-.fi-card:hover {
-  border-color: #ff9800;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(255, 152, 0, 0.18);
-}
-.fi-num {
-  font-size: 22px;
-  font-weight: 900;
-  color: #ff9800;
-  line-height: 1;
-}
-.fi-name {
-  font-size: 13px;
-  font-weight: 800;
-  margin-top: 6px;
-  color: #1a1a2e;
-}
-.fi-tag {
-  font-size: 11px;
-  font-weight: 600;
-  margin-top: 6px;
-  color: #555;
-  line-height: 1.35;
-}
-@media (max-width: 640px) {
-  .features-index { grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom:26px; }
-  .features-index .fi-card:nth-child(7) { grid-column: 2 / span 2; }
-  .fi-num { font-size: 18px; }
-  .fi-name { font-size: 11px; }
-  .fi-tag { font-size: 10px; }
-  .fi-card { padding: 10px 4px 8px; }
-}
-
-/* All features stack vertically now (each is feature-wide) */
-.features { display: block; }
-.feature.feature-wide,
-.features > .feature {
-  grid-column: 1 / -1;
-  margin-bottom: 32px;
-}
-
-/* Salary inline (integrated into 01) */
-.salary-inline { margin: 12px 0 8px; }
-.salary-inline .salary-wrap { max-width: 100%; }
-
+/*@CSS_SCROLLHINT@*/
 /* Scroll hint (mobile only) — used by ANALYTICS ranking table */
 .scroll-hint {
   display: none;
@@ -1369,8 +596,8 @@
     letter-spacing: 0.05em;
     font-weight: 600;
   }
-  .scroll-hint::before { content: "👈"; }
-  .scroll-hint::after { content: "👉"; }
+  .scroll-hint::before { content: "←"; }
+  .scroll-hint::after { content: "→"; }
   /* analytics ranking — wrap scroll container with hint+fade */
   .av2-scroll-wrap { position: relative; }
   .av2-scroll-wrap > .av2-scroll { border-radius: 0 0 8px 8px; }
@@ -1384,155 +611,364 @@
   }
 }
 
+  /* 比較表（現行LPから流用） */
+/*@CSS_COMP@*/
+  /* COMPARISON */
+  .comparison {
+    background:#fff;
+    border-radius:24px;
+    overflow:hidden;
+    box-shadow:0 8px 40px rgba(0,0,0,0.08);
+  }
+  .comp-row {
+    display:grid;
+    grid-template-columns:1.2fr 1fr 1fr;
+    border-bottom:1px solid #eef;
+  }
+  .comp-row:last-child { border-bottom:none; }
+  .comp-cell { padding:18px 22px; font-size:15px; }
+  .comp-head {
+    background:#1a1a2e;
+    color:#fff;
+    font-weight:800;
+    text-align:center;
+  }
+  .comp-head.before { background:#888; }
+  .comp-head.after { background:linear-gradient(135deg,#6a3093,#2a5298); }
+  .comp-label { background:#f5f5fb; font-weight:bold; color:#555; }
+  .comp-before { color:#999; }
+  .comp-after { color:#1a1a2e; font-weight:600; }
+  .comp-after::before { content:"✓ "; color:#06c755; font-weight:bold; }
+  .comp-head{background:#1b2b3d}
+  .comp-head.before{background:#6b7683}
+  .comp-head.after{background:#06c755}
+  .comp-label{background:#f5f7f9;color:#3c4652}
+  .comp-after{color:#1d2733}
 
+  /* FAQ（現行LPから流用） */
+/*@CSS_FAQ@*/
+  /* FAQ */
+  .faq-bg { background:#f5f5fb; }
+  .faq-item {
+    background:#fff;
+    border-radius:14px;
+    margin-bottom:14px;
+    overflow:hidden;
+    box-shadow:0 2px 12px rgba(0,0,0,0.04);
+  }
+  .faq-q {
+    padding:20px 24px;
+    font-weight:bold;
+    cursor:pointer;
+    display:flex;
+    align-items:flex-start;
+    gap:16px;
+    font-size:16px;
+    user-select:none;
+  }
+  .faq-q::before {
+    content:"Q";
+    background:linear-gradient(135deg,#6a3093,#2a5298);
+    color:#fff;
+    width:30px; height:30px;
+    border-radius:50%;
+    text-align:center;
+    line-height:30px;
+    flex-shrink:0;
+    font-weight:900;
+    font-size:14px;
+  }
+  .faq-a {
+    padding:0 24px 20px 70px;
+    color:#555;
+    font-size:14.5px;
+    line-height:1.7;
+  }
+  .faq-q::before{background:#06c755}
 
-/* === MID CTA === */
-.mid-cta {
-  background: linear-gradient(135deg, #ff9800, #ff6f00);
-  color: #fff;
-  text-align: center;
-  padding: 56px 24px;
-}
-.mid-cta .container { max-width: 760px; }
-.mid-cta-lead {
-  font-size: 18px;
-  line-height: 1.85;
-  margin: 0 0 26px;
-  font-weight: 700;
-  color: #fff;
-}
-.mid-cta-lead strong {
-  color: #ffd700;
-  font-size: 1.18em;
-}
-.mid-cta-btn {
-  display: inline-block;
-  background: #fff;
-  color: #d84315;
-  padding: 16px 36px;
-  border-radius: 50px;
-  font-weight: 900;
-  font-size: 18px;
-  text-decoration: none;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.22);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-.mid-cta-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(0,0,0,0.3);
-}
-.mid-cta-sub {
-  font-size: 13px;
-  margin-top: 16px;
-  opacity: 0.92;
-  color: #fff;
-}
-@media (max-width: 640px) {
-  .mid-cta { padding: 40px 16px; }
-  .mid-cta-lead { font-size: 15px; }
-  .mid-cta-btn { font-size: 16px; padding: 14px 28px; }
-}
+  /* 中間CTA */
+  .mid-cta{
+    background:#06c755;
+    color:#fff;
+    padding:56px 0;
+  }
+  .mid-cta p.lead{
+    font-size:17px;
+    font-weight:700;
+    margin-bottom:22px;
+    max-width:640px;
+  }
+  .mid-cta .btn-white{
+    display:inline-block;
+    background:#fff;
+    color:#067a38;
+    padding:14px 32px;
+    border-radius:10px;
+    font-weight:700;
+    font-size:16px;
+    text-decoration:none;
+  }
+  .mid-cta .sub{font-size:13px;margin-top:14px;opacity:.92}
 
-/* === CTA benefits chips === */
-.cta-benefits {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  justify-content: center;
-  margin: 18px 0 12px;
-}
-.cta-benefit {
-  display: inline-block;
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 700;
-  border: 1px solid rgba(255,255,255,0.25);
-}
-@media (max-width: 640px) {
-  .cta-benefit { font-size: 11.5px; padding: 5px 10px; }
-}
+  /* 導入店舗の声 */
+  .voices{max-width:720px}
+  blockquote.voice{
+    border-left:3px solid #06c755;
+    padding:4px 0 4px 20px;
+    margin-bottom:30px;
+  }
+  blockquote.voice p{font-size:15px;color:#333;margin-bottom:8px}
+  blockquote.voice cite{font-style:normal;font-size:13px;color:#5a6570}
 
-/* REFERRAL */
-.ref-section { background:#fff; text-align:center; }
-.ref-lead { font-size:16px; color:#555; max-width:680px; margin:0 auto 40px; line-height:1.8; }
-.ref-box {
-  background:linear-gradient(135deg,#1e3c72 0%,#6a3093 100%);
-  color:#fff; border-radius:20px; padding:56px 40px;
-  max-width:880px; margin:0 auto; border:1px solid rgba(255,215,0,0.5);
-}
-.ref-box h3 { font-size:clamp(22px,3vw,30px); font-weight:900; margin-bottom:16px; line-height:1.4; }
-.ref-box h3 span { color:#ffd700; }
-.ref-box > p { font-size:15px; opacity:0.92; max-width:560px; margin:0 auto 36px; line-height:1.9; }
-.ref-flow { display:flex; justify-content:center; align-items:center; gap:20px; flex-wrap:wrap; }
-.ref-step { background:rgba(255,255,255,0.08); border:1px solid rgba(255,215,0,0.25); padding:18px 24px; border-radius:12px; font-size:14px; min-width:170px; }
-.ref-step strong { display:block; font-size:22px; color:#ffd700; margin-bottom:6px; }
-.ref-arrow { color:#ffd700; font-size:22px; font-weight:bold; }
-@media (max-width: 600px) { .ref-box { padding:40px 22px; } }
+  /* 選ばれる理由 */
+  .why-list{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    gap:28px 48px;
+    max-width:900px;
+  }
+  .why-item h4{font-size:16px;font-weight:700;margin-bottom:6px}
+  .why-item p{font-size:14px;color:#5a6570}
 
+  /* セキュリティ・運用 */
+  .trust-list{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+    gap:28px 48px;
+    max-width:900px;
+  }
+  .trust-item h4{font-size:16px;font-weight:700;margin-bottom:6px}
+  .trust-item p{font-size:14px;color:#5a6570}
+
+  /* 導入の流れ */
+  .flow{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:16px;
+    counter-reset:step;
+  }
+  .step{
+    background:#fff;
+    border:1px solid #e3e7ec;
+    border-radius:12px;
+    padding:24px 22px;
+  }
+  .step::before{
+    counter-increment:step;
+    content:counter(step);
+    display:block;
+    width:30px;height:30px;
+    border-radius:50%;
+    background:#06c755;
+    color:#fff;
+    font-weight:800;
+    font-size:15px;
+    text-align:center;
+    line-height:30px;
+    margin-bottom:12px;
+  }
+  .step h4{font-size:16px;font-weight:700;margin-bottom:6px}
+  .step p{font-size:13.5px;color:#5a6570}
+
+  /* 紹介プログラム */
+  .ref-box{
+    border:1px solid #e3e7ec;
+    border-radius:16px;
+    padding:36px 32px;
+    max-width:720px;
+    background:#fff;
+  }
+  .ref-box h3{font-size:20px;font-weight:700;margin-bottom:12px}
+  .ref-box h3 span{color:#06c755}
+  .ref-box > p{font-size:14.5px;color:#3c4652;margin-bottom:20px}
+  .ref-steps{
+    list-style:none;
+    counter-reset:refstep;
+  }
+  .ref-steps li{
+    position:relative;
+    padding:0 0 14px 40px;
+    font-size:14px;
+    color:#3c4652;
+    counter-increment:refstep;
+  }
+  .ref-steps li::before{
+    content:counter(refstep);
+    position:absolute;
+    left:0;top:0;
+    width:26px;height:26px;
+    border-radius:50%;
+    background:#f5f7f9;
+    border:1px solid #d7dde3;
+    color:#1d2733;
+    font-weight:700;
+    font-size:13px;
+    text-align:center;
+    line-height:24px;
+  }
+
+  /* 最終CTA */
+  .cta{
+    background:#1b2b3d;
+    color:#fff;
+    padding:80px 0;
+  }
+  .cta h2{
+    font-size:clamp(24px,3.6vw,34px);
+    font-weight:800;
+    line-height:1.4;
+    margin-bottom:16px;
+  }
+  .cta p{
+    font-size:15.5px;
+    color:#c3cdd8;
+    margin-bottom:30px;
+    max-width:600px;
+  }
+  .cta-benefits{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 24px;
+    margin-top:22px;
+  }
+  .cta-benefits span{
+    font-size:13px;
+    color:#a9b7c6;
+  }
+  .cta-sub{margin-top:18px;font-size:13px;color:#8494a5}
+
+  footer{
+    background:#10161d;
+    color:#7d8894;
+    padding:30px 24px;
+    font-size:13px;
+  }
+  footer .container{padding:0}
+
+  @media (max-width:840px){
+    .hero-grid{grid-template-columns:1fr;gap:44px}
+  }
+  @media (max-width:640px){
+    .section{padding:52px 0}
+    .hero{padding:52px 0 60px}
+    .section-title{font-size:22px}
+    .feature{padding:26px 20px}
+    .impact-row{gap:22px 36px}
+    .impact-num{font-size:28px}
+    .comp-row{grid-template-columns:1fr}
+    .comp-cell{padding:13px 16px;font-size:14px}
+    .faq-q{font-size:14px;padding:14px 18px}
+    .faq-a{font-size:13px;padding:0 18px 14px 62px}
+    /* 明細書はスマホで全体が見えるように縮小（現行LPから流用） */
+/*@CSS_SALARY_MOBILE@*/
+    .salary-wrap { overflow:hidden; }
+    .salary-title { font-size:13px; letter-spacing:0.25em; padding:10px; }
+    .salary-meta { grid-template-columns:60px 1fr !important; }
+    .salary-meta > div { padding:5px 7px; font-size:10px; }
+    .salary-meta .lbl { letter-spacing:0.15em; }
+    .salary-section-title { font-size:10px; letter-spacing:0.25em; padding:6px; }
+    table.salary-table th, table.salary-table td { padding:3px 1px; font-size:9px; letter-spacing:0; }
+    table.salary-table th { line-height:1.15; }
+    table.salary-table tr.total td { letter-spacing:0.1em; }
+    table.settle td { padding:5px 7px; font-size:10px; }
+    table.settle td:first-child { letter-spacing:0.08em; }
+    table.settle td:nth-child(2) { font-size:9px; }
+    table.settle tr.sum td, table.settle tr.shop td { font-size:11px; letter-spacing:0.05em; }
+    table.settle tr.shop td.amt { font-size:12px; }
+  }
 </style>
 </head>
 <body>
 
-<!-- HERO -->
+<!-- ヒーロー -->
 <section class="hero">
-  <div class="container">
-    <span class="badge">★ 1日5〜6h・月150〜180hの業務を、店舗運営もセラピスト分析もLINEで全自動 ★</span>
-    <h1>その<span class="strike">手作業</span>、<br>もう<span>LINEに任せる</span>時代です。</h1>
-    <p class="hero-sub">
-      電話番号を送れば、お客様の過去履歴が瞬時に返信。<br>
-      名前を送れば、給料明細が即発行。<br>
-      シフトを送れば、<strong>各サイトまで自動連動</strong>。<br>
-      日報・月報・顧客管理、そして<strong>セラピスト評価・売上分析まで毎日自動</strong>――<br>
-      すべての店舗業務が、<strong>LINEひとつ</strong>に集約されます。<br>
-      <span style="color:#ffd700;font-weight:900;font-size:1.15em;">本当に「全部・自動・なにもせず」完結。</span>
-    </p>
-    <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener noreferrer" class="hero-cta">▶ 今すぐ無料相談（即日対応）</a>
-    <div class="hero-stats">
-      <div class="stat">
-        <div class="stat-num">7</div>
-        <div class="stat-label">機能フル装備</div>
+  <div class="container hero-grid">
+    <div>
+      <p class="hero-note">メンズエステ店舗向け・LINE業務自動化サービス KIRAKUBOT</p>
+      <h1>電話番号を送る。<br>3秒で履歴が返ってくる。</h1>
+      <p class="hero-sub">
+        名前を送れば、給料明細が画像で届く。シフトを送れば、各サイトまで自動反映。日報・月報・顧客台帳・売上分析まで、店舗業務がLINEひとつに集約されます。
+      </p>
+      <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener noreferrer" class="btn-line">LINEで無料相談（即日対応）</a>
+      <ul class="hero-facts">
+        <li>自動化機能は7つ</li>
+        <li>操作はLINEに送るだけ</li>
+        <li>24時間稼働</li>
+        <li>追加作業・手集計なし</li>
+      </ul>
+    </div>
+    <div>
+      <div class="line-chat" data-line-chat>
+        <div class="lc-header">
+          <span class="lc-back"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 4 7 12 15 20"/></svg></span>
+          <span class="lc-title">KIRAKUBOT</span>
+          <span class="lc-hicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </span>
+        </div>
+        <div class="lc-body">
+          <div class="lc-date"><span>今日</span></div>
+          <div class="lc-row lc-sent">
+            <div class="lc-meta"><span>既読</span><span>14:02</span></div>
+            <div class="lc-bubble">【番号検索】
+#T-XXX
+<span class="lc-a">090-XXXX-XXXX</span></div>
+          </div>
+          <div class="lc-row lc-recv">
+            <div class="lc-avatar"><span class="a1">Kiraku</span><span class="a1">bot</span><span class="a2">Automation</span></div>
+            <div class="lc-recv-main">
+              <div class="lc-name">KIRAKUBOT</div>
+              <div class="lc-recv-line">
+                <div class="lc-bubble">📍 T-XXX
+📋 利用履歴：<span class="lc-a">090-XXXX-XXXX</span>
+合計 11件（全11件）
+1. <span class="lc-a">2026/4/26</span> △△ R 120
+2. <span class="lc-a">2026/4/17</span> ◇◇ S 150
+3. <span class="lc-a">2026/4/1</span> △△ R 180 〇〇NG
+4. <span class="lc-a">2026/2/16</span> △△ R 100
+5. <span class="lc-a">2026/2/3</span> □□ F 90
+…</div>
+                <div class="lc-time">14:02</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="lc-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 3 2 4-3 4 3"/></svg>
+          <span class="lc-field">Aa</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
+        </div>
       </div>
-      <div class="stat">
-        <div class="stat-num">3秒</div>
-        <div class="stat-label">で業務完結</div>
-      </div>
-      <div class="stat">
-        <div class="stat-num">24h</div>
-        <div class="stat-label">いつでも稼働</div>
-      </div>
-      <div class="stat">
-        <div class="stat-num">0</div>
-        <div class="stat-label">追加作業・手集計</div>
-      </div>
+      <p class="chat-note">実際のやり取りの例。シート検索3分の作業が、LINE送信3秒に変わります。</p>
     </div>
   </div>
 </section>
 
-<!-- IMPACT BANNER -->
-<section class="impact">
+<!-- 実績 -->
+<section class="band">
   <div class="container">
-    <div class="impact-headline">⚡ 導入店舗が実感した、圧倒的な業務改善インパクト</div>
+    <h2>導入店舗で置き換えられた作業量</h2>
     <div class="impact-row">
-      <div class="impact-item">
-        <div class="impact-num">150-180<small>h</small></div>
-        <div class="impact-label">月の業務削減<br><small style="opacity:0.7;">（1日5〜6h）</small></div>
+      <div>
+        <div class="impact-num">150-180<small>時間</small></div>
+        <div class="impact-label">月の作業をLINEに置き換え<br>（1日5〜6時間）</div>
       </div>
-      <div class="impact-item">
+      <div>
         <div class="impact-num">月¥25<small>万</small></div>
-        <div class="impact-label">事務員1人分の<br>人件費を削減</div>
+        <div class="impact-label">事務員1人分の人件費に相当</div>
       </div>
-      <div class="impact-item">
+      <div>
         <div class="impact-num">100<small>%</small></div>
-        <div class="impact-label">計算を自動化</div>
+        <div class="impact-label">給料・売上の計算を自動化</div>
       </div>
-      <div class="impact-item">
+      <div>
         <div class="impact-num">複数<small>店舗</small></div>
-        <div class="impact-label">一括で集計可能</div>
+        <div class="impact-label">1通で一括集計</div>
       </div>
-      <div class="impact-item">
+      <div>
         <div class="impact-num">0<small>枚</small></div>
         <div class="impact-label">紙の明細書</div>
       </div>
@@ -1540,125 +976,75 @@
   </div>
 </section>
 
-<!-- PROBLEM -->
+<!-- 課題 -->
 <section class="section">
   <div class="container">
-    <div class="section-tag">CHALLENGE</div>
-    <h2 class="section-title">こんな毎日、<span>もう限界じゃないですか？</span></h2>
+    <h2 class="section-title">毎日、こんな作業に時間を取られていませんか</h2>
     <div class="problems">
-      <div class="problem">
-        <div class="problem-icon">🔍</div>
-        <div class="problem-text">「あのお客さん、前来た時どうだったっけ？」<strong>シート検索で毎回3分ロス</strong></div>
-      </div>
-      <div class="problem">
-        <div class="problem-icon">📝</div>
-        <div class="problem-text"><strong>予約管理</strong>を1件ずつ手打ちで入力。日報や顧客台帳に同じ情報を<strong>何度も転記</strong></div>
-      </div>
-      <div class="problem">
-        <div class="problem-icon">🧾</div>
-        <div class="problem-text">給料明細を電卓で計算→エクセルで作成。<strong>金額ミスが怖い</strong></div>
-      </div>
-      <div class="problem">
-        <div class="problem-icon">📊</div>
-        <div class="problem-text">月末、全店舗の売上・本数・出勤を<strong>数時間かけて手集計</strong></div>
-      </div>
-      <div class="problem">
-        <div class="problem-icon">🏆</div>
-        <div class="problem-text">セラピスト評価が<strong>感覚頼り</strong>。誰が稼ぎ頭か、誰が要改善か<strong>即答できない</strong></div>
-      </div>
-      <div class="problem">
-        <div class="problem-icon">📅</div>
-        <div class="problem-text">スタッフが各自<strong>シフトを複数サイトに手入力</strong>。漏れ・遅れ・反映ミスで<strong>集客ロス</strong></div>
-      </div>
+      <div class="problem">「あのお客さん、前来た時どうだったっけ？」<strong>シート検索で毎回3分ロス</strong></div>
+      <div class="problem"><strong>予約管理</strong>を1件ずつ手打ちで入力。日報や顧客台帳に同じ情報を<strong>何度も転記</strong></div>
+      <div class="problem">給料明細を電卓で計算→エクセルで作成。<strong>金額ミスが怖い</strong></div>
+      <div class="problem">月末、全店舗の売上・本数・出勤を<strong>数時間かけて手集計</strong></div>
+      <div class="problem">セラピスト評価が<strong>感覚頼り</strong>。誰が稼ぎ頭か、誰が要改善か<strong>即答できない</strong></div>
+      <div class="problem">スタッフが各自<strong>シフトを複数サイトに手入力</strong>。漏れ・遅れ・反映ミスで<strong>集客ロス</strong></div>
     </div>
-    <p style="text-align:center;margin-top:40px;font-size:18px;font-weight:bold;color:#6a3093;">
-      ↓ KIRAKUBOTなら、これ全部、LINEひとつで終わります。
-    </p>
+    <p class="problems-close">KIRAKUBOTなら、これらすべてがLINEにメッセージを1通送るだけで終わります。</p>
   </div>
 </section>
 
-<!-- FEATURES -->
-<section class="section features-bg">
+<!-- 機能 -->
+<section class="section alt">
   <div class="container">
-    <div class="section-tag">FEATURES</div>
-    <h2 class="section-title">LINEで送るだけ。<br><span>7つの自動化機能</span>がすべて解決します。</h2>
+    <h2 class="section-title">7つの自動化機能</h2>
+    <p class="section-lead">操作はすべて、LINEにメッセージを1通送るだけ。以下はすべて実際のトーク画面と同じやり取りです。</p>
 
-    <!-- 7機能インデックス -->
-    <div class="features-index features-index-7">
-      <a href="#feat-01" class="fi-card">
-        <div class="fi-num">01</div>
-        <div class="fi-name">🧾 給料明細</div>
-        <div class="fi-tag">名前送るだけで<br>明細書が即発行</div>
-      </a>
-      <a href="#feat-02" class="fi-card">
-        <div class="fi-num">02</div>
-        <div class="fi-name">📊 月報更新</div>
-        <div class="fi-tag">全店舗の売上を<br>一発で合算</div>
-      </a>
-      <a href="#feat-03" class="fi-card">
-        <div class="fi-num">03</div>
-        <div class="fi-name">📅 シフト更新</div>
-        <div class="fi-tag">LINE1通で<br>各サイトまで連動</div>
-      </a>
-      <a href="#feat-04" class="fi-card">
-        <div class="fi-num">04</div>
-        <div class="fi-name">🔍 番号検索</div>
-        <div class="fi-tag">電話番号で<br>過去履歴を3秒検索</div>
-      </a>
-      <a href="#feat-05" class="fi-card">
-        <div class="fi-num">05</div>
-        <div class="fi-name">👤 顧客更新</div>
-        <div class="fi-tag">日付1つで<br>顧客台帳を同期</div>
-      </a>
-      <a href="#feat-06" class="fi-card">
-        <div class="fi-num">06</div>
-        <div class="fi-name">📝 日報更新</div>
-        <div class="fi-tag">テンプレ送信で<br>日報自動入力</div>
-      </a>
-      <a href="#analytics" class="fi-card">
-        <div class="fi-num">07</div>
-        <div class="fi-name">📈 売上分析</div>
-        <div class="fi-tag">セラピスト評価が<br>毎日自動で完成</div>
-      </a>
+    <div class="feat-index">
+      <a href="#feat-01"><span>01</span>給料明細</a>
+      <a href="#feat-02"><span>02</span>月報更新</a>
+      <a href="#feat-03"><span>03</span>シフト更新</a>
+      <a href="#feat-04"><span>04</span>番号検索</a>
+      <a href="#feat-05"><span>05</span>顧客更新</a>
+      <a href="#feat-06"><span>06</span>日報更新</a>
+      <a href="#analytics"><span>07</span>売上分析</a>
     </div>
 
-    <div class="features">
+    <!-- 01 給料明細 -->
+    <div class="feature" id="feat-01">
+      <div class="feat-head"><span class="feat-num">01</span><h3>給料明細</h3></div>
+      <p class="feat-label">名前を送ると、明細書が画像で返信されます</p>
+      <p class="feature-desc">
+        名前・交通費・バンス・お釣りを送るだけで、<strong>給料明細書を自動で作成して画像で返信</strong>。お店の取り分まで自動計算されます。受け取った明細書はそのままセラピスト本人にLINE転送するだけで配布完了です。
+      </p>
 
-      <!-- 01 給料明細 -->
-      <div class="feature feature-wide" id="feat-01">
-        <div class="feature-speed">⚡ 明細書を即発行・そのままセラピストに転送</div>
-        <div class="feature-num">01</div>
-        <h3>🧾 給料明細</h3>
-        <p class="feature-desc">
-          名前・交通費・バンス・お釣りを送るだけで、<strong>給料明細書を自動で作成して画像で返信</strong>。お店の取り分まで自動計算されます。
-        </p>
-
-        <div class="shift-flow">
-          <span class="sf-step">📲 LINE送信</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">🧮 自動計算</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">🖼 明細書画像で返信</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">📲 そのままセラピストに転送</span>
+      <div class="line-chat" data-line-chat>
+        <div class="lc-header">
+          <span class="lc-back"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 4 7 12 15 20"/></svg></span>
+          <span class="lc-title">KIRAKUBOT</span>
+          <span class="lc-hicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </span>
         </div>
-
-        <div class="feature-before-after">
-          <span class="ba-label">BEFORE</span>電卓で計算→エクセル作成→印刷 →
-          <span class="ba-label after">AFTER</span><strong>LINE送信で明細書が即発行</strong>
-        </div>
-
-        <h4 class="shift-h">▶ 送り方の例</h4>
-        <div class="cmd-block">【明細】
+        <div class="lc-body">
+          <div class="lc-date"><span>今日</span></div>
+          <div class="lc-row lc-sent">
+            <div class="lc-meta"><span>既読</span><span>22:15</span></div>
+            <div class="lc-bubble">【明細】
 T-XXX
 日付:〇/〇
 名前:△△
 交通費:往復
 バンス:2,000
 お釣り:10,000</div>
-
-        <h4 class="shift-h">▶ ボットからの返信（画像で届きます）</h4>
-        <div class="salary-inline">
+          </div>
+          <div class="lc-row lc-recv">
+            <div class="lc-avatar"><span class="a1">Kiraku</span><span class="a1">bot</span><span class="a2">Automation</span></div>
+            <div class="lc-recv-main wide">
+              <div class="lc-name">KIRAKUBOT</div>
+              <div class="lc-recv-line">
+                <div class="lc-img">
+                <div class="lc-scale">
+<!--@SALARY_IMG@-->
           <div class="salary-wrap">
             <div class="salary-title">給 料 明 細 書</div>
             <div class="salary-meta">
@@ -1738,47 +1124,145 @@ T-XXX
               <tr class="shop"><td>お店（封筒に入れるお金）</td><td></td><td class="amt">¥42,200</td></tr>
             </table>
           </div>
+                </div>
+                </div>
+                <div class="lc-time">22:15</div>
+              </div>
+            </div>
+          </div>
         </div>
-
-        <div class="shift-callout">
-          💡 <strong>コース料金・指名加算・バックレート・オプション料金</strong>はあらかじめ店舗ごとに設定済み。一度入れれば、あとは名前を送るだけで自動計算されます。
-        </div>
-        <div class="shift-callout">
-          📲 受け取った明細書は<strong>そのままセラピスト本人にLINE転送するだけ</strong>で配布完了。紙の明細書も受け渡しの手間もゼロです。
+        <div class="lc-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 3 2 4-3 4 3"/></svg>
+          <span class="lc-field">Aa</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
         </div>
       </div>
 
-      <!-- 02 月報更新 -->
-      <div class="feature feature-wide" id="feat-02">
-        <div class="feature-speed">⚡ 全店舗・全期間を瞬時に合算</div>
-        <div class="feature-num">02</div>
-        <h3>📊 月報更新</h3>
-        <p class="feature-desc">
-          管理番号と日付を送るだけで、<strong>全店舗の月間売上・本数・出勤数を瞬時に集計</strong>。朝/昼/夜の内訳まで自動で分けて返信します。
-        </p>
+      <div class="salary-expand">
+        <p>届く明細書画像の内容（拡大表示）</p>
+<!--@SALARY_FULL@-->
+          <div class="salary-wrap">
+            <div class="salary-title">給 料 明 細 書</div>
+            <div class="salary-meta">
+              <div class="lbl">日　付</div>
+              <div>〇〇〇〇年〇月〇日（〇）</div>
+              <div class="lbl">店　舗</div>
+              <div>〇〇店</div>
+            </div>
+            <div class="salary-meta" style="grid-template-columns:120px 1fr;">
+              <div class="lbl">源氏名</div>
+              <div>△△</div>
+            </div>
+            <table class="salary-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>コース</th>
+                  <th>指名</th>
+                  <th class="cprice">コース料金</th>
+                  <th class="gprice">女の子給料</th>
+                  <th class="shop">お　店</th>
+                  <th class="opt">オプション</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td><td>100</td><td>S</td>
+                  <td class="price cprice">¥14,000</td>
+                  <td class="price gprice">¥8,400</td>
+                  <td class="price shop">¥5,600</td>
+                  <td class="opt"></td>
+                </tr>
+                <tr>
+                  <td>2</td><td>120</td><td>S</td>
+                  <td class="price cprice">¥16,000</td>
+                  <td class="price gprice">¥9,600</td>
+                  <td class="price shop">¥6,400</td>
+                  <td class="opt">衣装チェンジ</td>
+                </tr>
+                <tr>
+                  <td>3</td><td>120</td><td>R</td>
+                  <td class="price cprice">¥21,000</td>
+                  <td class="price gprice">¥13,000</td>
+                  <td class="price shop">¥8,000</td>
+                  <td class="opt">延長20分</td>
+                </tr>
+                <tr>
+                  <td>4</td><td>100</td><td>F</td>
+                  <td class="price cprice">¥14,000</td>
+                  <td class="price gprice">¥8,400</td>
+                  <td class="price shop">¥5,600</td>
+                  <td class="opt">前日割</td>
+                </tr>
+                <tr>
+                  <td>5</td><td>120</td><td>S</td>
+                  <td class="price cprice">¥16,000</td>
+                  <td class="price gprice">¥9,600</td>
+                  <td class="price shop">¥6,400</td>
+                  <td class="opt"></td>
+                </tr>
+                <tr class="total">
+                  <td colspan="3">合　計</td>
+                  <td class="cprice">¥81,000</td>
+                  <td class="gprice">¥49,000</td>
+                  <td class="shop">¥32,000</td>
+                  <td style="background:#1a1a2e;"></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="salary-section-title">精 算 明 細</div>
+            <table class="settle">
+              <tr><td>給　料</td><td></td><td class="amt">¥49,000</td></tr>
+              <tr class="pos"><td>交通費（＋）</td><td>往復</td><td class="amt">¥1,800</td></tr>
+              <tr class="neg"><td>バンス（－）</td><td></td><td class="amt">¥2,000</td></tr>
+              <tr class="sum"><td>給 料 合 計</td><td></td><td class="amt">¥48,800</td></tr>
+              <tr><td>お釣り</td><td></td><td class="amt">¥10,000</td></tr>
+              <tr class="shop"><td>お店（封筒に入れるお金）</td><td></td><td class="amt">¥42,200</td></tr>
+            </table>
+          </div>
+      </div>
 
-        <div class="shift-flow">
-          <span class="sf-step">📲 LINE送信</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">🔄 全店舗・全期間集計</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">📊 朝/昼/夜内訳</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">📲 LINE返信</span>
+      <div class="callout">
+        <strong>コース料金・指名加算・バックレート・オプション料金</strong>はあらかじめ店舗ごとに設定済み。一度入れれば、あとは名前を送るだけで自動計算されます。
+      </div>
+      <div class="callout">
+        受け取った明細書は<strong>そのままセラピスト本人にLINE転送するだけ</strong>で配布完了。紙の明細書も受け渡しの手間もゼロです。
+      </div>
+    </div>
+
+    <!-- 02 月報更新 -->
+    <div class="feature" id="feat-02">
+      <div class="feat-head"><span class="feat-num">02</span><h3>月報更新</h3></div>
+      <p class="feat-label">全店舗・全期間を1通で合算</p>
+      <p class="feature-desc">
+        管理番号と日付を送るだけで、<strong>全店舗の月間売上・本数・出勤数を集計</strong>。朝/昼/夜の内訳まで自動で分けて返信します。月末に全店舗のシートを開いて電卓で数時間かけていた集計が、送信1通になります。
+      </p>
+
+      <div class="line-chat" data-line-chat>
+        <div class="lc-header">
+          <span class="lc-back"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 4 7 12 15 20"/></svg></span>
+          <span class="lc-title">KIRAKUBOT</span>
+          <span class="lc-hicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </span>
         </div>
-
-        <div class="feature-before-after">
-          <span class="ba-label">BEFORE</span>月末に全店舗のシートを開いて電卓集計（数時間） →
-          <span class="ba-label after">AFTER</span><strong>LINE送信で瞬時に全店舗合算</strong>
-        </div>
-
-        <h4 class="shift-h">▶ 送り方の例</h4>
-        <div class="cmd-block">【月報更新】
+        <div class="lc-body">
+          <div class="lc-date"><span>今日</span></div>
+          <div class="lc-row lc-sent">
+            <div class="lc-meta"><span>既読</span><span>23:40</span></div>
+            <div class="lc-bubble">【月報更新】
 #T-XXX
 〇/〇</div>
-
-        <h4 class="shift-h">▶ ボットからの返信</h4>
-        <div class="reply-block">✅ 月報更新完了
+          </div>
+          <div class="lc-row lc-recv">
+            <div class="lc-avatar"><span class="a1">Kiraku</span><span class="a1">bot</span><span class="a2">Automation</span></div>
+            <div class="lc-recv-main">
+              <div class="lc-name">KIRAKUBOT</div>
+              <div class="lc-recv-line">
+                <div class="lc-bubble">✅ 月報更新完了
 📅 〇月〇日
 ─── 〇〇店 ───
 💰 総売上：300,000円
@@ -1792,177 +1276,230 @@ T-XXX
 💰 総売上：470,000円
 🏠 本数：33本
 👤 出勤：14人</div>
-
+                <div class="lc-time">23:40</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="lc-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 3 2 4-3 4 3"/></svg>
+          <span class="lc-field">Aa</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
+        </div>
       </div>
+    </div>
 
-      <!-- 03 シフト更新（Venrey連動） -->
-      <div class="feature feature-wide" id="feat-03">
-        <div class="feature-speed">⚡ Venrey連動・サイトまで全自動</div>
-        <div class="feature-num">03</div>
-        <h3>📅 シフト更新（Venrey連動）</h3>
-        <p class="feature-desc">
-          シフトをLINEに投稿するだけで、<strong>シフト表に反映 → Venreyに反映 → 各サイトへ連動更新</strong>まで一発で完結。スタッフが何人いても、複数サイトを開いて手入力する作業が<strong>完全にゼロ</strong>になります。
-        </p>
+    <!-- 03 シフト更新 -->
+    <div class="feature" id="feat-03">
+      <div class="feat-head"><span class="feat-num">03</span><h3>シフト更新（Venrey連動）</h3></div>
+      <p class="feat-label">シフト表への反映からVenrey・各サイトの連動更新まで1通で完結</p>
+      <p class="feature-desc">
+        シフトをLINEに投稿するだけで、<strong>シフト表に反映 → Venreyに反映 → 各サイトへ連動更新</strong>まで一発で完結。スタッフが何人いても、複数サイトを開いて手入力する作業がなくなります。
+      </p>
 
-        <div class="shift-flow">
-          <span class="sf-step">📲 LINE送信</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">📊 シフト表に反映</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">🌐 Venreyに反映</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">🔗 各サイトへ連動更新</span>
+      <div class="line-chat" data-line-chat>
+        <div class="lc-header">
+          <span class="lc-back"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 4 7 12 15 20"/></svg></span>
+          <span class="lc-title">KIRAKUBOT</span>
+          <span class="lc-hicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </span>
         </div>
-
-        <div class="feature-before-after">
-          <span class="ba-label">BEFORE</span>スタッフ各自が複数のサイトを手動更新 →
-          <span class="ba-label after">AFTER</span><strong>LINE1通で全部完結</strong>
-        </div>
-
-        <h4 class="shift-h">▶ 送り方の例（このまま送るだけ）</h4>
-        <div class="cmd-block">T-XXX
+        <div class="lc-body">
+          <div class="lc-date"><span>今日</span></div>
+          <div class="lc-row lc-sent">
+            <div class="lc-meta"><span>既読</span><span>15:30</span></div>
+            <div class="lc-bubble">T-XXX
 〇〇 〇〇
 
-25日(月)19-24上
-26日(火)16-23受
+<span class="lc-a">25日(月)19</span>-24上
+<span class="lc-a">26日(火)16</span>-23受
 27日(水)お休み
 28日(木)お休み
-29日(金)19-26受
-30日(土)12-17上
-31日(日)12-17上</div>
-
-        <div class="shift-callout">
-          💡 <strong>指定した日付のシフトもピンポイントで反映可能</strong>。直近分も先々の分も、必要なタイミングでまとめて連動できます。
+<span class="lc-a">29日(金)19</span>-26受
+<span class="lc-a">30日(土)12</span>-17上
+<span class="lc-a">31日(日)12</span>-17上</div>
+          </div>
+        </div>
+        <div class="lc-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 3 2 4-3 4 3"/></svg>
+          <span class="lc-field">Aa</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
         </div>
       </div>
+      <p class="chat-note">このまま送るだけで、シフト表と各サイトに反映されます。</p>
 
-      <!-- 04 番号検索 -->
-      <div class="feature feature-wide" id="feat-04">
-        <div class="feature-speed">⚡ 3秒で過去履歴が一覧表示</div>
-        <div class="feature-num">04</div>
-        <h3>🔍 番号検索</h3>
-        <p class="feature-desc">
-          管理番号と電話番号を送れば、<strong>お客様の過去履歴を一覧で返信</strong>。さらに<strong>セラピスト名を一緒に送れば、そのセラピストが過去に対応した履歴だけに絞り込み</strong>。<strong>そのまま本人に転送するだけ</strong>で、担当客の好み・指名歴・備考が<strong>一目で分かります</strong>。
-        </p>
+      <div class="callout">
+        <strong>指定した日付のシフトもピンポイントで反映可能</strong>。直近分も先々の分も、必要なタイミングでまとめて連動できます。
+      </div>
+    </div>
 
-        <div class="shift-flow">
-          <span class="sf-step">📲 番号＋セラピスト名を送信</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">🔍 履歴を検索</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">📒 一覧で返信</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">📲 セラピストに転送</span>
+    <!-- 04 番号検索 -->
+    <div class="feature" id="feat-04">
+      <div class="feat-head"><span class="feat-num">04</span><h3>番号検索</h3></div>
+      <p class="feat-label">シート検索3分の作業が、LINE送信3秒に</p>
+      <p class="feature-desc">
+        管理番号と電話番号を送れば、<strong>お客様の過去履歴を一覧で返信</strong>。さらに<strong>セラピスト名を一緒に送れば、そのセラピストが過去に対応した履歴だけに絞り込み</strong>。そのまま本人に転送するだけで、担当客の好み・指名歴・備考が一目で分かります。
+      </p>
+
+      <div class="line-chat" data-line-chat>
+        <div class="lc-header">
+          <span class="lc-back"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 4 7 12 15 20"/></svg></span>
+          <span class="lc-title">KIRAKUBOT</span>
+          <span class="lc-hicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </span>
         </div>
-
-        <div class="feature-before-after">
-          <span class="ba-label">BEFORE</span>シートを開いて Ctrl+F で検索→該当行を読む（3〜5分） →
-          <span class="ba-label after">AFTER</span><strong>LINE送信で3秒</strong>
-        </div>
-
-        <h4 class="shift-h">▶ 送り方の例①（電話番号だけ＝全履歴）</h4>
-        <div class="cmd-block">【番号検索】
+        <div class="lc-body">
+          <div class="lc-date"><span>今日</span></div>
+          <div class="lc-row lc-sent">
+            <div class="lc-meta"><span>既読</span><span>14:02</span></div>
+            <div class="lc-bubble">【番号検索】
 #T-XXX
-090-XXXX-XXXX</div>
-
-        <h4 class="shift-h">▶ ボットからの返信①（全担当者を含む全履歴）</h4>
-        <div class="reply-block">📍 T-XXX
-📋 利用履歴：090-XXXX-XXXX
+<span class="lc-a">090-XXXX-XXXX</span></div>
+          </div>
+          <div class="lc-row lc-recv">
+            <div class="lc-avatar"><span class="a1">Kiraku</span><span class="a1">bot</span><span class="a2">Automation</span></div>
+            <div class="lc-recv-main">
+              <div class="lc-name">KIRAKUBOT</div>
+              <div class="lc-recv-line">
+                <div class="lc-bubble">📍 T-XXX
+📋 利用履歴：<span class="lc-a">090-XXXX-XXXX</span>
 合計 11件（全11件）
-1. 2026/4/26   △△ R 120
-2. 2026/4/17   ◇◇ S 150
-3. 2026/4/1    △△ R 180 〇〇NG
-4. 2026/2/16   △△ R 100
-5. 2026/2/3    □□ F 90
+1. <span class="lc-a">2026/4/26</span> △△ R 120
+2. <span class="lc-a">2026/4/17</span> ◇◇ S 150
+3. <span class="lc-a">2026/4/1</span> △△ R 180 〇〇NG
+4. <span class="lc-a">2026/2/16</span> △△ R 100
+5. <span class="lc-a">2026/2/3</span> □□ F 90
 …</div>
-
-        <h4 class="shift-h">▶ 送り方の例②（セラピスト名で絞り込み）</h4>
-        <div class="cmd-block">【番号検索】
+                <div class="lc-time">14:02</div>
+              </div>
+            </div>
+          </div>
+          <div class="lc-row lc-sent">
+            <div class="lc-meta"><span>既読</span><span>14:03</span></div>
+            <div class="lc-bubble">【番号検索】
 #T-XXX
-090-XXXX-XXXX
+<span class="lc-a">090-XXXX-XXXX</span>
 △△</div>
-
-        <h4 class="shift-h">▶ ボットからの返信②（担当履歴だけに絞り込み）</h4>
-        <div class="reply-block">📍 T-XXX
-📋 利用履歴：090-XXXX-XXXX / △△
+          </div>
+          <div class="lc-row lc-recv">
+            <div class="lc-avatar"><span class="a1">Kiraku</span><span class="a1">bot</span><span class="a2">Automation</span></div>
+            <div class="lc-recv-main">
+              <div class="lc-name">KIRAKUBOT</div>
+              <div class="lc-recv-line">
+                <div class="lc-bubble">📍 T-XXX
+📋 利用履歴：<span class="lc-a">090-XXXX-XXXX</span> / △△
 合計 6件（全6件）
-1. 2026/4/26   △△ R 120
-2. 2026/4/17   △△ R 150
-3. 2026/4/1    △△ R 180 〇〇NG
-4. 2026/2/16   △△ R 100
+1. <span class="lc-a">2026/4/26</span> △△ R 120
+2. <span class="lc-a">2026/4/17</span> △△ R 150
+3. <span class="lc-a">2026/4/1</span> △△ R 180 〇〇NG
+4. <span class="lc-a">2026/2/16</span> △△ R 100
 …</div>
-
-        <div class="shift-callout">
-          💡 <strong>電話番号だけで送れば全履歴</strong>、<strong>セラピスト名を加えれば本人の担当履歴だけに絞り込み</strong>。
+                <div class="lc-time">14:03</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="shift-callout">
-          📲 受け取った履歴を<strong>そのままセラピストに転送するだけ</strong>。<strong>過去の利用履歴・NGなど備考が一目で確認</strong>できるので、LINE1つで情報共有が完了し、<strong>セラピストの満足度</strong>が一気に上がります。
+        <div class="lc-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 3 2 4-3 4 3"/></svg>
+          <span class="lc-field">Aa</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
         </div>
       </div>
+      <p class="chat-note">1通目は電話番号だけ＝全履歴。2通目はセラピスト名を加えて、担当履歴だけに絞り込んだ例です。</p>
 
-      <!-- 05 顧客更新 -->
-      <div class="feature feature-wide" id="feat-05">
-        <div class="feature-speed">⚡ 日付送信で顧客台帳を自動同期</div>
-        <div class="feature-num">05</div>
-        <h3>👤 顧客更新</h3>
-        <p class="feature-desc">
-          管理番号と日付を送るだけで、<strong>その日までの顧客データを最新化</strong>。リピート件数も自動でカウントされ、顧客分析の基礎データが揃います。
-        </p>
+      <div class="callout">
+        受け取った履歴を<strong>そのままセラピストに転送するだけ</strong>。過去の利用履歴・NGなど備考が一目で確認できるので、LINE1つで情報共有が完了します。
+      </div>
+    </div>
 
-        <div class="shift-flow">
-          <span class="sf-step">📲 日付を送信</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">🔄 当日来店分を同期</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">✅ リピート自動カウント</span>
+    <!-- 05 顧客更新 -->
+    <div class="feature" id="feat-05">
+      <div class="feat-head"><span class="feat-num">05</span><h3>顧客更新</h3></div>
+      <p class="feat-label">日付を1つ送ると、顧客台帳が同期されます</p>
+      <p class="feature-desc">
+        管理番号と日付を送るだけで、<strong>その日までの顧客データを最新化</strong>。リピート件数も自動でカウントされ、顧客分析の基礎データが揃います。
+      </p>
+
+      <div class="line-chat" data-line-chat>
+        <div class="lc-header">
+          <span class="lc-back"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 4 7 12 15 20"/></svg></span>
+          <span class="lc-title">KIRAKUBOT</span>
+          <span class="lc-hicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </span>
         </div>
-
-        <div class="feature-before-after">
-          <span class="ba-label">BEFORE</span>来店日を1件ずつ顧客台帳に転記（1日30件×3分） →
-          <span class="ba-label after">AFTER</span><strong>日付送信で全件自動更新</strong>
-        </div>
-
-        <h4 class="shift-h">▶ 送り方の例</h4>
-        <div class="cmd-block">【顧客更新】
+        <div class="lc-body">
+          <div class="lc-date"><span>今日</span></div>
+          <div class="lc-row lc-sent">
+            <div class="lc-meta"><span>既読</span><span>23:41</span></div>
+            <div class="lc-bubble">【顧客更新】
 #T-XXX
 〇月〇日</div>
-
-        <h4 class="shift-h">▶ ボットからの返信</h4>
-        <div class="reply-block">✅ 顧客更新完了
+          </div>
+          <div class="lc-row lc-recv">
+            <div class="lc-avatar"><span class="a1">Kiraku</span><span class="a1">bot</span><span class="a2">Automation</span></div>
+            <div class="lc-recv-main">
+              <div class="lc-name">KIRAKUBOT</div>
+              <div class="lc-recv-line">
+                <div class="lc-bubble">✅ 顧客更新完了
 📅 〇月〇日
 🏠 〇〇店
 👥 更新件数：30件
 🔄 リピート判定済（新規 12 / リピート 18）
 
 ※ 日報データから顧客台帳に自動反映しました</div>
-
-        <div class="shift-callout">
-          💡 <strong>リピート率の自動算定</strong>にも使用されます。顧客分析・ANALYTICSダッシュボードの基礎データはこの顧客更新が支えています。
+                <div class="lc-time">23:41</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="lc-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 3 2 4-3 4 3"/></svg>
+          <span class="lc-field">Aa</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
         </div>
       </div>
 
-      <!-- 06 日報更新 -->
-      <div class="feature feature-wide" id="feat-06">
-        <div class="feature-speed">⚡ テンプレ送信で日報シート自動入力</div>
-        <div class="feature-num">06</div>
-        <h3>📝 日報更新</h3>
-        <p class="feature-desc">
-          テンプレに沿って送るだけで、<strong>日報シートに自動入力</strong>。来店時間・媒体・指名・備考まで一発反映。<strong>月報集計の元データ</strong>になる重要機能です。
-        </p>
+      <div class="callout">
+        <strong>リピート率の自動算定</strong>にも使用されます。顧客分析・売上分析ダッシュボードの基礎データは、この顧客更新が支えています。
+      </div>
+    </div>
 
-        <div class="shift-flow">
-          <span class="sf-step">📲 テンプレ送信</span>
-          <span class="sf-arrow">→</span>
-          <span class="sf-step">📝 日報シート自動入力</span>
+    <!-- 06 日報更新 -->
+    <div class="feature" id="feat-06">
+      <div class="feat-head"><span class="feat-num">06</span><h3>日報更新</h3></div>
+      <p class="feat-label">テンプレを送ると、日報シートに自動入力されます</p>
+      <p class="feature-desc">
+        テンプレに沿って送るだけで、<strong>日報シートに自動入力</strong>。来店時間・媒体・指名・備考まで一発反映。<strong>月報集計の元データ</strong>になる重要機能です。
+      </p>
+
+      <div class="line-chat" data-line-chat>
+        <div class="lc-header">
+          <span class="lc-back"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 4 7 12 15 20"/></svg></span>
+          <span class="lc-title">KIRAKUBOT</span>
+          <span class="lc-hicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </span>
         </div>
-
-        <div class="feature-before-after">
-          <span class="ba-label">BEFORE</span>シートを開いて手打ち・行追加・書式調整（1件3分） →
-          <span class="ba-label after">AFTER</span><strong>テンプレ送信で自動入力</strong>
-        </div>
-
-        <h4 class="shift-h">▶ 送り方の例（このまま送るだけ）</h4>
-        <div class="cmd-block">【日報更新】
+        <div class="lc-body">
+          <div class="lc-date"><span>今日</span></div>
+          <div class="lc-row lc-sent">
+            <div class="lc-meta"><span>既読</span><span>21:05</span></div>
+            <div class="lc-bubble">【日報更新】
 #T-XXX
 日付:〇/〇
 店名:〇〇店
@@ -1972,50 +1509,38 @@ T-XXX
 オプション:前日割
 備考欄:
 媒体:HP
-番号:090-XXXX-XXXX
+番号:<span class="lc-a">090-XXXX-XXXX</span>
 予約者:〇〇
-来店時間:14:00</div>
-
-        <div class="shift-callout">
-          💡 <strong>送信するだけで日報シートに自動反映</strong>。LINEからの返答はなく、シートが静かに更新されます。<strong>月報集計の元データ</strong>がここに蓄積されるので、日々の日報の精度が月末の経営判断の精度を決めます。
+来店時間:<span class="lc-a">14:00</span></div>
+          </div>
+        </div>
+        <div class="lc-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 3 2 4-3 4 3"/></svg>
+          <span class="lc-field">Aa</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
         </div>
       </div>
+      <p class="chat-note">送信するだけで日報シートに自動反映。LINEからの返答はなく、シートが静かに更新されます。</p>
 
+      <div class="callout">
+        <strong>月報集計の元データ</strong>がここに蓄積されるので、日々の日報の精度が月末の経営判断の精度を決めます。
+      </div>
     </div>
+
   </div>
 </section>
 
-<!-- ANALYTICS DASHBOARD（目玉訴求） -->
-<section class="section analytics-bg" id="analytics">
+<!-- 07 売上分析 -->
+<section class="section" id="analytics">
   <div class="container">
-    <div style="text-align:center;">
-      <span class="analytics-badge-top">✨ もう一つの主役機能</span>
-    </div>
-    <h2 class="section-title analytics-title">実は、<br><span>これだけじゃありません。</span></h2>
-
-    <p class="analytics-lead">
-      LINEで日々の業務をこなすだけ。<br>
-      その<span class="gold">裏側で勝手に</span>、<br>
-      <span class="gold big">セラピストの評価・売上・リピート率・本数</span>が<br>
-      <span class="gold big">毎日、自動で完成</span>していきます。
+    <h2 class="section-title">売上分析ダッシュボード（毎日自動更新）</h2>
+    <p class="section-lead">
+      LINEで日々の業務をこなすだけで、その裏側でセラピストの評価・売上・リピート率・本数が毎日自動で集計されます。追加の作業や集計の手間はありません。
     </p>
 
-    <div class="analytics-zero">
-      <div class="zero-card">
-        <div class="zero-num">0</div>
-        <div class="zero-label">追加作業</div>
-      </div>
-      <div class="zero-card">
-        <div class="zero-num">0</div>
-        <div class="zero-label">集計の手間</div>
-      </div>
-      <div class="zero-card">
-        <div class="zero-num">毎日</div>
-        <div class="zero-label">自動で更新</div>
-      </div>
-    </div>
-
-    <!-- DASHBOARD PREVIEW (v2 — screenshot-style) -->
+<!--@AV2@-->
     <div class="analytics-v2">
   <div class="av2-summary">
     <div class="av2-sum-card"><div class="l">総売上</div><div class="v">¥4,814,000</div></div>
@@ -2024,7 +1549,7 @@ T-XXX
     <div class="av2-sum-card"><div class="l">平均単価</div><div class="v">¥15,000</div></div>
   </div>
   <div class="av2-section">
-  <div class="av2-h">🏆 総合評価スコア（偏差値方式・上位10名）</div>
+  <div class="av2-h">総合評価スコア（偏差値方式・上位10名）</div>
   <div class="av2-sub">利益35%＋出勤20%＋リピ率15%＋利益/h 15%＋本数15%　／　各バーは偏差値（50=平均）</div>
   <div class="av2-scroll">
   <table class="av2-score-table">
@@ -2080,7 +1605,7 @@ T-XXX
   </div>
 </div>
   <div class="av2-section">
-  <div class="av2-h">📋 総合評価ランキング表</div>
+  <div class="av2-h">総合評価ランキング表</div>
   <div class="av2-sub">利益額35%＋出勤20%＋リピ率15%＋利益/h 15%＋本数15%</div>
   <div class="scroll-hint">スワイプで全12項目を表示</div>
   <div class="av2-scroll-wrap"><div class="av2-scroll">
@@ -2222,9 +1747,9 @@ T-XXX
       <td>19</td>
     </tr></tbody></table></div></div></div>
   <div class="av2-section">
-  <div class="av2-h">🎯 タイプ別分類（4象限・自動判定）</div>
+  <div class="av2-h">タイプ別分類（4象限・自動判定）</div>
   <div class="av2-sub">中央値基準：利益/h ¥1,971 ／ リピ率 24%</div>
-  <div class="av2-scroll"><div class="av2-quad-head elite">🏆 精鋭タイプ（高効率×高リピ）　— 4名（上位10名中）</div>
+  <div class="av2-scroll"><div class="av2-quad-head elite">精鋭タイプ（高効率×高リピ）　— 4名（上位10名中）</div>
       <table class="av2-quad-table">
         <thead><tr><td class="nm" style="font-weight:700;color:#666;">名前</td><td class="num" style="font-weight:700;color:#666;">利益/h</td><td class="num" style="font-weight:700;color:#666;">リピ率</td><td class="num" style="font-weight:700;color:#666;">売上</td></tr></thead>
         <tbody><tr>
@@ -2248,7 +1773,7 @@ T-XXX
         <td class="num">50%</td>
         <td class="num">¥197,000</td>
       </tr></tbody>
-      </table><div class="av2-quad-head once">⚠ 一見さん型（高効率×低リピ）　— 1名（上位10名中）</div>
+      </table><div class="av2-quad-head once">一見さん型（高効率×低リピ）　— 1名（上位10名中）</div>
       <table class="av2-quad-table">
         <thead><tr><td class="nm" style="font-weight:700;color:#666;">名前</td><td class="num" style="font-weight:700;color:#666;">利益/h</td><td class="num" style="font-weight:700;color:#666;">リピ率</td><td class="num" style="font-weight:700;color:#666;">売上</td></tr></thead>
         <tbody><tr>
@@ -2257,7 +1782,7 @@ T-XXX
         <td class="num">19%</td>
         <td class="num">¥329,000</td>
       </tr></tbody>
-      </table><div class="av2-quad-head fan">💎 ファン化型（低効率×高リピ）　— 2名（上位10名中）</div>
+      </table><div class="av2-quad-head fan">ファン化型（低効率×高リピ）　— 2名（上位10名中）</div>
       <table class="av2-quad-table">
         <thead><tr><td class="nm" style="font-weight:700;color:#666;">名前</td><td class="num" style="font-weight:700;color:#666;">利益/h</td><td class="num" style="font-weight:700;color:#666;">リピ率</td><td class="num" style="font-weight:700;color:#666;">売上</td></tr></thead>
         <tbody><tr>
@@ -2271,7 +1796,7 @@ T-XXX
         <td class="num">77%</td>
         <td class="num">¥219,000</td>
       </tr></tbody>
-      </table><div class="av2-quad-head need">🔻 要改善（低効率×低リピ）　— 3名（上位10名中）</div>
+      </table><div class="av2-quad-head need">要改善（低効率×低リピ）　— 3名（上位10名中）</div>
       <table class="av2-quad-table">
         <thead><tr><td class="nm" style="font-weight:700;color:#666;">名前</td><td class="num" style="font-weight:700;color:#666;">利益/h</td><td class="num" style="font-weight:700;color:#666;">リピ率</td><td class="num" style="font-weight:700;color:#666;">売上</td></tr></thead>
         <tbody><tr>
@@ -2292,7 +1817,7 @@ T-XXX
       </tr></tbody>
       </table></div></div>
   <div class="av2-section">
-  <div class="av2-h">💰 売上ランキング</div>
+  <div class="av2-h">売上ランキング</div>
   <div class="av2-sub">上位10名抜粋表示</div>
   <div class="av2-scroll">
   <table class="av2-srk">
@@ -2359,7 +1884,7 @@ T-XXX
       <td>37%</td>
     </tr></tbody></table></div></div>
   <div class="av2-section">
-  <div class="av2-h">🔢 本数ランキング</div>
+  <div class="av2-h">本数ランキング</div>
   <div class="av2-sub">上位10名抜粋表示</div>
   <div class="av2-scroll">
   <table class="av2-srk">
@@ -2426,7 +1951,7 @@ T-XXX
       <td>¥16,400</td>
     </tr></tbody></table></div></div>
   <div class="av2-section">
-  <div class="av2-h">🚦 信号機評価表</div>
+  <div class="av2-h">信号機評価表</div>
   <div class="av2-sub">偏差値ベース　◎ ≥60 ／ ○ ≥50 ／ △ ≥40 ／ × &lt;40</div>
   <div class="av2-scroll">
   <table class="av2-sig">
@@ -2463,7 +1988,7 @@ T-XXX
       <td><span class="m-c">○</span></td><td><span class="m-x">×</span></td><td><span class="m-x">×</span></td><td><span class="m-c">○</span></td><td><span class="m-c">○</span></td>
     </tr></tbody></table></div></div>
   <div class="av2-section">
-  <div class="av2-h">👤 指名・フリー・リピ内訳</div>
+  <div class="av2-h">指名・フリー・リピ内訳</div>
   <div class="av2-sub">本数ベース（上位10名）</div>
   <div class="av2-scroll" style="padding:8px 0;"><div class="av2-shimei-row">
       <div class="nm">A.さん</div>
@@ -2577,147 +2102,73 @@ T-XXX
   </p>
 </div>
 
-    <!-- 4本柱訴求 -->
-    <div class="pillars">
-      <div class="pillar">
-        <div class="pillar-icon">🏆</div>
-        <div class="pillar-name">セラピスト評価</div>
-        <div class="pillar-desc">SS〜Eのランクで<br>一目で実力把握</div>
-      </div>
-      <div class="pillar">
-        <div class="pillar-icon">💰</div>
-        <div class="pillar-name">売上ランキング</div>
-        <div class="pillar-desc">誰が稼ぎ頭か<br>横バーで一発判定</div>
-      </div>
-      <div class="pillar">
-        <div class="pillar-icon">🔄</div>
-        <div class="pillar-name">リピート率分析</div>
-        <div class="pillar-desc">4タイプに自動分類<br>育成方針が明確に</div>
-      </div>
-      <div class="pillar">
-        <div class="pillar-icon">📊</div>
-        <div class="pillar-name">本数ランキング</div>
-        <div class="pillar-desc">本数も自動集計<br>稼働効率まで見える</div>
-      </div>
-    </div>
-
-    <!-- 絶賛コメント -->
-    <div class="praise-wrap">
-      <div class="praise-title">💎 他店オーナーから多数の絶賛コメント 💎</div>
-      <div class="praise-quotes">
-        <div class="praise-q">「これだけで導入する価値ある」</div>
-        <div class="praise-q">「経営判断がブレなくなった」</div>
-        <div class="praise-q">「セラピスト評価が客観的にできる」</div>
-      </div>
-    </div>
-
   </div>
 </section>
 
-<!-- MID CTA (between ANALYTICS and VOICE) -->
+<!-- 中間CTA -->
 <section class="mid-cta">
   <div class="container">
-    <p class="mid-cta-lead">
-      ⚡ ここまで読んだ方へ。<br>
-      <strong>「うちの店舗で動かしたら、実際どう変わる？」</strong><br>
-      その答えを<strong>無料デモ</strong>でその場でお見せします。
-    </p>
-    <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener noreferrer" class="mid-cta-btn">▶ 無料デモを今すぐ予約する</a>
-    <p class="mid-cta-sub">所要時間15分 / オンライン対応 / 導入義務なし</p>
+    <p class="lead">「うちの店舗で動かしたら、実際どう変わる？」——その答えを無料デモでその場でお見せします。</p>
+    <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener noreferrer" class="btn-white">無料デモを予約する</a>
+    <p class="sub">所要時間15分 / オンライン対応 / 導入義務なし</p>
   </div>
 </section>
 
-<!-- VOICE -->
-<section class="section features-bg">
-  <div class="container">
-    <div class="section-tag">VOICE</div>
-    <h2 class="section-title">導入店舗からの<span>リアルな声</span></h2>
-    <div class="voice-grid">
-      <div class="voice">
-        <p class="voice-text">
-          月末になると深夜まで明細作成と月報集計をしていたのが、今では会計後すぐに帰宅できます。経営に集中できる時間が一気に増えました。
-        </p>
-        <div class="voice-meta">
-          <div class="voice-avatar">M</div>
-          <div>
-            <div class="voice-name">店舗オーナー M様</div>
-            <div class="voice-role">2店舗運営／導入3ヶ月</div>
-          </div>
-        </div>
-      </div>
-      <div class="voice">
-        <p class="voice-text">
-          電話番号を入力するだけで履歴が一瞬で出てくるのが本当に便利。お客様への対応がワンランク上がりました。リピート率も上がっています。
-        </p>
-        <div class="voice-meta">
-          <div class="voice-avatar">K</div>
-          <div>
-            <div class="voice-name">店長 K様</div>
-            <div class="voice-role">単店舗運営／導入6ヶ月</div>
-          </div>
-        </div>
-      </div>
-      <div class="voice">
-        <p class="voice-text">
-          給料明細の計算ミスがゼロになりました。セラピストとのトラブルもなくなり、信頼関係まで良くなった気がします。もう手作業に戻れません。
-        </p>
-        <div class="voice-meta">
-          <div class="voice-avatar">S</div>
-          <div>
-            <div class="voice-name">マネージャー S様</div>
-            <div class="voice-role">3店舗運営／導入1年</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- WHY -->
-<section class="section why-bg">
-  <div class="container">
-    <div class="section-tag">WHY KIRAKUBOT</div>
-    <h2 class="section-title">なぜ、KIRAKUBOTが<br><span>選ばれるのか？</span></h2>
-    <div class="why-grid">
-      <div class="why-card">
-        <div class="why-icon">⚡</div>
-        <h4>圧倒的なスピード</h4>
-        <p>シート検索・電卓計算・手入力の時間がゼロに。たった3秒で全業務が完了します。</p>
-      </div>
-      <div class="why-card">
-        <div class="why-icon">📱</div>
-        <h4>LINEひとつでOK</h4>
-        <p>新しいアプリの導入も操作も不要。スタッフ全員がすでに使い慣れたLINEだけで動きます。</p>
-      </div>
-      <div class="why-card">
-        <div class="why-icon">🎯</div>
-        <h4>ヒューマンエラー激減</h4>
-        <p>料金計算ミス・転記漏れ・打ち間違いといった手作業特有のトラブルを徹底排除。</p>
-      </div>
-      <div class="why-card">
-        <div class="why-icon">🏪</div>
-        <h4>複数店舗を一括管理</h4>
-        <p>店舗ごとの売上・本数・出勤を瞬時に合算。経営判断のスピードが段違いに変わります。</p>
-      </div>
-      <div class="why-card">
-        <div class="why-icon">🛠️</div>
-        <h4>店舗ごとにカスタマイズ</h4>
-        <p>コース料金・オプション・指名料、店舗の運用に合わせて自由に設定可能です。</p>
-      </div>
-      <div class="why-card">
-        <div class="why-icon">💬</div>
-        <h4>導入後もLINEでサポート</h4>
-        <p>トラブル・追加機能のご相談まで、すべてLINEで完結。誰でも安心して使い続けられます。</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- COMPARISON -->
+<!-- 導入店舗の声 -->
 <section class="section">
   <div class="container">
-    <div class="section-tag">BEFORE / AFTER</div>
-    <h2 class="section-title">導入前と導入後で、<span>こんなに変わります。</span></h2>
+    <h2 class="section-title">導入店舗の声</h2>
+    <div class="voices">
+      <blockquote class="voice">
+        <p>月末になると深夜まで明細作成と月報集計をしていたのが、今では会計後すぐに帰宅できます。経営に集中できる時間が一気に増えました。</p>
+        <cite>店舗オーナー M様（2店舗運営／導入3ヶ月）</cite>
+      </blockquote>
+      <blockquote class="voice">
+        <p>給料明細の計算ミスがゼロになりました。セラピストとのトラブルもなくなり、信頼関係まで良くなった気がします。もう手作業に戻れません。</p>
+        <cite>マネージャー S様（3店舗運営／導入1年）</cite>
+      </blockquote>
+    </div>
+  </div>
+</section>
+
+<!-- 選ばれる理由 -->
+<section class="section alt">
+  <div class="container">
+    <h2 class="section-title">KIRAKUBOTが選ばれる理由</h2>
+    <div class="why-list">
+      <div class="why-item">
+        <h4>シート検索3分が、LINE送信3秒に</h4>
+        <p>シート検索・電卓計算・手入力の待ち時間がなくなります。送って、返ってくるだけです。</p>
+      </div>
+      <div class="why-item">
+        <h4>新しいアプリは不要</h4>
+        <p>導入も操作も、スタッフ全員がすでに使い慣れたLINEだけで動きます。</p>
+      </div>
+      <div class="why-item">
+        <h4>計算ミス・転記漏れがなくなる</h4>
+        <p>料金計算・転記・打ち間違いといった手作業特有のミスを、自動化でなくします。</p>
+      </div>
+      <div class="why-item">
+        <h4>複数店舗を一括管理</h4>
+        <p>店舗ごとの売上・本数・出勤を1通で合算。店舗が増えても手間は増えません。</p>
+      </div>
+      <div class="why-item">
+        <h4>店舗ごとにカスタマイズ</h4>
+        <p>コース料金・オプション・指名料、店舗の運用に合わせて自由に設定できます。</p>
+      </div>
+      <div class="why-item">
+        <h4>導入後もLINEでサポート</h4>
+        <p>トラブル・追加機能のご相談まで、すべて同じLINEトークで完結します。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 比較 -->
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">導入前と導入後の比較</h2>
+<!--@COMP@-->
     <div class="comparison">
       <div class="comp-row">
         <div class="comp-cell comp-head">業務</div>
@@ -2758,51 +2209,43 @@ T-XXX
   </div>
 </section>
 
-<!-- TRUST -->
-<section class="section trust-bg">
+<!-- セキュリティ・運用 -->
+<section class="section alt">
   <div class="container">
-    <div class="section-tag">TRUST & SUPPORT</div>
-    <h2 class="section-title">大切なデータも、運用も。<br><span>すべて安心の体制でお守りします。</span></h2>
-    <div class="trust-grid">
-      <div class="trust-card">
-        <div class="trust-icon">🔐</div>
+    <h2 class="section-title">セキュリティと運用体制</h2>
+    <div class="trust-list">
+      <div class="trust-item">
         <h4>認証された人だけが使える</h4>
-        <p>LINEアカウント（userId）と契約管理番号（T-XXX）の<strong>二重認証</strong>。オーナーが承認した人だけがBotを操作できる完全クローズド設計です。</p>
+        <p>LINEアカウント（userId）と契約管理番号（T-XXX）の<strong>二重認証</strong>。オーナーが承認した人だけがBotを操作できるクローズド設計です。</p>
       </div>
-      <div class="trust-card">
-        <div class="trust-icon">🚫</div>
+      <div class="trust-item">
         <h4>自動登録を一切受け付けません</h4>
-        <p>「友達追加すれば誰でも使える」ような自動登録は<strong>絶対に禁止</strong>。登録は必ずオーナーが手動承認する設計のため、第三者の侵入リスクをゼロに。</p>
+        <p>「友達追加すれば誰でも使える」ような自動登録は行いません。登録は必ずオーナーが手動承認する設計のため、第三者は利用できません。</p>
       </div>
-      <div class="trust-card">
-        <div class="trust-icon">🏪</div>
+      <div class="trust-item">
         <h4>店舗ごとに完全データ分離</h4>
-        <p>所属契約ID（T-XXX）単位でアクセス権限を厳格に管理。A店舗のスタッフがB店舗のデータにアクセスすることは構造的に不可能です。</p>
+        <p>所属契約ID（T-XXX）単位でアクセス権限を管理。A店舗のスタッフがB店舗のデータにアクセスすることは構造的に不可能です。</p>
       </div>
-      <div class="trust-card">
-        <div class="trust-icon">☁️</div>
+      <div class="trust-item">
         <h4>クラウド自動バックアップ</h4>
-        <p>Googleスプレッドシートと連携。手元のPCが壊れても、スマホをなくしてもデータは絶対に消えません。</p>
+        <p>Googleスプレッドシートと連携。手元のPCが壊れても、スマホをなくしてもデータは消えません。</p>
       </div>
-      <div class="trust-card">
-        <div class="trust-icon">🚀</div>
+      <div class="trust-item">
         <h4>常時稼働</h4>
-        <p>専用VPSで24時間365日稼働。深夜の予約対応・早朝の集計まで、休まずサポート。</p>
+        <p>専用VPSで24時間365日稼働。深夜の予約対応・早朝の集計まで、休まず動き続けます。</p>
       </div>
-      <div class="trust-card">
-        <div class="trust-icon">💬</div>
+      <div class="trust-item">
         <h4>LINEで直接サポート</h4>
-        <p>「ここを変えたい」「機能を追加したい」――すべてLINEひとつでご相談可能。</p>
+        <p>「ここを変えたい」「機能を追加したい」——すべてLINEひとつでご相談いただけます。</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- FLOW -->
-<section class="section features-bg">
+<!-- 導入の流れ -->
+<section class="section">
   <div class="container">
-    <div class="section-tag">HOW IT WORKS</div>
-    <h2 class="section-title">導入はかんたん<span>4ステップ</span></h2>
+    <h2 class="section-title">導入の流れ</h2>
     <div class="flow">
       <div class="step">
         <h4>お問い合わせ</h4>
@@ -2825,11 +2268,10 @@ T-XXX
 </section>
 
 <!-- FAQ -->
-<section class="section faq-bg">
+<section class="section alt">
   <div class="container">
-    <div class="section-tag">FAQ</div>
-    <h2 class="section-title">よくある<span>ご質問</span></h2>
-
+    <h2 class="section-title">よくあるご質問</h2>
+<!--@FAQ@-->
     <div class="faq-item">
       <div class="faq-q">操作はむずかしくないですか？スタッフでも使えますか？</div>
       <div class="faq-a">LINEを送るだけなので、新人スタッフでも初日から使えます。テンプレートをコピー＆貼り付けるだけで全機能が動きます。</div>
@@ -2857,53 +2299,103 @@ T-XXX
   </div>
 </section>
 
-<!-- REFERRAL -->
-<section class="section ref-section">
+<!-- 紹介プログラム -->
+<section class="section">
   <div class="container">
-    <div class="section-tag">REFERRAL</div>
-    <h2 class="section-title">紹介<span>プログラム</span></h2>
-    <p class="ref-lead">同業の店舗オーナー様をご紹介いただくと、両店舗ともに月額割引が3ヶ月適用されます。</p>
-
+    <h2 class="section-title">紹介プログラム</h2>
+    <p class="section-lead">同業の店舗オーナー様をご紹介いただくと、両店舗ともに月額割引が3ヶ月適用されます。</p>
     <div class="ref-box">
-      <h3>紹介者・被紹介者ともに<br><span>月¥3,000 × 3ヶ月割引</span></h3>
-      <p>ご契約中の店舗様から、新規ご契約予定の店舗様をご紹介いただいた場合、<br>双方の月額料金から¥3,000を3ヶ月間割引いたします（合計¥9,000相当）。</p>
-
-      <div class="ref-flow">
-        <div class="ref-step"><strong>STEP 1</strong>ご契約店舗様から<br>ご紹介</div>
-        <span class="ref-arrow">→</span>
-        <div class="ref-step"><strong>STEP 2</strong>被紹介店舗様が<br>ご契約</div>
-        <span class="ref-arrow">→</span>
-        <div class="ref-step"><strong>STEP 3</strong>両店舗に3ヶ月<br>割引適用</div>
-      </div>
+      <h3>紹介者・被紹介者ともに<span> 月¥3,000 × 3ヶ月割引</span></h3>
+      <p>ご契約中の店舗様から、新規ご契約予定の店舗様をご紹介いただいた場合、双方の月額料金から¥3,000を3ヶ月間割引いたします（合計¥9,000相当）。</p>
+      <ol class="ref-steps">
+        <li>ご契約店舗様からご紹介</li>
+        <li>被紹介店舗様がご契約</li>
+        <li>両店舗に3ヶ月割引適用</li>
+      </ol>
     </div>
   </div>
 </section>
 
-<!-- FINAL CTA -->
+<!-- 最終CTA -->
 <section class="cta" id="cta">
-  <div class="container cta-inner">
-    <span class="cta-tag">★ いまが、変える瞬間。 ★</span>
-    <h2>店舗運営の「めんどう」を、<br><span>今日から終わらせる。</span></h2>
+  <div class="container">
+    <h2>店舗運営の手作業を、<br>今日で終わりにしませんか。</h2>
     <p>
-      毎日の手作業に何時間も奪われる時代は、もう終わりです。<br>
-      KIRAKUBOTで、あなたの店舗運営をワンランク上のステージへ。
+      1日5〜6時間の手作業をLINEに置き換えて、経営に使える時間を取り戻してください。ご相談いただければ、最短即日でスタートできます。
     </p>
-    <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener noreferrer" class="cta-btn">▶ 無料デモを今すぐ予約</a>
+    <a href="https://line.me/ti/p/E1KWZ-0_f5" target="_blank" rel="noopener noreferrer" class="btn-line">LINEで無料デモを予約する</a>
     <div class="cta-benefits">
-      <span class="cta-benefit">✓ 所要時間15分</span>
-      <span class="cta-benefit">✓ オンライン対応</span>
-      <span class="cta-benefit">✓ 導入義務なし</span>
-      <span class="cta-benefit">✓ 最短即日でスタート</span>
+      <span>所要時間15分</span>
+      <span>オンライン対応</span>
+      <span>導入義務なし</span>
+      <span>最短即日でスタート</span>
     </div>
     <div class="cta-sub">
-      ※ ご相談・お見積もり・デモは完全無料。しつこい営業は一切いたしません。
+      ※ ご相談・お見積もり・デモは無料です。しつこい営業はいたしません。
     </div>
   </div>
 </section>
 
 <footer>
-  © KIRAKUBOT｜LINE自動化サービス
+  <div class="container">© KIRAKUBOT｜LINE自動化サービス</div>
 </footer>
 
+<script>
+// 明細書サムネイル（画像メッセージ）を枠幅に合わせて縮小表示
+(function(){
+  function fit(){
+    document.querySelectorAll('.lc-img .lc-scale').forEach(function(el){
+      var w = el.parentElement.clientWidth;
+      if(!w) return;
+      var s = w / 355;
+      el.style.transform = 'scale(' + s + ')';
+      el.parentElement.style.height = (el.offsetHeight * s) + 'px';
+    });
+  }
+  window.addEventListener('load', fit);
+  window.addEventListener('resize', fit);
+  fit();
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+(function(){
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var animOK = !reduceMotion && typeof gsap !== 'undefined';
+  if(!animOK) return; // 演出なし＝最初から全表示
+
+  function primeChat(chat){
+    gsap.set(chat.querySelectorAll('.lc-row'), {opacity:0, y:10, scale:.96, transformOrigin:'bottom'});
+    gsap.set(chat.querySelectorAll('.lc-sent .lc-meta'), {opacity:0});
+  }
+  function playChat(chat){
+    var tl = gsap.timeline();
+    var rows = chat.querySelectorAll('.lc-row');
+    var t = 0.15;
+    rows.forEach(function(row){
+      tl.to(row, {opacity:1, y:0, scale:1, duration:.35, ease:'power2.out'}, t);
+      if(row.classList.contains('lc-sent')){
+        var meta = row.querySelector('.lc-meta');
+        if(meta) tl.to(meta, {opacity:1, duration:.25}, t + 0.6);
+        t += 1.0;
+      } else {
+        t += 0.7;
+      }
+    });
+  }
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        playChat(e.target);
+        observer.unobserve(e.target);
+      }
+    });
+  }, {threshold:.25});
+  document.querySelectorAll('[data-line-chat]').forEach(function(c){
+    primeChat(c);
+    observer.observe(c);
+  });
+})();
+</script>
 </body>
 </html>
