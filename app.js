@@ -43,6 +43,9 @@ app.use(express.json());
 const { registerSignRoute } = require('./lib/sign_handler');
 registerSignRoute(app);
 
+const { registerAgencyIntakeRoute } = require('./lib/agency_intake_handler');
+registerAgencyIntakeRoute(app);
+
 const { registerAdminRoutes } = require('./lib/admin_handler');
 registerAdminRoutes(app);
 
