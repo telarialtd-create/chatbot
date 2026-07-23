@@ -193,6 +193,7 @@
       white-space:nowrap;
       line-height:1.5;
     }
+    .wire-pill.side { transform:translate(0,-50%); }
     .node { position:relative; }
     .node-head { margin-bottom:8px; }
     .node-tag {
@@ -605,8 +606,8 @@
         </div>
       </div>
 
-      <span class="wire-pill" id="pill0">30分ごと</span>
-      <span class="wire-pill" id="pill1">毎日 4:00</span>
+      <span class="wire-pill" id="pill0">30分ごと・毎日 4:00</span>
+      <span class="wire-pill" id="pill1">30分ごと・毎日 4:00</span>
     </div>
     <div class="diagram-cap">※ 実際の画面を簡略化したイメージです。</div>
 
@@ -631,25 +632,25 @@
   </div>
 </section>
 
-<!-- 対応媒体① すぐるくん -->
-<section class="section alt" id="product-suguru">
+<!-- 対応媒体（すぐるくん・自社ホームページ共通） -->
+<section class="section alt" id="products">
   <div class="container fx">
-    <div class="media-label">対応媒体 ① ベンリー → すぐるくん</div>
-    <h2 class="section-title">セラピスト管理画面「すぐるくん」へ自動同期。</h2>
-    <p class="section-lead">出勤・並び順・新人登録は30分ごと、プロフィールと写真は毎日。ベンリーの内容を基準に、すぐるくん側を自動で揃え続けます。<br><strong>複数店舗で本番稼働中。</strong></p>
+    <div class="media-label">対応媒体　ベンリー → すぐるくん・自社ホームページ</div>
+    <h2 class="section-title">すぐるくんにも、自社HPにも、同じ内容を自動同期。</h2>
+    <p class="section-lead">出勤・並び順は30分ごと、プロフィールと写真は毎日。ベンリーの内容を基準に、セラピスト管理画面「すぐるくん」と店舗の自社ホームページ（CMSへ直接反映）を、同じ更新サイクルで自動で揃え続けます。<br><strong>複数店舗で本番稼働中。店舗公式サイトでは全41名の本番同期を実施済み。</strong></p>
 
     <div class="def-grid">
       <div class="def-item">
         <div class="def-head"><h3>出勤の自動同期</h3><span class="def-badge">30分ごと</span></div>
-        <p>ベンリーの出勤状況を30分ごとにすぐるくんへ反映。誰が出ているかを常に最新に保ちます。</p>
+        <p>ベンリーの出勤状況を30分ごとに各媒体へ反映。誰が出ているかを常に最新に保ちます。</p>
       </div>
       <div class="def-item">
         <div class="def-head"><h3>並び順の自動同期</h3><span class="def-badge">30分ごと</span></div>
-        <p>ベンリー側の並び順をすぐるくんへそのまま反映。店舗が意図した見せ方を媒体間で揃えます。</p>
+        <p>ベンリー側の並び順をそのまま反映。店舗が意図した見せ方を媒体間で揃えます。</p>
       </div>
       <div class="def-item">
         <div class="def-head"><h3>新人の自動フル登録</h3><span class="def-badge">登録の手作業ゼロ</span></div>
-        <p>ベンリーに新しく登録された女の子を検知し、すぐるくん側へプロフィール一式を自動で新規登録します。</p>
+        <p>ベンリーに新しく登録された女の子を検知し、プロフィール一式を自動で新規登録します。</p>
       </div>
       <div class="def-item">
         <div class="def-head"><h3>プロフィール・写真の追従</h3><span class="def-badge">毎日 4:00 追従</span></div>
@@ -659,36 +660,8 @@
   </div>
 </section>
 
-<!-- 対応媒体② 自社ホームページ -->
-<section class="section" id="product-hp">
-  <div class="container fx">
-    <div class="media-label">対応媒体 ② ベンリー → 自社ホームページ</div>
-    <h2 class="section-title">店舗の自社HPへ、直接自動反映。</h2>
-    <p class="section-lead">ポータルだけでなく、店舗自身の公式サイトにもベンリーの内容を自動で同期。プロフィール・出勤・並び順・写真までCMSへ直接書き込みます。<br><strong>店舗公式サイトで全41名の本番同期を実施済み。</strong></p>
-
-    <div class="def-grid">
-      <div class="def-item">
-        <div class="def-head"><h3>プロフィールの同期</h3><span class="def-badge">CMS直接反映</span></div>
-        <p>ベンリーのプロフィール情報を自社HPのCMSへ反映。キャッチやスペック表記まで媒体間で統一します。</p>
-      </div>
-      <div class="def-item">
-        <div class="def-head"><h3>出勤の同期</h3><span class="def-badge">出勤を自動掲載</span></div>
-        <p>「本日の出勤」を自社HPへ自動反映。サイトを見たお客様が、常に正しい出勤情報にたどり着けます。</p>
-      </div>
-      <div class="def-item">
-        <div class="def-head"><h3>並び順の同期</h3><span class="def-badge">見せ方を統一</span></div>
-        <p>ベンリーの並び順を自社HPの一覧にも反映。おすすめ順・注目の見せ方を媒体間でそろえます。</p>
-      </div>
-      <div class="def-item">
-        <div class="def-head"><h3>写真のアップロード</h3><span class="def-badge">画像も自動</span></div>
-        <p>プロフィール写真を自社HPへ自動アップロード。画像の差し替えにも追従し、サイトを最新の状態に保ちます。</p>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- 料金 -->
-<section class="section alt" id="pricing">
+<section class="section" id="pricing">
   <div class="container fx">
     <h2 class="section-title">料金は、媒体ごとに。</h2>
     <p class="section-lead">1店舗あたりの月額のみ。初期構築・サポート費はいただきません。<br>すぐるくん・自社HPは、それぞれ単体でも併用でもご利用いただけます。いつでも停止できます。</p>
@@ -734,7 +707,7 @@
 </section>
 
 <!-- 信頼設計 -->
-<section class="section" id="safety">
+<section class="section alt" id="safety">
   <div class="container fx">
     <h2 class="section-title">「自動だから怖い」を、設計で消す。</h2>
     <p class="section-lead">他店への誤反映・既存情報の消失といった事故を、仕組みそのもので防いでいます。多店舗で安心して展開いただくための信頼設計です。</p>
@@ -761,7 +734,7 @@
 </section>
 
 <!-- 実績 -->
-<section class="section alt" id="results">
+<section class="section" id="results">
   <div class="container fx">
     <h2 class="section-title">本番稼働の実績。</h2>
     <p class="section-lead">複数店舗・複数媒体で実運用中。机上の構想ではなく、すでに動いているシステムです。</p>
@@ -774,7 +747,7 @@
 </section>
 
 <!-- 導入の流れ -->
-<section class="section" id="flow">
+<section class="section alt" id="flow">
   <div class="container fx">
     <h2 class="section-title">お申込みから運用開始まで。</h2>
     <p class="section-lead">ヒアリングから初期構築・接続まで、こちらで一気通貫。店舗側の準備はログイン情報のご提供だけです。</p>
@@ -805,7 +778,7 @@
 </section>
 
 <!-- FAQ -->
-<section class="section alt" id="faq">
+<section class="section" id="faq">
   <div class="container fx">
     <h2 class="section-title">よくあるご質問</h2>
 
@@ -928,13 +901,23 @@
       }
       wires[i].setAttribute('d', dpath);
     });
-    [0,1].forEach(function(i){
-      var p = wires[i], len = p.getTotalLength();
-      var at = mobile ? Math.max(len - 56, len * 0.55) : len * 0.5;
-      var pt = p.getPointAtLength(at);
-      pills[i].style.left = pt.x + 'px';
-      pills[i].style.top = pt.y + 'px';
-    });
+    if (mobile){
+      /* モバイルは幹線1本＝両ラベル同一のため1個だけ、ベンリー直下の幹線右横に表示 */
+      var pt0 = wires[0].getPointAtLength(20);
+      pills[0].classList.add('side');
+      pills[0].style.left = (pt0.x + 10) + 'px';
+      pills[0].style.top = pt0.y + 'px';
+      pills[1].style.display = 'none';
+    } else {
+      pills[0].classList.remove('side');
+      pills[1].style.display = '';
+      [0,1].forEach(function(i){
+        var p = wires[i], len = p.getTotalLength();
+        var pt = p.getPointAtLength(len * 0.5);
+        pills[i].style.left = pt.x + 'px';
+        pills[i].style.top = pt.y + 'px';
+      });
+    }
     setPulse(0, state.p0); setPulse(1, state.p1);
   }
 
